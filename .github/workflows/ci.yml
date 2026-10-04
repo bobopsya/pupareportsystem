@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix server
+          npm ci --prefix web
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit & API tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: End-to-end (Playwright)
+        run: |
+          npx playwright install --with-deps chromium
+          export DATA_DIR="$RUNNER_TEMP/data" DB_KEY=$(openssl rand -hex 32) FILES_KEY=$(openssl rand -hex 32) \
+                 COOKIE_SECURE=0 WEB_DIST="$PWD/web/dist" HOST=127.0.0.1 PORT=8080
+          ADMIN_PASSWORD=$(node server/dist/cli.js create-user admin "CI Admin" | sed -n 's/.*Временный пароль: //p')
+          node server/dist/index.js > "$RUNNER_TEMP/server.log" 2>&1 &
+          for _ in $(seq 30); do curl -fs http://127.0.0.1:8080/api/health && break; sleep 1; done
+          ADMIN_PASSWORD="$ADMIN_PASSWORD" npx playwright test
+
+      - name: Server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log" || true
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t zhukonet-portal:ci .

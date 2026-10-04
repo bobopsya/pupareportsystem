@@ -1,0 +1,61 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --color-bg: #0a0a0a;
+  --color-surface: #111111;
+  --color-elevated: #171717;
+  --color-hover: #1f1f1f;
+  --color-line: #262626;
+  --color-line-strong: #3a3a3a;
+  --color-fg: #fafafa;
+  --color-muted: #a3a3a3;
+  --color-faint: #6b6b6b;
+
+  --color-ok: #4ade80;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
+  --color-info: #93c5fd;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #fafafa;
+  color: #0a0a0a;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+:focus-visible {
+  outline: 2px solid #fafafa;
+  outline-offset: 2px;
+}
+
+input[type='date'],
+input[type='datetime-local'] {
+  color-scheme: dark;
+}
+
+.uplot {
+  font-family: var(--font-mono);
+}

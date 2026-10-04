@@ -1,0 +1,40 @@
+# ZhukoNet portal.
+#   Caddy mode (ports 80/443 free):   COMPOSE_PROFILES=caddy in .env
+#   Behind existing nginx:            leave COMPOSE_PROFILES empty, nginx proxies to 127.0.0.1:${APP_PORT}
+services:
+  app:
+    build: .
+    image: zhukonet-portal:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: "1"
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

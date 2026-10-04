@@ -1,0 +1,8 @@
+# HTTPS certificate is issued automatically by Let's Encrypt for {$DOMAIN}.
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 25MB
+	}
+	reverse_proxy app:8080
+}
