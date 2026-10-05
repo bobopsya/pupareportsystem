@@ -68,6 +68,42 @@ function safeName(name: string) {
   return name.replace(/[\\/\0\r\n"]/g, '_').slice(0, 200) || 'file';
 }
 
+export type OwnerType = (typeof OWNER_TYPES)[number];
+export type FileKind = (typeof KINDS)[number];
+
+/** Encrypts and stores an upload; photos/avatars are re-encoded (EXIF/GPS stripped) and get a thumbnail. */
+export async function storeFile(
+  ctx: Ctx,
+  f: { buffer: Buffer; filename: string; mimetype: string; ownerType: OwnerType; ownerId: string; kind: FileKind; caption?: string },
+  userId: string | null,
+) {
+  const id = randomId();
+  let data = f.buffer;
+  let mime = f.mimetype || 'application/octet-stream';
+  let name = safeName(f.filename);
+  let thumb: Buffer | null = null;
+
+  if (f.kind === 'photo' || f.kind === 'avatar') {
+    try {
+      // sharp drops EXIF/GPS metadata unless explicitly asked to keep it; rotate() applies orientation first.
+      const max = f.kind === 'avatar' ? 512 : 2560;
+      data = await sharp(f.buffer).rotate().resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 84, mozjpeg: true }).toBuffer();
+      thumb = await sharp(data).resize({ width: 400, height: 400, fit: 'cover' }).webp({ quality: 75 }).toBuffer();
+      mime = 'image/jpeg';
+      name = name.replace(/\.[^.]+$/, '') + '.jpg';
+    } catch {
+      throw new HttpError(400, 'Не удалось обработать изображение (поддерживаются JPEG, PNG, WebP, GIF, TIFF, AVIF)');
+    }
+  }
+
+  fs.writeFileSync(blobPath(ctx, id), ctx.fileCrypto.encrypt(data));
+  if (thumb) fs.writeFileSync(blobPath(ctx, id, true), ctx.fileCrypto.encrypt(thumb));
+  ctx.db
+    .prepare('INSERT INTO files(id, owner_type, owner_id, kind, name, mime, size, caption, has_thumb, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, f.ownerType, f.ownerId, f.kind, name, mime, data.length, f.caption ?? '', thumb ? 1 : 0, ctx.now(), userId);
+  return toFile(ctx.db.prepare('SELECT * FROM files WHERE id = ?').get(id) as FileRow);
+}
+
 export function registerFileRoutes(app: FastifyInstance, ctx: Ctx) {
   const { db } = ctx;
   const getRow = (id: string) => db.prepare('SELECT * FROM files WHERE id = ? AND deleted_at IS NULL').get(id) as FileRow | undefined;
@@ -97,32 +133,9 @@ export function registerFileRoutes(app: FastifyInstance, ctx: Ctx) {
       .object({ ownerType: z.enum(OWNER_TYPES), ownerId: z.string().min(1).max(64), kind: z.enum(KINDS), caption: z.string().max(500).default('') })
       .parse(fields);
 
-    const id = randomId();
-    let data = upload.buffer;
-    let mime = upload.mimetype || 'application/octet-stream';
-    let name = safeName(upload.filename);
-    let thumb: Buffer | null = null;
-
-    if (meta.kind === 'photo' || meta.kind === 'avatar') {
-      try {
-        // sharp drops EXIF/GPS metadata unless explicitly asked to keep it; rotate() applies orientation first.
-        const max = meta.kind === 'avatar' ? 512 : 2560;
-        data = await sharp(upload.buffer).rotate().resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 84, mozjpeg: true }).toBuffer();
-        thumb = await sharp(data).resize({ width: 400, height: 400, fit: 'cover' }).webp({ quality: 75 }).toBuffer();
-        mime = 'image/jpeg';
-        name = name.replace(/\.[^.]+$/, '') + '.jpg';
-      } catch {
-        throw new HttpError(400, 'Не удалось обработать изображение (поддерживаются JPEG, PNG, WebP, GIF, TIFF, AVIF)');
-      }
-    }
-
-    fs.writeFileSync(blobPath(ctx, id), ctx.fileCrypto.encrypt(data));
-    if (thumb) fs.writeFileSync(blobPath(ctx, id, true), ctx.fileCrypto.encrypt(thumb));
-    db.prepare(
-      'INSERT INTO files(id, owner_type, owner_id, kind, name, mime, size, caption, has_thumb, created_at, created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-    ).run(id, meta.ownerType, meta.ownerId, meta.kind, name, mime, data.length, meta.caption, thumb ? 1 : 0, ctx.now(), req.user!.id);
-    audit(ctx, req, 'create', 'file', id, `${name} → ${meta.ownerType}`);
-    return toFile(getRow(id)!);
+    const file = await storeFile(ctx, { ...upload, ...meta }, req.user!.id);
+    audit(ctx, req, 'create', 'file', file.id, `${file.name} → ${meta.ownerType}`);
+    return file;
   });
 
   app.get('/api/files/:id', async (req, reply) => {

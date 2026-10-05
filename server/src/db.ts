@@ -85,6 +85,38 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+  `
+  -- Daily check-ins ("я на связи"); day is the Moscow calendar date YYYY-MM-DD.
+  CREATE TABLE checkins (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    ts INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    PRIMARY KEY (user_id, day)
+  );
+  CREATE INDEX checkins_day ON checkins(day);
+
+  -- Missed check-ins already announced in the Telegram channel (one row per employee per day).
+  CREATE TABLE checkin_reports (
+    day TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    sent_at INTEGER NOT NULL,
+    PRIMARY KEY (day, user_id)
+  );
+
+  CREATE TABLE tg_links (
+    tg_id INTEGER PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    username TEXT,
+    linked_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE tg_link_codes (
+    code_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function openDb(dataDir: string, keyHex: string): DB {

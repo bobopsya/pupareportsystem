@@ -1,4 +1,5 @@
 import {
+  CalendarCheck,
   Cpu,
   Gauge,
   History,
@@ -43,6 +44,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { to: '/', label: 'Дашборд', icon: <Gauge /> },
       { to: '/map', label: 'Карта', icon: <MapIcon /> },
       { to: '/tasks', label: 'Задачи', icon: <ListTodo /> },
+      { to: '/checkins', label: 'Отметки', icon: <CalendarCheck /> },
     ],
   },
   {

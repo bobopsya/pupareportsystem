@@ -8,6 +8,7 @@ import { ChangePasswordPage, LoginPage } from './pages/Login';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Tasks = lazy(() => import('./pages/Tasks'));
+const Checkins = lazy(() => import('./pages/Checkins'));
 const Employees = lazy(() => import('./pages/Employees'));
 const Clients = lazy(() => import('./pages/Clients'));
 const Vault = lazy(() => import('./pages/Vault'));
@@ -35,6 +36,7 @@ export function App() {
             <Route index element={<Dashboard />} />
             <Route path="map" element={<MapAll />} />
             <Route path="tasks" element={<Tasks />} />
+            <Route path="checkins" element={<Checkins />} />
             <Route path="employees" element={<Employees />} />
             <Route path="clients" element={<Clients />} />
             <Route path="clients/:id" element={<Clients />} />

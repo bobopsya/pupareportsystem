@@ -9,15 +9,17 @@ import path from 'node:path';
 import { ZodError } from 'zod';
 import { registerAuth } from './auth.js';
 import { HttpError, type Ctx } from './context.js';
+import type { TelegramBot } from './telegram/bot.js';
 import { MAX_FILE_BYTES, registerFileRoutes } from './routes/files.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerEmployeeRoutes } from './routes/employees.js';
 import { registerRecordRoutes } from './routes/records.js';
 import { registerRoutingRoutes } from './routes/routing.js';
+import { registerTelegramRoutes } from './routes/telegram.js';
 import { registerVaultRoutes } from './routes/vault.js';
 import { registerZerotierRoutes } from './routes/zerotier.js';
 
-export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildApp(ctx: Ctx, opts: { logger?: boolean; bot?: TelegramBot } = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: opts.logger ? { level: ctx.cfg.logLevel, redact: ['req.headers.cookie', 'req.headers.authorization'] } : false,
     // Exactly one reverse proxy (Caddy or nginx) sits in front; trust only its X-Forwarded-For hop.
@@ -74,6 +76,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerRoutingRoutes(app, ctx);
   registerFileRoutes(app, ctx);
   registerVaultRoutes(app, ctx);
+  registerTelegramRoutes(app, ctx, opts.bot);
 
   const webDist = ctx.cfg.webDist;
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {

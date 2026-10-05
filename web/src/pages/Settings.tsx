@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DatabaseBackup, KeyRound, Lock, Network, UserCog } from 'lucide-react';
+import { Bot, DatabaseBackup, KeyRound, Lock, Network, UserCog } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useState, type FormEvent } from 'react';
 import { Badge, Button, Card, ErrorText, Field, Input, Mono, PageHeader, useConfirm, useToast } from '../components/ui';
 import { api, downloadFrom } from '../lib/api';
+import { fmtAgo, fmtDate } from '../lib/format';
+import type { TelegramInfo } from '../lib/types';
 import { strength } from '../lib/password';
 import { useVault } from '../lib/vault';
 import { ChangePasswordForm } from './Login';
@@ -62,6 +65,108 @@ function ZtTokenCard() {
           {data && <Mono className="ml-auto text-xs text-faint">{data.ztApiUrl}</Mono>}
         </div>
       </form>
+    </Card>
+  );
+}
+
+function TelegramBotCard() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { data } = useQuery({ queryKey: ['telegram'], queryFn: () => api<TelegramInfo>('/telegram'), refetchInterval: 30_000 });
+  const [token, setToken] = useState('');
+  const [channel, setChannel] = useState<string | null>(null);
+  const refresh = () => qc.invalidateQueries({ queryKey: ['telegram'] });
+  const saveToken = useMutation({
+    mutationFn: () => api<{ botUsername: string | null }>('/telegram/token', { method: 'PUT', body: { token: token.trim() } }),
+    onSuccess: (r) => (setToken(''), toast(`Бот @${r.botUsername} подключён`, 'ok'), refresh()),
+    onError: (e) => toast(e.message, 'bad'),
+  });
+  const removeToken = useMutation({ mutationFn: () => api('/telegram/token', { method: 'DELETE' }), onSuccess: refresh });
+  const saveChannel = useMutation({
+    mutationFn: () => api<{ channel: string }>('/telegram/channel', { method: 'PUT', body: { channel: channel ?? '' } }),
+    onSuccess: () => (setChannel(null), toast('Канал сохранён', 'ok'), refresh()),
+    onError: (e) => toast(e.message, 'bad'),
+  });
+  const test = useMutation({
+    mutationFn: () => api('/telegram/test', { method: 'POST' }),
+    onSuccess: () => toast('Тестовое сообщение отправлено в канал', 'ok'),
+    onError: (e) => toast(e.message, 'bad'),
+  });
+  if (!data) return null;
+  const st = data.status;
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-2">
+          <Bot className="size-4 text-muted" /> Telegram-бот
+        </span>
+      }
+      actions={
+        <Badge tone={!data.tokenSet ? 'neutral' : st.polling ? 'ok' : st.lastError ? 'bad' : 'warn'}>
+          {!data.tokenSet ? 'не настроено' : st.polling ? `@${data.botUsername} работает` : st.lastError ? 'ошибка' : 'запускается…'}
+        </Badge>
+      }
+    >
+      <div className="flex flex-col gap-4 p-4">
+        <p className="text-sm text-muted">
+          Создайте бота у <Mono>@BotFather</Mono> (<Mono>/newbot</Mono>) и вставьте токен. Токен хранится на сервере в зашифрованном виде. Затем добавьте бота в канал
+          администратором с правом публикации.
+        </p>
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveToken.mutate();
+          }}
+        >
+          <Field label={data.tokenSet ? `Заменить токен (сейчас @${data.botUsername ?? '?'})` : 'Токен бота'}>
+            <Input mono type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="123456789:AA…" />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" disabled={token.trim().length < 30} loading={saveToken.isPending}>
+              Проверить и сохранить
+            </Button>
+            {data.tokenSet && (
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  if (await confirm({ title: 'Отключить бота?', body: 'Бот перестанет отвечать и публиковать сообщения. Привязки сотрудников сохранятся.', danger: true, confirmText: 'Отключить' }))
+                    removeToken.mutate();
+                }}
+              >
+                Удалить токен
+              </Button>
+            )}
+          </div>
+        </form>
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveChannel.mutate();
+          }}
+        >
+          <Field label="Канал для сообщений о пропущенных отметках" hint="@имя, ссылка https://t.me/имя или числовой id (-100…)">
+            <Input mono value={channel ?? data.channel} onChange={(e) => setChannel(e.target.value)} placeholder="@my_channel" />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" disabled={channel === null || channel === data.channel} loading={saveChannel.isPending}>
+              Сохранить канал
+            </Button>
+            <Button variant="secondary" disabled={!data.tokenSet || !data.channel} loading={test.isPending} onClick={() => test.mutate()}>
+              Тест в канал
+            </Button>
+          </div>
+        </form>
+        <ul className="flex flex-col gap-1 text-xs text-muted">
+          <li>• Привязано сотрудников: {data.linkedCount}. Привязка — в разделе <Link to="/checkins" className="text-fg underline underline-offset-2">Отметки</Link>.</li>
+          <li>• Отметка до 00:00 МСК; напоминания в личку в {data.reminders.join(' и ')} МСК.</li>
+          {data.startDay && <li>• Сообщения в канал публикуются за дни начиная с {fmtDate(data.startDay)}.</li>}
+          {st.lastPollAt && <li>• Последняя связь с Telegram: {fmtAgo(st.lastPollAt)}.</li>}
+          {st.lastError && <li className="text-bad">• Ошибка: {st.lastError}</li>}
+        </ul>
+      </div>
     </Card>
   );
 }
@@ -189,6 +294,7 @@ export default function Settings() {
           <ZtTokenCard />
           <BackupCard />
         </div>
+        <TelegramBotCard />
         <MasterKeyCard />
         <Card
           title={

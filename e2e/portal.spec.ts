@@ -263,6 +263,27 @@ test('full portal flow', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Добр/ })).toBeVisible();
   await shot(page, '02-dashboard');
 
+  // --- Отметки ---
+  await expect(page.getByText('Вы ещё не отметились сегодня')).toBeVisible();
+  await page.getByRole('button', { name: 'Отметиться' }).click();
+  await expect(page.getByText('Вы отметились сегодня')).toBeVisible();
+  await nav(page, 'Отметки');
+  await expect(page.getByRole('heading', { name: 'Отметки' })).toBeVisible();
+  await expect(page.getByText('Вы отметились сегодня')).toBeVisible();
+  await expect(page.getByText('отметились 1 из 1')).toBeVisible();
+  await page.getByLabel('Текст сообщения').fill('Внимание: {имя} не вышел на связь {дата}');
+  await expect(page.getByText(/Внимание: .+ не вышел на связь \d{2}\.\d{2}\.\d{4}/)).toBeVisible();
+  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.getByText(/Изменено:/)).toBeVisible();
+  await expect(page.getByText('Бот ещё не настроен')).toBeVisible();
+  await shot(page, '20-checkins');
+  await nav(page, 'Настройки');
+  await expect(page.getByText('Telegram-бот')).toBeVisible();
+  await page.getByLabel('Канал для сообщений о пропущенных отметках').fill('https://t.me/botaaaaaaaaaaaaaa');
+  await page.getByRole('button', { name: 'Сохранить канал' }).click();
+  await expect(page.getByLabel('Канал для сообщений о пропущенных отметках')).toHaveValue('@botaaaaaaaaaaaaaa');
+  await shot(page, '21-settings-telegram');
+
   await nav(page, 'Журнал');
   const log = page.getByRole('main').getByRole('listitem');
   await expect(log.filter({ hasText: 'Просмотр пароля' }).first()).toBeVisible();

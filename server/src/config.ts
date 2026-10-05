@@ -11,6 +11,7 @@ export interface Config {
   trustProxy: boolean;
   ztApiUrl: string;
   osrmUrl: string;
+  tgApiUrl: string;
   logLevel: string;
 }
 
@@ -32,6 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: env.TRUST_PROXY === '1',
     ztApiUrl: (env.ZT_API_URL ?? 'https://api.zerotier.com/api/v1').replace(/\/$/, ''),
     osrmUrl: (env.OSRM_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
+    tgApiUrl: (env.TG_API_URL ?? 'https://api.telegram.org').replace(/\/$/, ''),
     logLevel: env.LOG_LEVEL ?? 'info',
   };
 }

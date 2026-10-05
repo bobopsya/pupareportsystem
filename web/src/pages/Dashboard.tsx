@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth';
 import { fmtAgo } from '../lib/format';
 import type { AuditEntry } from '../lib/types';
 import { AuditRow } from './Audit';
+import { CheckinButton } from './Checkins';
 import { TaskList } from './Tasks';
 
 interface DashboardData {
@@ -48,6 +49,10 @@ export default function Dashboard() {
   return (
     <>
       <PageHeader title={`${greeting()}, ${user?.fullName.split(' ')[0] ?? ''}`} description="Сводка по ZhukoNet" />
+
+      <section className="mb-5 rounded-lg border border-line bg-surface p-4">
+        <CheckinButton compact />
+      </section>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         <Stat to="/employees" icon={<Users />} label="Сотрудники" value={c.employees} />

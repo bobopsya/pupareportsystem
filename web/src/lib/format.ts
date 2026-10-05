@@ -42,6 +42,13 @@ export function initials(name: string) {
     .join('');
 }
 
+const mskTimeFmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
+
+/** "HH:MM" in Moscow time (check-in deadlines are in MSK regardless of the browser's zone). */
+export function fmtMskTime(ts: number) {
+  return mskTimeFmt.format(new Date(ts));
+}
+
 export function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -114,6 +121,9 @@ export const ACTION_LABEL: Record<string, string> = {
   vault_init: 'Создание хранилища',
   vault_rekey: 'Смена мастер-ключа',
   settings: 'Настройки',
+  checkin: 'Отметка',
+  tg_link: 'Привязка Telegram',
+  tg_unlink: 'Отвязка Telegram',
 };
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'bad' | 'info';

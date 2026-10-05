@@ -22,6 +22,8 @@ export interface Ctx {
   fileCrypto: ServerCrypto;
   secretCrypto: ServerCrypto;
   now: () => number;
+  /** Outbound HTTP (Telegram). Replaced in tests. */
+  http: (url: string, init: RequestInit) => Promise<Response>;
 }
 
 export function createCtx(db: DB, cfg: Config, now: () => number = Date.now): Ctx {
@@ -31,6 +33,7 @@ export function createCtx(db: DB, cfg: Config, now: () => number = Date.now): Ct
     fileCrypto: new ServerCrypto(cfg.filesKey, 'files'),
     secretCrypto: new ServerCrypto(cfg.filesKey, 'settings'),
     now,
+    http: (url, init) => fetch(url, init),
   };
 }
 
@@ -38,7 +41,7 @@ export type AuditAction =
   | 'login' | 'login_fail' | 'logout' | 'password_change' | 'password_reset'
   | 'create' | 'update' | 'delete' | 'restore' | 'purge'
   | 'reveal' | 'copy' | 'import' | 'export'
-  | 'sync' | 'backup' | 'vault_init' | 'vault_rekey' | 'settings';
+  | 'sync' | 'backup' | 'vault_init' | 'vault_rekey' | 'settings' | 'checkin' | 'tg_link' | 'tg_unlink';
 
 export function audit(
   ctx: Ctx,

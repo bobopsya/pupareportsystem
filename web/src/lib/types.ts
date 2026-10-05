@@ -225,3 +225,46 @@ export interface AuditEntry {
   summary: string | null;
   ip: string | null;
 }
+
+export interface CheckinMark {
+  ts: number;
+  source: 'web' | 'telegram';
+}
+
+export interface CheckinEmployee {
+  id: string;
+  fullName: string;
+  login: string;
+  position: string;
+  status: string;
+  telegram: { username: string | null } | null;
+  checkins: Record<string, CheckinMark>;
+  /** Days (from the requested range) on which this employee had to check in. */
+  required: string[];
+  /** Days for which a "missed check-in" post went to the channel. */
+  reported: string[];
+}
+
+export interface CheckinsData {
+  today: string;
+  /** Newest first. */
+  days: string[];
+  startDay: string | null;
+  deadline: string;
+  employees: CheckinEmployee[];
+}
+
+export interface TelegramInfo {
+  tokenSet: boolean;
+  botUsername: string | null;
+  channel: string;
+  template: string;
+  defaultTemplate: string;
+  templateMeta: { by: string; at: number } | null;
+  placeholders: string[];
+  reminders: string[];
+  startDay: string | null;
+  linkedCount: number;
+  status: { polling: boolean; lastPollAt: number | null; lastError: string | null; lastReportAt: number | null };
+  me: { linked: true; username: string | null; linkedAt: number } | { linked: false };
+}
