@@ -1,14 +1,17 @@
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { Eye, EyeOff, List, Map as MapIcon, Pencil, Plus, Trash2, Wifi as WifiIcon, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ClientSelect, matches, SearchInput } from '../components/common';
+import { MapStyleToggle } from '../components/MapStyle';
 import {
   Badge, Button, Card, Checkbox, CopyButton, cx, Empty, ErrorText, Field, IconButton, Input, Loading, Modal, Mono, PageHeader, Segmented, Select, Table,
   TagInput, Textarea, td, th, trHover, useConfirm,
 } from '../components/ui';
 import { fmtAgo, type Tone } from '../lib/format';
+import { parseLatLng } from '../lib/geo';
+import { createMap, dotIcon, escHtml, TIP_OPTS, tooltip } from '../lib/map';
+import { useMapStyle } from '../lib/theme';
 import { useClientNames, useDeleteRecord, useRecords, useSaveRecord } from '../lib/queries';
 import type { Wifi, WifiData, WifiStatus } from '../lib/types';
 
@@ -16,14 +19,25 @@ const EMPTY: WifiData = {
   name: '', password: '', security: 'wpa2', band: '', hidden: false, status: 'active', clientId: null, location: '', lat: null, lng: null, tags: [], notes: '',
 };
 
-const SECURITY: Record<string, string> = {
+export const SECURITY: Record<string, string> = {
   open: 'Открытая', wep: 'WEP', wpa: 'WPA', wpa2: 'WPA2', wpa3: 'WPA3', 'wpa2-ent': 'WPA2-Enterprise', other: 'Другое',
 };
 export const WIFI_STATUS: Record<WifiStatus, { label: string; tone: Tone; color: string }> = {
-  active: { label: 'Активна', tone: 'ok', color: '#4ade80' },
-  inactive: { label: 'Не работает', tone: 'bad', color: '#f87171' },
-  unknown: { label: 'Неизвестно', tone: 'neutral', color: '#a3a3a3' },
+  active: { label: 'Активна', tone: 'ok', color: 'var(--color-ok)' },
+  inactive: { label: 'Не работает', tone: 'bad', color: 'var(--color-bad)' },
+  unknown: { label: 'Неизвестно', tone: 'neutral', color: 'var(--color-faint)' },
 };
+
+/** Brief info shown when hovering a Wi-Fi network on a map. */
+export function wifiTooltip(n: Wifi, clientName: (id: string | null) => string) {
+  const st = WIFI_STATUS[n.status];
+  return tooltip(n.name, [
+    `<span class="zn-tip-status"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${st.color}"></span>${st.label}</span>`,
+    `Защита: ${SECURITY[n.security]}${n.band ? ` · ${n.band === 'dual' ? '2.4+5' : n.band} ГГц` : ''}`,
+    n.clientId && `Клиент: ${escHtml(clientName(n.clientId))}`,
+    n.location && escHtml(n.location),
+  ]);
+}
 
 // ---------------- Password cell ----------------
 function PasswordCell({ value }: { value: string }) {
@@ -50,9 +64,8 @@ function WifiModal({ net, onClose }: { net: Wifi | 'new'; onClose: () => void })
   const coords = `${f.lat ?? ''}${f.lat !== null || f.lng !== null ? ', ' : ''}${f.lng ?? ''}`;
 
   const parseCoords = (text: string) => {
-    const m = text.match(/(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)/);
-    if (!m) return setF((x) => ({ ...x, lat: null, lng: null }));
-    setF((x) => ({ ...x, lat: Number(m[1]), lng: Number(m[2]) }));
+    const ll = parseLatLng(text);
+    setF((x) => ({ ...x, lat: ll?.lat ?? null, lng: ll?.lng ?? null }));
   };
 
   return (
@@ -143,18 +156,11 @@ function WifiMap({ nets, onSelect, clientName }: { nets: Wifi[]; onSelect: (n: W
   onSelectRef.current = onSelect;
 
   const pts = useMemo(() => nets.filter((n) => n.lat !== null && n.lng !== null), [nets]);
+  const { style: mapStyle } = useMapStyle();
 
   useEffect(() => {
     if (!box.current || map.current) return;
-    const m = L.map(box.current, { attributionControl: true }).setView([52.52, 13.405], 3);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap',
-      // The page sends no Referer at all; OSM's tile policy rejects such requests (403).
-      // Tiles alone send just the portal origin, as the policy requires.
-      referrerPolicy: 'strict-origin-when-cross-origin',
-      className: 'zn-dark-tiles',
-    }).addTo(m);
+    const m = createMap(box.current, [52.52, 13.405], 3);
     layer.current = L.layerGroup().addTo(m);
     map.current = m;
     return () => {
@@ -169,27 +175,9 @@ function WifiMap({ nets, onSelect, clientName }: { nets: Wifi[]; onSelect: (n: W
     if (!m || !lg) return;
     lg.clearLayers();
     for (const n of pts) {
-      const color = WIFI_STATUS[n.status].color;
-      const icon = L.divIcon({
-        className: '',
-        html: `<span style="display:flex;width:18px;height:18px;border-radius:50%;background:${color};border:2px solid #0a0a0a;box-shadow:0 0 0 2px ${color}55"></span>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
-      const marker = L.marker([n.lat!, n.lng!], { icon }).addTo(lg);
-      const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-      const st = WIFI_STATUS[n.status];
-      const rows = [
-        `<span class="zn-tip-status"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${st.color}"></span>${st.label}</span>`,
-        `Защита: ${SECURITY[n.security]}${n.band ? ` · ${n.band === 'dual' ? '2.4+5' : n.band} ГГц` : ''}`,
-        n.clientId ? `Клиент: ${esc(clientName(n.clientId))}` : null,
-        n.location ? esc(n.location) : null,
-      ].filter(Boolean);
+      const marker = L.marker([n.lat!, n.lng!], { icon: dotIcon(WIFI_STATUS[n.status].color) }).addTo(lg);
       // A hover tooltip with brief info; clicking the marker opens the full card.
-      marker.bindTooltip(
-        `<div class="zn-tip"><b>${esc(n.name)}</b>${rows.map((r) => `<div>${r}</div>`).join('')}</div>`,
-        { direction: 'top', offset: [0, -10], opacity: 1, className: 'zn-tip-wrap' },
-      );
+      marker.bindTooltip(wifiTooltip(n, clientName), TIP_OPTS);
       marker.on('click', () => onSelectRef.current(n));
     }
     if (pts.length) {
@@ -199,13 +187,13 @@ function WifiMap({ nets, onSelect, clientName }: { nets: Wifi[]; onSelect: (n: W
   }, [pts]);
 
   return (
-    <Card>
+    <Card actions={<MapStyleToggle />} title="Карта сетей">
       {pts.length === 0 && (
         <div className="border-b border-line px-4 py-2 text-xs text-faint">
           Ни у одной сети нет координат. Добавьте «Координаты» в карточке сети, чтобы она появилась на карте. Остальные {nets.length} сетей видны в списке.
         </div>
       )}
-      <div ref={box} className="h-[65dvh] min-h-80 w-full rounded-b-lg" style={{ background: '#111' }} />
+      <div ref={box} className="zn-map h-[65dvh] min-h-80 w-full rounded-b-lg" data-map-style={mapStyle} />
     </Card>
   );
 }
@@ -221,6 +209,17 @@ export default function WifiPage() {
   const [status, setStatus] = useState('');
   const [clientId, setClientId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Wifi | 'new' | null>(null);
+  const [params, setParams] = useSearchParams();
+
+  // /wifi?open=<id> (from the overview map) opens that network's card.
+  useEffect(() => {
+    const id = params.get('open');
+    const n = id && data.find((x) => x.id === id);
+    if (n) {
+      setEdit(n);
+      setParams({}, { replace: true });
+    }
+  }, [params, data, setParams]);
 
   const list = data
     .filter((n) => (!status || n.status === status) && (!clientId || n.clientId === clientId))

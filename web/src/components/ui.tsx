@@ -24,7 +24,7 @@ export function cx(...c: (string | false | null | undefined)[]) {
 // ---------- Buttons ----------
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 const VARIANT: Record<Variant, string> = {
-  primary: 'bg-fg text-bg hover:bg-white/85 border border-fg',
+  primary: 'bg-fg text-bg hover:bg-fg/85 border border-fg',
   secondary: 'bg-elevated text-fg border border-line hover:border-line-strong hover:bg-hover',
   ghost: 'text-muted hover:text-fg hover:bg-hover border border-transparent',
   danger: 'bg-transparent text-bad border border-bad/40 hover:bg-bad/10',
@@ -112,7 +112,8 @@ export function Field({ label, hint, children, className }: { label: string; hin
   );
 }
 
-export function Checkbox({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean }) {
+/** `ariaLabel` names the checkbox for screen readers when `label` is not plain text. */
+export function Checkbox({ checked, onChange, label, disabled, ariaLabel }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean; ariaLabel?: string }) {
   return (
     <span
       onClick={() => onChange(!checked)}
@@ -121,6 +122,7 @@ export function Checkbox({ checked, onChange, label, disabled }: { checked: bool
       <span
         role="checkbox"
         aria-checked={checked}
+        aria-label={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         aria-disabled={disabled}
         tabIndex={0}
         onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && (e.preventDefault(), onChange(!checked))}

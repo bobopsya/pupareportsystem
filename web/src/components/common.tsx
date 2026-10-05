@@ -1,8 +1,43 @@
+import { useEffect, useState } from 'react';
 import { fileUrl } from '../lib/api';
 import { initials } from '../lib/format';
+import { parseLatLng } from '../lib/geo';
 import { useEmployees, useRecords } from '../lib/queries';
 import type { Holder, OwnerType } from '../lib/types';
-import { cx, NoFieldId, Select } from './ui';
+import { cx, Input, NoFieldId, Select } from './ui';
+
+const fmtLatLng = (lat: number | null, lng: number | null) => (lat === null || lng === null ? '' : `${lat}, ${lng}`);
+
+/**
+ * Text field for "lat, lng" (also accepts a Google/Yandex Maps link). Shows the parsed
+ * value back once it is valid, and stays in sync when coordinates change elsewhere.
+ */
+export function CoordsInput({ lat, lng, onChange }: { lat: number | null; lng: number | null; onChange: (lat: number | null, lng: number | null) => void }) {
+  const [text, setText] = useState(() => fmtLatLng(lat, lng));
+  // Only reacts to outside changes (e.g. coordinates taken from a pasted map link), not to typing.
+  useEffect(() => {
+    const ll = parseLatLng(text);
+    if (ll?.lat !== (lat ?? undefined) || ll?.lng !== (lng ?? undefined)) setText(fmtLatLng(lat, lng));
+  }, [lat, lng]);
+  const invalid = text.trim() !== '' && !parseLatLng(text);
+  return (
+    <>
+      <Input
+        mono
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const ll = parseLatLng(e.target.value);
+          onChange(ll?.lat ?? null, ll?.lng ?? null);
+        }}
+        placeholder="55.7558, 37.6173"
+        aria-invalid={invalid}
+        className={invalid ? 'border-bad/60' : undefined}
+      />
+      {invalid && <span className="text-xs text-bad">Не удалось распознать координаты</span>}
+    </>
+  );
+}
 
 export function Avatar({ name, fileId, size = 36, className }: { name: string; fileId?: string | null; size?: number; className?: string }) {
   const style = { width: size, height: size, fontSize: Math.max(10, size * 0.36) };

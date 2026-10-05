@@ -58,6 +58,8 @@ export interface ClientData {
   messengers: { telegram: string; whatsapp: string; signal: string };
   address: string;
   mapUrl: string;
+  lat: number | null;
+  lng: number | null;
   birthDate: string;
   document: { type: string; number: string };
   serviceStart: string;

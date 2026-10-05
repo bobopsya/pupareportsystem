@@ -4,12 +4,13 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Avatar, EmployeeSelect, matches, SearchInput } from '../components/common';
+import { Avatar, CoordsInput, EmployeeSelect, matches, SearchInput } from '../components/common';
 import {
   AddRowButton, Badge, Button, Card, Dot, Empty, ErrorText, Field, IconButton, Input, Loading, Modal, Mono, PageHeader, Select, SidePanel, Table, Tabs, TagInput,
   Textarea, td, th, trHover, useConfirm, useToast, cx,
 } from '../components/ui';
 import { api, downloadFrom, fileUrl, uploadFile, type FileMeta } from '../lib/api';
+import { parseLatLng } from '../lib/geo';
 import { CLIENT_STATUS, EVENT_KIND, fmtAgo, fmtBytes, fmtDate, fmtDateTime, today, uid } from '../lib/format';
 import { useDeleteRecord, useEmployeeNames, useRecords, useSaveRecord } from '../lib/queries';
 import type { Client, ClientData, ClientEventKind, InfraRow } from '../lib/types';
@@ -17,7 +18,7 @@ import { ClientRoutes } from './Routes';
 import { VaultLinkedList } from './Vault';
 
 export const EMPTY_CLIENT: ClientData = {
-  fullName: '', status: 'new', responsibleId: null, phones: [], emails: [], messengers: { telegram: '', whatsapp: '', signal: '' }, address: '', mapUrl: '',
+  fullName: '', status: 'new', responsibleId: null, phones: [], emails: [], messengers: { telegram: '', whatsapp: '', signal: '' }, address: '', mapUrl: '', lat: null, lng: null,
   birthDate: '', document: { type: '', number: '' }, serviceStart: '', tariff: '', tags: [], customFields: [], infra: [], avatarFileId: null, notes: '',
 };
 
@@ -188,7 +189,16 @@ function OverviewTab({ client }: { client: Client }) {
           </Field>
           <div className="flex items-end gap-2">
             <Field label="Ссылка на карту (необязательно)" className="flex-1">
-              <Input value={f.mapUrl} onChange={(e) => set('mapUrl', e.target.value)} placeholder="https://maps…" />
+              <Input
+                value={f.mapUrl}
+                onChange={(e) => {
+                  const url = e.target.value;
+                  // A pasted Google/Yandex link already carries the coordinates.
+                  const ll = f.lat === null ? parseLatLng(url) : null;
+                  setF((x) => ({ ...x, mapUrl: url, ...(ll ?? {}) }));
+                }}
+                placeholder="https://maps…"
+              />
             </Field>
             {mapHref && (
               <a href={mapHref} target="_blank" rel="noreferrer noopener" className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line px-3 text-sm text-muted hover:text-fg">
@@ -196,6 +206,9 @@ function OverviewTab({ client }: { client: Client }) {
               </a>
             )}
           </div>
+          <Field label="Координаты объекта" hint="Для общей карты. «широта, долгота» или ссылка Google/Яндекс Карт.">
+            <CoordsInput lat={f.lat} lng={f.lng} onChange={(lat, lng) => setF((x) => ({ ...x, lat, lng }))} />
+          </Field>
         </div>
       </Section>
 

@@ -16,6 +16,9 @@ export const clientSchema = z.object({
     .default({ telegram: '', whatsapp: '', signal: '' }),
   address: str(500),
   mapUrl: str(1000),
+  // Site coordinates for the overview map; null when unknown.
+  lat: z.number().min(-90).max(90).nullable().default(null),
+  lng: z.number().min(-180).max(180).nullable().default(null),
   birthDate: str(20),
   document: z.object({ type: str(100), number: str(100) }).default({ type: '', number: '' }),
   serviceStart: str(20),

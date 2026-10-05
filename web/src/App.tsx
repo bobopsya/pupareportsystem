@@ -15,6 +15,7 @@ const ZeroTier = lazy(() => import('./pages/ZeroTier'));
 const Devices = lazy(() => import('./pages/Devices'));
 const WifiPage = lazy(() => import('./pages/Wifi'));
 const RoutesPage = lazy(() => import('./pages/Routes'));
+const MapAll = lazy(() => import('./pages/MapAll'));
 const SerialConsole = lazy(() => import('./pages/SerialConsole'));
 const Audit = lazy(() => import('./pages/Audit'));
 const Trash = lazy(() => import('./pages/Trash'));
@@ -32,6 +33,7 @@ export function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
+            <Route path="map" element={<MapAll />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="employees" element={<Employees />} />
             <Route path="clients" element={<Clients />} />

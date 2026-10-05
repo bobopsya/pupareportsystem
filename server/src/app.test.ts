@@ -122,8 +122,10 @@ describe('records', () => {
     const bad = await app.inject({ method: 'POST', url: '/api/clients', headers: h, payload: { fullName: '' } });
     expect(bad.statusCode).toBe(400);
 
-    const up = await app.inject({ method: 'PUT', url: `/api/clients/${id}`, headers: h, payload: { ...c.json(), tariff: 'Премиум' } });
-    expect(up.json().tariff).toBe('Премиум');
+    const up = await app.inject({ method: 'PUT', url: `/api/clients/${id}`, headers: h, payload: { ...c.json(), tariff: 'Премиум', lat: 55.75, lng: 37.62 } });
+    expect(up.json()).toMatchObject({ tariff: 'Премиум', lat: 55.75, lng: 37.62 });
+    const badCoords = await app.inject({ method: 'PUT', url: `/api/clients/${id}`, headers: h, payload: { ...c.json(), lat: 123 } });
+    expect(badCoords.statusCode).toBe(400);
 
     expect((await app.inject({ method: 'GET', url: '/api/clients?q=Пётр', headers: h })).json()).toHaveLength(1);
     await app.inject({ method: 'DELETE', url: `/api/clients/${id}`, headers: h });

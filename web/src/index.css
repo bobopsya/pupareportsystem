@@ -2,7 +2,8 @@
 @import '@fontsource-variable/jetbrains-mono';
 @import 'tailwindcss';
 
-@theme {
+/* Dark is the default palette; light overrides the same variables below. */
+@theme static {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
@@ -22,6 +23,23 @@
   --color-info: #93c5fd;
 }
 
+:root[data-theme='light'] {
+  --color-bg: #f6f6f6;
+  --color-surface: #ffffff;
+  --color-elevated: #f1f1f1;
+  --color-hover: #ebebeb;
+  --color-line: #e2e2e2;
+  --color-line-strong: #c9c9c9;
+  --color-fg: #0a0a0a;
+  --color-muted: #525252;
+  --color-faint: #8a8a8a;
+
+  --color-ok: #15803d;
+  --color-warn: #b45309;
+  --color-bad: #dc2626;
+  --color-info: #1d4ed8;
+}
+
 html,
 body,
 #root {
@@ -37,61 +55,68 @@ body {
 }
 
 ::selection {
-  background: #fafafa;
-  color: #0a0a0a;
+  background: var(--color-fg);
+  color: var(--color-bg);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  scrollbar-color: var(--color-line-strong) transparent;
 }
 
 :focus-visible {
-  outline: 2px solid #fafafa;
+  outline: 2px solid var(--color-fg);
   outline-offset: 2px;
-}
-
-input[type='date'],
-input[type='datetime-local'] {
-  color-scheme: dark;
 }
 
 .uplot {
   font-family: var(--font-mono);
 }
 
-/* Dark map: invert the standard OSM tiles to match the portal theme. */
-.zn-dark-tiles {
-  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
-}
-.leaflet-container {
-  background: #111;
+/* ---------- Maps ---------- */
+/* Two classes so this wins over leaflet.css (#ddd), which is bundled after this file. */
+.zn-map.leaflet-container {
+  background: var(--color-surface);
   font-family: var(--font-sans);
 }
 
-/* Hover tooltip for Wi-Fi markers, themed dark. */
+/* Dark map style: invert the standard OSM tiles. "auto" follows the portal theme. */
+.zn-map[data-map-style='dark'] .zn-tiles,
+:root[data-theme='dark'] .zn-map[data-map-style='auto'] .zn-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
+}
+
+/* Route lines; colours via CSS so they follow the theme. */
+.zn-line-road {
+  stroke: var(--color-ok);
+}
+.zn-line-straight {
+  stroke: var(--color-fg);
+}
+
+/* Hover tooltips on map markers. */
 .leaflet-tooltip.zn-tip-wrap {
-  background: #171717;
-  border: 1px solid #3a3a3a;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-line-strong);
   border-radius: 8px;
-  color: #fafafa;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color: var(--color-fg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1.5;
 }
 .leaflet-tooltip.zn-tip-wrap::before {
-  border-top-color: #3a3a3a;
+  border-top-color: var(--color-line-strong);
 }
 .zn-tip b {
   font-size: 13px;
 }
 .zn-tip > div {
-  color: #a3a3a3;
+  color: var(--color-muted);
 }
 .zn-tip-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #fafafa;
+  color: var(--color-fg);
 }

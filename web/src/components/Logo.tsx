@@ -2,7 +2,7 @@
 export function LogoMark({ size = 32, className }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" className={className} role="img" aria-label="ZhukoNet">
-      <circle cx="32" cy="32" r="32" fill="#fff" />
+      <circle cx="32" cy="32" r="31.5" fill="#fff" style={{ stroke: 'var(--color-line-strong)' }} strokeWidth="1" />
       <g transform="translate(0 2)">
         <path
           d="M29.5 14.5 25 9M34.5 14.5 39 9M24 25l-7-3.5M22 34h-8M23 43l-7 5M40 25l7-3.5M42 34h8M41 43l7 5"

@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import {
   ArrowDown, ArrowUp, Download, ImagePlus, MapPin, Navigation, Plus, Route as RouteIcon, Save, Trash2, X,
 } from 'lucide-react';
@@ -14,14 +13,17 @@ import {
 import { api, fileUrl, saveBlob, uploadFile, type FileMeta } from '../lib/api';
 import { fmtAgo, fmtBytes, fmtDate, type Tone } from '../lib/format';
 import { pathLengthKm, routeToGpx } from '../lib/geo';
+import { createMap, escHtml, numberIcon, TIP_OPTS, tooltip } from '../lib/map';
+import { useMapStyle } from '../lib/theme';
+import { MapStyleToggle } from '../components/MapStyle';
 import { useClientNames, useDeleteRecord, useEmployeeNames, useRecords, useSaveRecord } from '../lib/queries';
 import type { Route, RouteData, RoutePoint, RouteStatus } from '../lib/types';
 
-export const ROUTE_STATUS: Record<RouteStatus, { label: string; tone: Tone }> = {
-  planned: { label: 'Запланирован', tone: 'info' },
-  in_progress: { label: 'В пути', tone: 'warn' },
-  done: { label: 'Выполнен', tone: 'ok' },
-  cancelled: { label: 'Отменён', tone: 'neutral' },
+export const ROUTE_STATUS: Record<RouteStatus, { label: string; tone: Tone; color: string }> = {
+  planned: { label: 'Запланирован', tone: 'info', color: 'var(--color-info)' },
+  in_progress: { label: 'В пути', tone: 'warn', color: 'var(--color-warn)' },
+  done: { label: 'Выполнен', tone: 'ok', color: 'var(--color-ok)' },
+  cancelled: { label: 'Отменён', tone: 'neutral', color: 'var(--color-faint)' },
 };
 
 const EMPTY: RouteData = { name: '', clientId: null, assigneeId: null, date: '', time: '', status: 'planned', description: '', tags: [], points: [] };
@@ -34,11 +36,11 @@ function RouteMap({ points, road, onAdd, onMove }: { points: RoutePoint[]; road:
   const cb = useRef({ onAdd, onMove });
   cb.current = { onAdd, onMove };
   const fitted = useRef(false);
+  const { style: mapStyle } = useMapStyle();
 
   useEffect(() => {
     if (!box.current || map.current) return;
-    const m = L.map(box.current).setView([55.75, 37.62], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap', referrerPolicy: 'strict-origin-when-cross-origin', className: 'zn-dark-tiles' }).addTo(m);
+    const m = createMap(box.current);
     layer.current = L.layerGroup().addTo(m);
     m.on('click', (e) => cb.current.onAdd(e.latlng.lat, e.latlng.lng));
     map.current = m;
@@ -54,25 +56,7 @@ function RouteMap({ points, road, onAdd, onMove }: { points: RoutePoint[]; road:
     const lg = layer.current;
     if (!m || !lg) return;
     lg.clearLayers();
-
-    if (road?.geometry.length) L.polyline(road.geometry, { color: '#4ade80', weight: 4, opacity: 0.9 }).addTo(lg);
-    if (points.length > 1) L.polyline(points.map((p) => [p.lat, p.lng] as [number, number]), { color: '#fafafa', weight: 2, opacity: road ? 0.3 : 0.7, dashArray: '6 6' }).addTo(lg);
-
-    points.forEach((p, i) => {
-      const icon = L.divIcon({
-        className: '',
-        html: `<span style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#fafafa;color:#0a0a0a;font:600 12px sans-serif;border:2px solid #0a0a0a;box-shadow:0 0 0 2px #fafafa55">${i + 1}</span>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
-      const marker = L.marker([p.lat, p.lng], { icon, draggable: true }).addTo(lg);
-      marker.on('dragend', () => {
-        const ll = marker.getLatLng();
-        cb.current.onMove(i, ll.lat, ll.lng);
-      });
-      if (p.label || p.note) marker.bindTooltip(`<div class="zn-tip"><b>${(p.label || `Точка ${i + 1}`).replace(/[<>&]/g, '')}</b>${p.note ? `<div>${p.note.replace(/[<>&]/g, '')}</div>` : ''}</div>`, { className: 'zn-tip-wrap', direction: 'top', offset: [0, -12] });
-    });
-
+    drawRoute(lg, points, road, { draggable: true, onMove: (i, lat, lng) => cb.current.onMove(i, lat, lng) });
     if (points.length && !fitted.current) {
       m.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [50, 50], maxZoom: 15 });
       fitted.current = true;
@@ -81,12 +65,41 @@ function RouteMap({ points, road, onAdd, onMove }: { points: RoutePoint[]; road:
 
   return (
     <div className="relative">
-      <div ref={box} className="h-[60dvh] min-h-80 w-full rounded-lg" style={{ background: '#111' }} />
-      <div className="pointer-events-none absolute left-2 top-2 z-[500] rounded-md border border-line bg-bg/85 px-2.5 py-1.5 text-xs text-muted backdrop-blur">
+      <div ref={box} className="zn-map h-[60dvh] min-h-80 w-full rounded-lg" data-map-style={mapStyle} />
+      <div className="pointer-events-none absolute right-2 top-2 z-[500] hidden rounded-md border border-line bg-bg/85 px-2.5 py-1.5 text-xs text-muted backdrop-blur sm:block">
         Клик по карте — добавить точку · маркер можно перетащить
       </div>
     </div>
   );
+}
+
+/** Draws a route (road line, straight dashed line, numbered points) into a layer; shared with the overview map. */
+export function drawRoute(
+  lg: L.LayerGroup,
+  points: RoutePoint[],
+  road: Route['road'],
+  opts: { draggable?: boolean; onMove?: (i: number, lat: number, lng: number) => void; color?: string; tooltip?: string; onClick?: () => void } = {},
+) {
+  const color = opts.color ?? 'var(--color-fg)';
+  const lines: L.Polyline[] = [];
+  if (road?.geometry.length) lines.push(L.polyline(road.geometry, { weight: 4, opacity: 0.9, className: 'zn-line-road' }).addTo(lg));
+  if (points.length > 1) {
+    lines.push(L.polyline(points.map((p) => [p.lat, p.lng] as [number, number]), { weight: 2, opacity: road ? 0.35 : 0.8, dashArray: '6 6', className: 'zn-line-straight' }).addTo(lg));
+  }
+  points.forEach((p, i) => {
+    const marker = L.marker([p.lat, p.lng], { icon: numberIcon(i + 1, color), draggable: !!opts.draggable }).addTo(lg);
+    if (opts.onMove) {
+      marker.on('dragend', () => {
+        const ll = marker.getLatLng();
+        opts.onMove!(i, ll.lat, ll.lng);
+      });
+    }
+    const tip = opts.tooltip ?? (p.label || p.note ? tooltip(p.label || `Точка ${i + 1}`, [p.note && escHtml(p.note)]) : null);
+    if (tip) marker.bindTooltip(tip, TIP_OPTS);
+    if (opts.onClick) marker.on('click', opts.onClick);
+  });
+  if (opts.tooltip) lines.forEach((l) => l.bindTooltip(opts.tooltip!, { ...TIP_OPTS, sticky: true }));
+  if (opts.onClick) lines.forEach((l) => l.on('click', opts.onClick!));
 }
 
 // ---------------- Photos ----------------
@@ -224,6 +237,7 @@ function RouteEditor({ route }: { route: Route }) {
         <Button size="sm" variant="ghost" icon={<Download className="size-3.5" />} disabled={!f.points.length} onClick={() => saveBlob(new Blob([routeToGpx(f.name || 'route', f.points)], { type: 'application/gpx+xml' }), `${(f.name || 'route').replace(/[^\p{L}\p{N}]+/gu, '_')}.gpx`)}>
           GPX
         </Button>
+        <MapStyleToggle />
       </div>
 
       {f.points.length > 0 && (

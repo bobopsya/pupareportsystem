@@ -231,7 +231,7 @@ function GeneratorPanel({ onUse }: { onUse?: (p: string) => void }) {
       </div>
       <StrengthBar password={pw} />
       <Field label={`Длина: ${o.length}`}>
-        <input type="range" min={8} max={64} value={o.length} onChange={(e) => regen({ ...o, length: Number(e.target.value) })} className="accent-white" />
+        <input type="range" min={8} max={64} value={o.length} onChange={(e) => regen({ ...o, length: Number(e.target.value) })} className="accent-fg" />
       </Field>
       <div className="grid grid-cols-2 gap-2">
         <Checkbox checked={o.lower} onChange={(v) => regen({ ...o, lower: v })} label="a–z" />

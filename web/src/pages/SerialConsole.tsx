@@ -27,7 +27,9 @@ interface ChipInfo {
 
 const MAX_LINES = 5000;
 const MAX_POINTS = 600;
-const PLOT_COLORS = ['#fafafa', '#4ade80', '#93c5fd', '#fbbf24', '#f87171', '#c084fc', '#2dd4bf', '#a3a3a3'];
+/** Series colours; the first follows the theme's foreground so it is visible on both backgrounds. */
+const PLOT_EXTRA = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#737373'];
+const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,7 +48,8 @@ function Plotter({ series, version }: { series: React.MutableRefObject<{ x: numb
     const el = box.current;
     if (!el) return;
     const keys = [...series.current.ys.keys()];
-    const sig = keys.join('|');
+    // Theme is part of the signature, so the next data tick redraws the plot in the new colours.
+    const sig = `${keys.join('|')}#${document.documentElement.dataset.theme}`;
     const data = [series.current.x, ...keys.map((k) => series.current.ys.get(k)!)] as uPlot.AlignedData;
     if (plot.current && sig === names.current) {
       plot.current.setData(data);
@@ -55,7 +58,8 @@ function Plotter({ series, version }: { series: React.MutableRefObject<{ x: numb
     plot.current?.destroy();
     names.current = sig;
     if (!keys.length) return;
-    const axis = { stroke: '#6b6b6b', grid: { stroke: '#1f1f1f', width: 1 }, ticks: { stroke: '#262626', width: 1 } };
+    const axis = { stroke: cssVar('--color-faint'), grid: { stroke: cssVar('--color-hover'), width: 1 }, ticks: { stroke: cssVar('--color-line'), width: 1 } };
+    const colors = [cssVar('--color-fg'), ...PLOT_EXTRA];
     plot.current = new uPlot(
       {
         width: el.clientWidth,
@@ -64,7 +68,7 @@ function Plotter({ series, version }: { series: React.MutableRefObject<{ x: numb
         cursor: { drag: { x: false, y: false } },
         scales: { x: { time: false } },
         axes: [{ ...axis, label: 'секунды' }, axis],
-        series: [{ label: 't' }, ...keys.map((k, i) => ({ label: k, stroke: PLOT_COLORS[i % PLOT_COLORS.length], width: 1.5, points: { show: false } }))],
+        series: [{ label: 't' }, ...keys.map((k, i) => ({ label: k, stroke: colors[i % colors.length], width: 1.5, points: { show: false } }))],
       },
       data,
       el,

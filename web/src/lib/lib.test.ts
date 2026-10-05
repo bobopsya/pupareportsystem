@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dedupeKey, hostOf, parseCredentialsJson } from './jsonImport';
 import { DEFAULT_GEN, generatePassword, strength } from './password';
-import { pathLengthKm, routeToGpx } from './geo';
+import { parseLatLng, pathLengthKm, routeToGpx } from './geo';
 import { guessBoard, LineSplitter, parsePlotLine } from './serial';
 import { createVault, decryptSecret, encryptSecret, rekey, unlockWithMaster, unlockWithRecovery } from './vaultCrypto';
 
@@ -128,6 +128,16 @@ describe('routes geo', () => {
     expect(km).toBeGreaterThan(110);
     expect(km).toBeLessThan(112);
     expect(pathLengthKm([{ lat: 5, lng: 5 }])).toBe(0);
+  });
+
+  it('parses coordinates from text and map links', () => {
+    expect(parseLatLng('55.7558, 37.6173')).toEqual({ lat: 55.7558, lng: 37.6173 });
+    expect(parseLatLng('55.7558 37.6173')).toEqual({ lat: 55.7558, lng: 37.6173 });
+    expect(parseLatLng('https://www.google.com/maps/place/Kremlin/@55.752,37.6175,17z/data=!3m1')).toEqual({ lat: 55.752, lng: 37.6175 });
+    // Yandex puts longitude first.
+    expect(parseLatLng('https://yandex.ru/maps/?ll=37.6173%2C55.7558&z=16')).toEqual({ lat: 55.7558, lng: 37.6173 });
+    expect(parseLatLng('Москва, Тверская 1')).toBeNull();
+    expect(parseLatLng('155, 37')).toBeNull();
   });
 
   it('builds GPX with waypoints and a track', () => {

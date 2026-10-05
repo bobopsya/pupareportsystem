@@ -5,12 +5,16 @@ import {
   KeyRound,
   ListTodo,
   LogOut,
+  Map as MapIcon,
   Menu,
+  Monitor,
+  Moon,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
   Route,
   Settings,
+  Sun,
   Trash2,
   Usb,
   UserRound,
@@ -22,8 +26,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
+import { useTheme, type ThemePref } from '../lib/theme';
 import { LogoMark, Wordmark } from './Logo';
-import { cx, IconButton } from './ui';
+import { cx, IconButton, Segmented } from './ui';
 
 interface NavItem {
   to: string;
@@ -36,6 +41,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: 'Обзор',
     items: [
       { to: '/', label: 'Дашборд', icon: <Gauge /> },
+      { to: '/map', label: 'Карта', icon: <MapIcon /> },
       { to: '/tasks', label: 'Задачи', icon: <ListTodo /> },
     ],
   },
@@ -75,6 +81,32 @@ function readCollapsed() {
   } catch {
     return false;
   }
+}
+
+const THEME_OPTIONS: { id: ThemePref; label: string; icon: ReactNode }[] = [
+  { id: 'dark', label: 'Тёмная', icon: <Moon className="size-3.5" /> },
+  { id: 'light', label: 'Светлая', icon: <Sun className="size-3.5" /> },
+  { id: 'system', label: 'Как в системе', icon: <Monitor className="size-3.5" /> },
+];
+
+/** Theme choice: a segmented control, or a single cycling button when the sidebar is collapsed. */
+function ThemeSwitch({ compact }: { compact: boolean }) {
+  const { pref, setPref } = useTheme();
+  if (compact) {
+    const i = THEME_OPTIONS.findIndex((o) => o.id === pref);
+    const next = THEME_OPTIONS[(i + 1) % THEME_OPTIONS.length]!;
+    return (
+      <IconButton label={`Тема: ${THEME_OPTIONS[i]!.label}. Переключить на «${next.label}»`} onClick={() => setPref(next.id)}>
+        {THEME_OPTIONS[i]!.icon}
+      </IconButton>
+    );
+  }
+  return (
+    <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+      <span className="text-xs text-faint">Тема</span>
+      <Segmented value={pref} onChange={setPref} options={THEME_OPTIONS.map((o) => ({ id: o.id, label: o.icon, title: o.label }))} />
+    </div>
+  );
 }
 
 function Sidebar({ collapsed, onToggle, onNavigate, mobile }: { collapsed: boolean; onToggle?: () => void; onNavigate?: () => void; mobile?: boolean }) {
@@ -140,6 +172,7 @@ function Sidebar({ collapsed, onToggle, onNavigate, mobile }: { collapsed: boole
             <LogOut className="size-4" />
           </IconButton>
         )}
+        <ThemeSwitch compact={collapsed} />
         {onToggle && (
           <button
             type="button"

@@ -71,6 +71,7 @@ test('full portal flow', async ({ page }) => {
   await page.getByRole('button', { name: 'Создать и открыть' }).click();
   await expect(page.getByRole('tab', { name: 'Обзор' })).toBeVisible();
   await page.getByLabel('Тариф').fill('Умный дом — премиум');
+  await page.getByLabel('Координаты объекта').fill('55.7558, 37.6173');
   await page.getByLabel('Адрес').fill('Berlin, Musterstraße 1');
   await page.getByRole('button', { name: 'Поле' }).click();
   await page.getByPlaceholder('Название').fill('Код домофона');
@@ -218,6 +219,36 @@ test('full portal flow', async ({ page }) => {
   await page.getByRole('button', { name: 'Сохранить' }).first().click();
   await expect(page.getByText('Маршрут сохранён')).toBeVisible();
   await shot(page, '16-routes');
+
+  // --- Карта всего ---
+  await nav(page, 'Карта');
+  await expect(page.getByRole('heading', { name: 'Карта' })).toBeVisible();
+  const markers = page.locator('.leaflet-marker-icon');
+  // client site + Wi-Fi network + 3 route points
+  await expect(markers).toHaveCount(5);
+  const wifiLayer = page.getByRole('checkbox', { name: 'Wi-Fi' });
+  await wifiLayer.click();
+  await expect(wifiLayer).toHaveAttribute('aria-checked', 'false');
+  await expect(markers).toHaveCount(4);
+  await wifiLayer.click();
+  await expect(markers).toHaveCount(5);
+  // client filter keeps only the client and its route (the Wi-Fi network is not linked)
+  await page.getByRole('main').getByRole('combobox').selectOption({ label: 'Пётр Иванов' });
+  await expect(markers).toHaveCount(4);
+  await shot(page, '17-map-dark');
+
+  // --- Тема ---
+  await page.getByTitle('Светлая', { exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(246, 246, 246)');
+  await shot(page, '18-map-light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light'); // remembered
+  await nav(page, 'Дашборд');
+  await expect(page.getByRole('heading', { name: /Добр/ })).toBeVisible();
+  await shot(page, '19-dashboard-light');
+  await page.getByTitle('Тёмная', { exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
   await nav(page, 'USB-консоль');
   await expect(page.getByRole('heading', { name: 'USB-консоль' })).toBeVisible();
