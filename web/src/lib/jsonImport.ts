@@ -4,9 +4,9 @@
  * flat arrays, nested structures, keyed maps ({"github.com": {...}}) and exports of common
  * password managers (Bitwarden: items[].login.{username,password,uris[].uri}).
  */
-import type { VaultSecret } from './types';
+import type { VaultCategory, VaultSecret } from './types';
 
-const PASSWORD_KEYS = ['password', 'pass', 'passwd', 'pwd', 'pw', 'secret', 'пароль', 'parol', 'passwort', 'kennwort'];
+const PASSWORD_KEYS = ['password', 'pass', 'passwd', 'pwd', 'pw', 'secret', 'token', 'accesstoken', 'access_token', 'authtoken', 'apikey', 'api_key', 'пароль', 'parol', 'passwort', 'kennwort', 'токен'];
 const LOGIN_KEYS = ['login', 'username', 'user', 'user_name', 'userName', 'account', 'логин', 'benutzer', 'benutzername', 'nickname', 'uid'];
 const EMAIL_KEYS = ['email', 'e-mail', 'mail', 'почта', 'emailaddress', 'email_address'];
 const URL_KEYS = ['url', 'uri', 'link', 'href', 'website', 'web', 'origin', 'origin_url', 'login_uri', 'loginurl', 'адрес'];
@@ -61,6 +61,17 @@ function looksLikeUrl(s: string) {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(s);
 }
 
+/** Guesses a category from the site/url so imported Discord/Steam accounts land in the right place. */
+export function guessCategory(site: string, url: string): VaultCategory {
+  const h = `${hostOf(url)} ${site}`.toLowerCase();
+  if (/discord/.test(h)) return 'discord';
+  if (/steam/.test(h)) return 'steam';
+  if (/(epicgames|ea\.com|origin|ubisoft|battle\.net|riotgames|minecraft|mojang|roblox|xbox|playstation|psn|nintendo|gog\.com|twitch)/.test(h)) return 'game';
+  if (/(gmail|mail\.|outlook|proton|yandex|yahoo|icloud)/.test(h)) return 'email';
+  if (/(vk\.com|facebook|instagram|twitter|x\.com|tiktok|telegram|ok\.ru|linkedin|reddit)/.test(h)) return 'social';
+  return 'site';
+}
+
 export interface ParsedEntry extends VaultSecret {
   /** JSON path where the entry was found, for the preview. */
   path: string;
@@ -82,7 +93,7 @@ function fromObject(o: Obj, parentKey: string | null): ParsedEntry | null {
   if (!site && url) site = hostOf(url);
   const notesParts = [pick(scope, NOTE)];
   if (email && email !== login) notesParts.push(`Email: ${email}`);
-  return { site, url, login, password, notes: notesParts.filter(Boolean).join('\n'), path: '' };
+  return { site, url, login, password, notes: notesParts.filter(Boolean).join('\n'), category: guessCategory(site, url), fields: [], path: '' };
 }
 
 export interface ParseResult {

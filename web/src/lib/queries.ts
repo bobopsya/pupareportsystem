@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
-import type { Client, ClientEvent, Device, Employee, Meta, SerialTemplate, Task, VaultItem, ZtMember, ZtNetwork } from './types';
+import type { Client, ClientEvent, Device, Employee, Meta, SerialTemplate, Task, VaultItem, Wifi, ZtMember, ZtNetwork } from './types';
 
 export interface RouteTypes {
   clients: Client;
@@ -11,6 +11,7 @@ export interface RouteTypes {
   tasks: Task;
   'serial-templates': SerialTemplate;
   'vault-items': VaultItem;
+  'wifi-networks': Wifi;
 }
 export type Route = keyof RouteTypes;
 

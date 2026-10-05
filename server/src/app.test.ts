@@ -134,6 +134,25 @@ describe('records', () => {
     expect((await app.inject({ method: 'GET', url: '/api/clients', headers: h })).json()).toHaveLength(1);
   });
 
+  it('CRUD + filters for Wi-Fi networks', async () => {
+    const cookie = await session();
+    const h = { ...H, cookie };
+    const created = await app.inject({ method: 'POST', url: '/api/wifi-networks', headers: h, payload: { name: 'Office-5G', password: 'secret123', security: 'wpa3', status: 'active', lat: 52.52, lng: 13.405 } });
+    expect(created.statusCode).toBe(200);
+    const net = created.json();
+    expect(net).toMatchObject({ name: 'Office-5G', security: 'wpa3', lat: 52.52, lng: 13.405 });
+
+    await app.inject({ method: 'POST', url: '/api/wifi-networks', headers: h, payload: { name: 'Guest', status: 'inactive' } });
+    expect((await app.inject({ method: 'GET', url: '/api/wifi-networks?status=active', headers: h })).json()).toHaveLength(1);
+    expect((await app.inject({ method: 'GET', url: '/api/wifi-networks', headers: h })).json()).toHaveLength(2);
+
+    const bad = await app.inject({ method: 'POST', url: '/api/wifi-networks', headers: h, payload: { name: '', lat: 999 } });
+    expect(bad.statusCode).toBe(400);
+
+    const dash = (await app.inject({ method: 'GET', url: '/api/dashboard', headers: h })).json();
+    expect(dash.counts.wifi).toBe(2);
+  });
+
   it('records device transfers server-side', async () => {
     const cookie = await session();
     const h = { ...H, cookie };

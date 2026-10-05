@@ -123,8 +123,27 @@ test('full portal flow', async ({ page }) => {
   await expect(page.getByRole('cell', { name: /github\.com/ })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('cell', { name: /router\.local/ }).first()).toBeVisible();
   await expect(page.getByText(/слабых: \d/)).toBeVisible();
-  await page.getByRole('row', { name: /github\.com/ }).getByRole('button', { name: 'Показать' }).click();
+  await page.getByRole('row', { name: /github\.com/ }).getByRole('button', { name: 'Показать' }).first().click();
   await expect(page.getByText('Gh!7xP2q-Vb9z')).toBeVisible();
+
+  // Discord token entry with category + extra field
+  await page.getByRole('button', { name: 'Добавить' }).click();
+  await page.getByLabel('Категория').selectOption('discord');
+  await page.getByLabel('Название аккаунта / сервиса').fill('Discord · рабочий');
+  await page.getByLabel('Логин / email / ID').fill('zhukonet#0001');
+  await page.getByLabel('Токен / пароль').fill('discord-main-token-xyz');
+  await page.getByRole('button', { name: 'Поле' }).click();
+  await page.getByPlaceholder('Название (Токен…)').fill('Steam-ключ');
+  await page.getByPlaceholder('Значение').fill('STEAM-KEY-7788');
+  await page.getByRole('dialog').getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.getByRole('cell', { name: /Discord · рабочий/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Discord · рабочий/ }).getByText('Discord', { exact: true })).toBeVisible();
+  // filter by category
+  const categoryFilter = page.getByRole('combobox').filter({ hasText: 'Все категории' });
+  await categoryFilter.selectOption('discord');
+  await expect(page.getByRole('cell', { name: /github\.com/ })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: /Discord · рабочий/ })).toBeVisible();
+  await categoryFilter.selectOption('');
   await shot(page, '06-vault');
 
   // --- ZeroTier ---
@@ -153,6 +172,24 @@ test('full portal flow', async ({ page }) => {
   await page.getByRole('button', { name: 'Сохранить' }).click();
   await expect(page.getByText('Датчик температуры #1')).toBeVisible();
   await shot(page, '08-devices');
+
+  // --- Wi-Fi ---
+  await nav(page, 'Wi-Fi');
+  await page.getByRole('button', { name: 'Добавить сеть' }).click();
+  await page.getByLabel('Название сети (SSID) *').fill('ZhukoNet-Office');
+  await page.getByLabel('Пароль').fill('WifiPass-2026!');
+  await page.getByLabel('Защита').selectOption('wpa3');
+  await page.getByLabel(/Координаты/).fill('52.5200, 13.4050');
+  await page.getByRole('dialog').getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.getByRole('cell', { name: 'ZhukoNet-Office' })).toBeVisible();
+  await page.getByRole('row', { name: /ZhukoNet-Office/ }).getByRole('button', { name: 'Показать' }).click();
+  await expect(page.getByText('WifiPass-2026!')).toBeVisible();
+  // map view renders a marker for the geocoded network
+  await page.getByTitle('Карта').click();
+  await expect(page.locator('.leaflet-container')).toBeVisible();
+  await expect(page.locator('.leaflet-marker-icon')).toHaveCount(1);
+  await shot(page, '14-wifi');
+  await page.getByTitle('Список').click();
 
   await nav(page, 'USB-консоль');
   await expect(page.getByRole('heading', { name: 'USB-консоль' })).toBeVisible();

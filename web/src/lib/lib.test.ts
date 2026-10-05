@@ -55,6 +55,17 @@ describe('parseCredentialsJson', () => {
     expect(parseCredentialsJson('{"a":1}').error).toMatch(/не найдено/);
   });
 
+  it('imports token fields and guesses Discord/Steam categories', () => {
+    const r = parseCredentialsJson(JSON.stringify([
+      { site: 'Discord', login: 'me@mail.com', token: 'abc.def.ghi' },
+      { url: 'https://store.steampowered.com', username: 'gamer', password: 'steampass' },
+      { service: 'github.com', user: 'dev', password: 'x' },
+    ]));
+    expect(r.entries[0]).toMatchObject({ category: 'discord', password: 'abc.def.ghi', login: 'me@mail.com' });
+    expect(r.entries[1]!.category).toBe('steam');
+    expect(r.entries[2]!.category).toBe('site');
+  });
+
   it('builds duplicate keys from host + login', () => {
     expect(hostOf('https://www.GitHub.com/login')).toBe('github.com');
     expect(dedupeKey({ site: 'github.com', url: '', login: 'Ivan ' })).toBe(dedupeKey({ site: '', url: 'https://www.github.com/x', login: 'ivan' }));
@@ -66,11 +77,15 @@ describe('vault crypto', () => {
 
   it('round-trips items and unlocks with master password or recovery code', async () => {
     const { meta, recoveryCode, dek } = await createVault('master-pass', ITER);
-    const sealed = await encryptSecret(dek, { site: 's', url: '', login: 'l', password: 'секрет', notes: '' });
+    const sealed = await encryptSecret(dek, { site: 's', url: '', login: 'l', password: 'секрет', notes: '', category: 'discord', fields: [{ label: 'Токен', value: 'tok-123' }] });
     expect(sealed.ct).not.toContain('секрет');
+    expect(sealed.ct).not.toContain('tok-123');
 
     const a = await unlockWithMaster(meta, 'master-pass');
-    expect((await decryptSecret(a.dek, sealed)).password).toBe('секрет');
+    const openedA = await decryptSecret(a.dek, sealed);
+    expect(openedA.password).toBe('секрет');
+    expect(openedA.category).toBe('discord');
+    expect(openedA.fields[0]).toEqual({ label: 'Токен', value: 'tok-123' });
     const b = await unlockWithRecovery(meta, recoveryCode.toLowerCase().replace(/-/g, ' '));
     expect((await decryptSecret(b.dek, sealed)).password).toBe('секрет');
     await expect(unlockWithMaster(meta, 'wrong')).rejects.toThrow();
@@ -78,7 +93,7 @@ describe('vault crypto', () => {
 
   it('rekey keeps existing items readable', async () => {
     const { dek, dekRaw } = await createVault('old', ITER);
-    const sealed = await encryptSecret(dek, { site: 's', url: '', login: '', password: 'p', notes: '' });
+    const sealed = await encryptSecret(dek, { site: 's', url: '', login: '', password: 'p', notes: '', category: 'site', fields: [] });
     const { meta } = await rekey(dekRaw, 'new', ITER);
     const { dek: dek2 } = await unlockWithMaster(meta, 'new');
     expect((await decryptSecret(dek2, sealed)).password).toBe('p');

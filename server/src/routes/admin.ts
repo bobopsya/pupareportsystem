@@ -106,6 +106,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
         membersOnline: members.filter((m) => m.online).length,
         devices: countType('device'),
         vaultItems: countType('vault_item'),
+        wifi: countType('wifi'),
         openTasks: tasks.filter((t) => !t.done).length,
       },
       members: members

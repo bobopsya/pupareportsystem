@@ -30,7 +30,8 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'blob:'],
+        // tile.openstreetmap.org: map tiles for the Wi-Fi map view (images only).
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org'],
         fontSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],

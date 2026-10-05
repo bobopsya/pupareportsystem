@@ -14,6 +14,7 @@ import {
   Usb,
   UserRound,
   Users,
+  Wifi,
   X,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -49,6 +50,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/vault', label: 'Пароли', icon: <KeyRound /> },
       { to: '/zerotier', label: 'ZeroTier', icon: <Network /> },
+      { to: '/wifi', label: 'Wi-Fi', icon: <Wifi /> },
       { to: '/devices', label: 'Устройства', icon: <Cpu /> },
       { to: '/console', label: 'USB-консоль', icon: <Usb /> },
     ],

@@ -156,14 +156,37 @@ export interface VaultItemData {
 }
 export type VaultItem = VaultItemData & Meta;
 
-/** Decrypted contents of a vault item. */
+export type VaultCategory = 'site' | 'discord' | 'steam' | 'game' | 'email' | 'social' | 'other';
+
+/** Decrypted contents of a vault item. Extra fields (Discord/Steam tokens, 2FA…) are encrypted too. */
 export interface VaultSecret {
   site: string;
   url: string;
   login: string;
   password: string;
   notes: string;
+  category: VaultCategory;
+  fields: { label: string; value: string }[];
 }
+
+export type WifiSecurity = 'open' | 'wep' | 'wpa' | 'wpa2' | 'wpa3' | 'wpa2-ent' | 'other';
+export type WifiStatus = 'active' | 'inactive' | 'unknown';
+
+export interface WifiData {
+  name: string;
+  password: string;
+  security: WifiSecurity;
+  band: '' | '2.4' | '5' | '6' | 'dual';
+  hidden: boolean;
+  status: WifiStatus;
+  clientId: string | null;
+  location: string;
+  lat: number | null;
+  lng: number | null;
+  tags: string[];
+  notes: string;
+}
+export type Wifi = WifiData & Meta;
 
 export interface AuditEntry {
   id: number;

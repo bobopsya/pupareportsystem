@@ -123,6 +123,22 @@ export const vaultItemSchema = z.object({
   clientId: nullableId,
 });
 
+export const wifiSchema = z.object({
+  name: z.string().trim().min(1, 'Укажите название сети (SSID)').max(200),
+  password: str(200),
+  security: z.enum(['open', 'wep', 'wpa', 'wpa2', 'wpa3', 'wpa2-ent', 'other']).default('wpa2'),
+  band: z.enum(['', '2.4', '5', '6', 'dual']).default(''),
+  hidden: z.boolean().default(false),
+  status: z.enum(['active', 'inactive', 'unknown']).default('active'),
+  clientId: nullableId,
+  location: str(500),
+  // Geo coordinates for the map view; null when unknown.
+  lat: z.number().min(-90).max(90).nullable().default(null),
+  lng: z.number().min(-180).max(180).nullable().default(null),
+  tags,
+  notes: str(10000),
+});
+
 export const employeeProfileSchema = z.object({
   fullName: z.string().trim().min(1, 'Укажите ФИО').max(200),
   position: str(200),
@@ -137,7 +153,7 @@ export const employeeProfileSchema = z.object({
   avatarFileId: nullableId,
 });
 
-export type RecordType = 'client' | 'client_event' | 'zt_network' | 'zt_member' | 'device' | 'task' | 'serial_template' | 'vault_item';
+export type RecordType = 'client' | 'client_event' | 'zt_network' | 'zt_member' | 'device' | 'task' | 'serial_template' | 'vault_item' | 'wifi';
 
 export interface TypeDef {
   schema: z.ZodObject<z.ZodRawShape>;
@@ -164,6 +180,7 @@ export const TYPES: Record<RecordType, TypeDef> = {
   task: { schema: taskSchema, filters: ['assigneeId', 'clientId'], title: (d) => String(d.text).slice(0, 60) },
   serial_template: { schema: serialTemplateSchema, filters: [], title: (d) => String(d.name) },
   vault_item: { schema: vaultItemSchema, filters: ['clientId', 'folder'], title: (d) => (d.folder ? `папка «${d.folder}»` : 'без папки') },
+  wifi: { schema: wifiSchema, filters: ['clientId', 'status'], title: (d) => String(d.name) },
 };
 
 export const TYPE_ROUTES: Record<string, RecordType> = {
@@ -175,4 +192,5 @@ export const TYPE_ROUTES: Record<string, RecordType> = {
   tasks: 'task',
   'serial-templates': 'serial_template',
   'vault-items': 'vault_item',
+  'wifi-networks': 'wifi',
 };

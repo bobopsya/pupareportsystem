@@ -13,6 +13,7 @@ const Clients = lazy(() => import('./pages/Clients'));
 const Vault = lazy(() => import('./pages/Vault'));
 const ZeroTier = lazy(() => import('./pages/ZeroTier'));
 const Devices = lazy(() => import('./pages/Devices'));
+const WifiPage = lazy(() => import('./pages/Wifi'));
 const SerialConsole = lazy(() => import('./pages/SerialConsole'));
 const Audit = lazy(() => import('./pages/Audit'));
 const Trash = lazy(() => import('./pages/Trash'));
@@ -37,6 +38,7 @@ export function App() {
             <Route path="vault" element={<Vault />} />
             <Route path="zerotier" element={<ZeroTier />} />
             <Route path="devices" element={<Devices />} />
+            <Route path="wifi" element={<WifiPage />} />
             <Route path="console" element={<SerialConsole />} />
             <Route path="audit" element={<Audit />} />
             <Route path="trash" element={<Trash />} />

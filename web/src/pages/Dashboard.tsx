@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Cpu, KeyRound, ListTodo, Network, UserRound, Users } from 'lucide-react';
+import { Cpu, KeyRound, ListTodo, Network, UserRound, Users, Wifi } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Dot, Empty, Loading, Mono, PageHeader } from '../components/ui';
@@ -11,7 +11,7 @@ import { AuditRow } from './Audit';
 import { TaskList } from './Tasks';
 
 interface DashboardData {
-  counts: Record<'employees' | 'clients' | 'activeClients' | 'networks' | 'members' | 'membersOnline' | 'devices' | 'vaultItems' | 'openTasks', number>;
+  counts: Record<'employees' | 'clients' | 'activeClients' | 'networks' | 'members' | 'membersOnline' | 'devices' | 'vaultItems' | 'wifi' | 'openTasks', number>;
   members: { id: string; name: string; nodeId: string; online: boolean; lastSeen: number | null; ips: string[]; network: string }[];
   lastSync: number | null;
   recent: AuditEntry[];
@@ -49,7 +49,7 @@ export default function Dashboard() {
     <>
       <PageHeader title={`${greeting()}, ${user?.fullName.split(' ')[0] ?? ''}`} description="Сводка по ZhukoNet" />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         <Stat to="/employees" icon={<Users />} label="Сотрудники" value={c.employees} />
         <Stat to="/clients" icon={<UserRound />} label="Клиенты" value={c.clients} sub={`${c.activeClients} активных`} />
         <Stat to="/zerotier" icon={<Network />} label="Сети ZeroTier" value={c.networks} sub={`${c.members} узлов`} />
@@ -60,6 +60,7 @@ export default function Dashboard() {
           value={c.membersOnline}
           sub={data.lastSync ? `синхр. ${fmtAgo(data.lastSync)}` : 'нет синхронизации'}
         />
+        <Stat to="/wifi" icon={<Wifi />} label="Wi-Fi сети" value={c.wifi} />
         <Stat to="/devices" icon={<Cpu />} label="Устройства" value={c.devices} />
         <Stat to="/vault" icon={<KeyRound />} label="Пароли" value={c.vaultItems} />
       </div>

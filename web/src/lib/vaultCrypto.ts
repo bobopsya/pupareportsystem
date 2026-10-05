@@ -138,5 +138,5 @@ export async function encryptSecret(dek: CryptoKey, secret: VaultSecret): Promis
 export async function decryptSecret(dek: CryptoKey, item: { ct: string; iv: string }): Promise<VaultSecret> {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(item.iv) }, dek, fromB64(item.ct));
   const obj = JSON.parse(dec.decode(plain));
-  return { site: '', url: '', login: '', password: '', notes: '', ...obj };
+  return { site: '', url: '', login: '', password: '', notes: '', category: 'site', fields: [], ...obj };
 }

@@ -1,16 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Download, Eye, EyeOff, FileJson, KeyRound, Lock, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, Upload, Wand2 } from 'lucide-react';
+import { AlertTriangle, Download, Eye, EyeOff, FileJson, KeyRound, Lock, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, Upload, Wand2, X } from 'lucide-react';
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ClientSelect, matches, SearchInput } from '../components/common';
 import {
-  Badge, Button, Card, Checkbox, CopyButton, cx, Empty, ErrorText, Field, IconButton, Input, Loading, Modal, Mono, PageHeader, Select, Table, TagInput,
+  AddRowButton, Badge, Button, Card, Checkbox, CopyButton, cx, Empty, ErrorText, Field, IconButton, Input, Loading, Modal, Mono, PageHeader, Select, Table, TagInput,
   Textarea, td, th, trHover, useConfirm, useToast,
 } from '../components/ui';
 import { api, saveBlob } from '../lib/api';
+import type { Tone } from '../lib/format';
 import { hostOf, dedupeKey, parseCredentialsJson, type ParsedEntry } from '../lib/jsonImport';
 import { DEFAULT_GEN, generatePassword, STRENGTH_LABEL, strength, type GenOptions } from '../lib/password';
 import { useClientNames, useDeleteRecord, useSaveRecord } from '../lib/queries';
-import type { VaultItem, VaultSecret } from '../lib/types';
+import type { VaultCategory, VaultItem, VaultSecret } from '../lib/types';
 import { usePlainVault, useVault, type PlainItem } from '../lib/vault';
 
 const CLIPBOARD_CLEAR_MS = 30_000;
@@ -179,21 +180,34 @@ export function VaultGate({ children, compact }: { children: ReactNode; compact?
 }
 
 // ---------------- Password cell ----------------
-function SecretValue({ item, secret }: { item: VaultItem; secret: VaultSecret }) {
+/** One masked secret with show/copy. Reveals and copies are written to the audit log. */
+function MaskedSecret({ value, itemId, label, copyLabel }: { value: string; itemId: string; label?: string; copyLabel: string }) {
   const [shown, setShown] = useState(false);
   return (
-    <div className="flex items-center gap-1">
-      <Mono className={cx('min-w-0 flex-1 truncate', !shown && 'tracking-widest text-muted')}>{shown ? secret.password : '••••••••••'}</Mono>
+    <div className="flex min-w-0 items-center gap-1">
+      {label && <span className="shrink-0 text-[11px] text-faint">{label}</span>}
+      <Mono className={cx('min-w-0 flex-1 truncate', !shown && 'tracking-widest text-muted')}>{shown ? value : '••••••••••'}</Mono>
       <IconButton
         label={shown ? 'Скрыть' : 'Показать'}
         onClick={() => {
-          if (!shown) void logEvent('reveal', { itemId: item.id, label: secret.site });
+          if (!shown) void logEvent('reveal', { itemId, label: copyLabel });
           setShown(!shown);
         }}
       >
         {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
       </IconButton>
-      <CopyButton value={secret.password} label="Копировать пароль" clearAfterMs={CLIPBOARD_CLEAR_MS} onCopied={() => void logEvent('copy', { itemId: item.id, label: secret.site })} />
+      <CopyButton value={value} label="Копировать" clearAfterMs={CLIPBOARD_CLEAR_MS} onCopied={() => void logEvent('copy', { itemId, label: copyLabel })} />
+    </div>
+  );
+}
+
+function SecretValue({ item, secret }: { item: VaultItem; secret: VaultSecret }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <MaskedSecret value={secret.password} itemId={item.id} copyLabel={secret.site} />
+      {secret.fields?.filter((f) => f.value).map((f, i) => (
+        <MaskedSecret key={i} value={f.value} itemId={item.id} label={f.label || 'поле'} copyLabel={`${secret.site} · ${f.label}`} />
+      ))}
     </div>
   );
 }
@@ -236,7 +250,22 @@ function GeneratorPanel({ onUse }: { onUse?: (p: string) => void }) {
 }
 
 // ---------------- Item editor ----------------
-const EMPTY_SECRET: VaultSecret = { site: '', url: '', login: '', password: '', notes: '' };
+const EMPTY_SECRET: VaultSecret = { site: '', url: '', login: '', password: '', notes: '', category: 'site', fields: [] };
+
+export const VAULT_CATEGORY: Record<string, { label: string; tone: Tone }> = {
+  site: { label: 'Сайт', tone: 'neutral' },
+  discord: { label: 'Discord', tone: 'info' },
+  steam: { label: 'Steam', tone: 'info' },
+  game: { label: 'Игра', tone: 'info' },
+  email: { label: 'Почта', tone: 'neutral' },
+  social: { label: 'Соцсеть', tone: 'neutral' },
+  other: { label: 'Другое', tone: 'neutral' },
+};
+
+/** Categories where the "password" is really a token/key. */
+function isTokenKind(c: VaultCategory) {
+  return c === 'discord' || c === 'steam' || c === 'game';
+}
 
 function ItemModal({ item, onClose, defaults }: { item: PlainItem | null; onClose: () => void; defaults?: { clientId?: string | null } }) {
   const vault = useVault();
@@ -278,19 +307,31 @@ function ItemModal({ item, onClose, defaults }: { item: PlainItem | null; onClos
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Сайт / сервис">
-          <Input value={s.site} onChange={(e) => setS({ ...s, site: e.target.value })} placeholder="github.com" autoFocus />
+        <Field label="Категория">
+          <Select value={s.category} onChange={(e) => setS({ ...s, category: e.target.value as VaultCategory })}>
+            {Object.entries(VAULT_CATEGORY).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Клиент">
+          <ClientSelect value={meta.clientId} onChange={(clientId) => setMeta({ ...meta, clientId })} />
+        </Field>
+        <Field label={isTokenKind(s.category) ? 'Название аккаунта / сервиса' : 'Сайт / сервис'}>
+          <Input value={s.site} onChange={(e) => setS({ ...s, site: e.target.value })} placeholder={isTokenKind(s.category) ? 'Discord · основной' : 'github.com'} autoFocus />
         </Field>
         <Field label="Адрес (URL)">
           <Input value={s.url} onChange={(e) => setS({ ...s, url: e.target.value })} placeholder="https://…" />
         </Field>
-        <Field label="Логин или почта" className="sm:col-span-2">
+        <Field label={isTokenKind(s.category) ? 'Логин / email / ID' : 'Логин или почта'} className="sm:col-span-2">
           <Input mono value={s.login} onChange={(e) => setS({ ...s, login: e.target.value })} autoComplete="off" />
         </Field>
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <span className="text-xs font-medium text-muted">Пароль</span>
+          <span className="text-xs font-medium text-muted">{isTokenKind(s.category) ? 'Токен / пароль' : 'Пароль'}</span>
           <div className="flex gap-2">
-            <Input mono type={show ? 'text' : 'password'} value={s.password} onChange={(e) => setS({ ...s, password: e.target.value })} autoComplete="new-password" />
+            <Input mono aria-label={isTokenKind(s.category) ? 'Токен / пароль' : 'Пароль'} type={show ? 'text' : 'password'} value={s.password} onChange={(e) => setS({ ...s, password: e.target.value })} autoComplete="new-password" />
             <IconButton label={show ? 'Скрыть' : 'Показать'} className="size-9 border border-line" onClick={() => setShow(!show)}>
               {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </IconButton>
@@ -311,11 +352,29 @@ function ItemModal({ item, onClose, defaults }: { item: PlainItem | null; onClos
             />
           </div>
         )}
-        <Field label="Папка">
+        <div className="sm:col-span-2">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-xs font-medium text-muted">Доп. поля</span>
+            <AddRowButton onClick={() => setS({ ...s, fields: [...s.fields, { label: '', value: '' }] })}>Поле</AddRowButton>
+          </div>
+          {s.fields.length === 0 ? (
+            <p className="text-xs text-faint">Любые секреты сверх пароля: Discord-токен, Steam-ключ, 2FA, API-ключ, PIN. Шифруются вместе с записью.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {s.fields.map((f, i) => (
+                <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] gap-2">
+                  <Input placeholder="Название (Токен…)" value={f.label} onChange={(e) => setS({ ...s, fields: s.fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} />
+                  <Input mono placeholder="Значение" value={f.value} onChange={(e) => setS({ ...s, fields: s.fields.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} />
+                  <IconButton label="Удалить поле" onClick={() => setS({ ...s, fields: s.fields.filter((_, j) => j !== i) })}>
+                    <X className="size-4" />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <Field label="Папка" className="sm:col-span-2">
           <Input value={meta.folder} onChange={(e) => setMeta({ ...meta, folder: e.target.value })} placeholder="Например: Инфраструктура" list="vault-folders" />
-        </Field>
-        <Field label="Клиент">
-          <ClientSelect value={meta.clientId} onChange={(clientId) => setMeta({ ...meta, clientId })} />
         </Field>
         <Field label="Теги" className="sm:col-span-2">
           <TagInput value={meta.tags} onChange={(tags) => setMeta({ ...meta, tags })} />
@@ -373,7 +432,7 @@ function ImportModal({ existing, onClose }: { existing: PlainItem[]; onClose: ()
     let n = 0;
     for (const r of chosen) {
       setBusy(`Шифрование и сохранение ${++n} из ${chosen.length}…`);
-      const sealed = await vault.seal({ site: r.site, url: r.url, login: r.login, password: r.password, notes: r.notes });
+      const sealed = await vault.seal({ site: r.site, url: r.url, login: r.login, password: r.password, notes: r.notes, category: r.category, fields: r.fields });
       if (r.status === 'changed' && r.existingId) {
         const prev = existing.find((p) => p.item.id === r.existingId)!.item;
         await api(`/vault-items/${r.existingId}`, { method: 'PUT', body: { ...prev, ...sealed } });
@@ -554,6 +613,7 @@ function VaultContent() {
   const cli = useClientNames();
   const [q, setQ] = useState('');
   const [folder, setFolder] = useState('');
+  const [category, setCategory] = useState('');
   const [clientId, setClientId] = useState<string | null>(null);
   const [health, setHealth] = useState<'' | 'weak' | 'reused'>('');
   const [edit, setEdit] = useState<PlainItem | 'new' | null>(null);
@@ -573,7 +633,7 @@ function VaultContent() {
 
   const folders = useMemo(() => Array.from(new Set((plain ?? []).map((p) => p.item.folder).filter(Boolean))).sort(), [plain]);
   const list = (plain ?? [])
-    .filter((p) => (!folder || p.item.folder === folder) && (!clientId || p.item.clientId === clientId))
+    .filter((p) => (!folder || p.item.folder === folder) && (!clientId || p.item.clientId === clientId) && (!category || (p.secret?.category ?? 'site') === category))
     .filter((p) => (health === 'weak' ? analysis.score(p) < 3 : health === 'reused' ? analysis.reused(p) : true))
     .filter((p) => matches(q, p.secret?.site, p.secret?.url, p.secret?.login, p.secret?.notes, p.item.folder, p.item.tags))
     .sort((a, b) => (a.secret?.site ?? '').localeCompare(b.secret?.site ?? '', 'ru'));
@@ -645,8 +705,16 @@ function VaultContent() {
 
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center">
         <SearchInput value={q} onChange={setQ} placeholder="Сайт, логин, заметка…" />
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex">
-          <Select value={folder} onChange={(e) => setFolder(e.target.value)} className="lg:w-48">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:flex">
+          <Select value={category} onChange={(e) => setCategory(e.target.value)} className="lg:w-40">
+            <option value="">Все категории</option>
+            {Object.entries(VAULT_CATEGORY).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v.label}
+              </option>
+            ))}
+          </Select>
+          <Select value={folder} onChange={(e) => setFolder(e.target.value)} className="lg:w-44">
             <option value="">Все папки</option>
             {folders.map((f) => (
               <option key={f}>{f}</option>
@@ -698,7 +766,12 @@ function VaultContent() {
                     <td className={td}>
                       {p.secret ? (
                         <>
-                          <div className="font-medium">{p.secret.site || hostOf(p.secret.url)}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{p.secret.site || hostOf(p.secret.url)}</span>
+                            {p.secret.category && p.secret.category !== 'site' && (
+                              <Badge tone={VAULT_CATEGORY[p.secret.category]?.tone}>{VAULT_CATEGORY[p.secret.category]?.label}</Badge>
+                            )}
+                          </div>
                           {p.secret.url && (
                             <a href={/^https?:\/\//i.test(p.secret.url) ? p.secret.url : `https://${p.secret.url}`} target="_blank" rel="noreferrer noopener" className="block max-w-56 truncate text-xs text-faint hover:text-fg">
                               {p.secret.url}
