@@ -13,6 +13,7 @@ import { api, downloadFrom, fileUrl, uploadFile, type FileMeta } from '../lib/ap
 import { CLIENT_STATUS, EVENT_KIND, fmtAgo, fmtBytes, fmtDate, fmtDateTime, today, uid } from '../lib/format';
 import { useDeleteRecord, useEmployeeNames, useRecords, useSaveRecord } from '../lib/queries';
 import type { Client, ClientData, ClientEventKind, InfraRow } from '../lib/types';
+import { ClientRoutes } from './Routes';
 import { VaultLinkedList } from './Vault';
 
 export const EMPTY_CLIENT: ClientData = {
@@ -385,6 +386,10 @@ function InfraTab({ client }: { client: Client }) {
             ))}
           </ul>
         )}
+      </Section>
+
+      <Section title="Маршруты выездов">
+        <ClientRoutes clientId={client.id} />
       </Section>
     </div>
   );

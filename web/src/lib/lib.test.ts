@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dedupeKey, hostOf, parseCredentialsJson } from './jsonImport';
 import { DEFAULT_GEN, generatePassword, strength } from './password';
+import { pathLengthKm, routeToGpx } from './geo';
 import { guessBoard, LineSplitter, parsePlotLine } from './serial';
 import { createVault, decryptSecret, encryptSecret, rekey, unlockWithMaster, unlockWithRecovery } from './vaultCrypto';
 
@@ -117,6 +118,28 @@ describe('password tools', () => {
   it('scores strength', () => {
     expect(strength('123456')).toBe(0);
     expect(strength('qT7#vL9!mZ2$pR4&')).toBe(4);
+  });
+});
+
+describe('routes geo', () => {
+  it('measures path length in km', () => {
+    // ~111 km per degree of latitude.
+    const km = pathLengthKm([{ lat: 0, lng: 0 }, { lat: 1, lng: 0 }]);
+    expect(km).toBeGreaterThan(110);
+    expect(km).toBeLessThan(112);
+    expect(pathLengthKm([{ lat: 5, lng: 5 }])).toBe(0);
+  });
+
+  it('builds GPX with waypoints and a track', () => {
+    const gpx = routeToGpx('Выезд <1>', [
+      { lat: 55.75, lng: 37.62, label: 'Старт', note: 'офис' },
+      { lat: 55.76, lng: 37.63, label: '', note: '' },
+    ]);
+    expect(gpx).toContain('<gpx');
+    expect(gpx).toContain('lat="55.75" lon="37.62"');
+    expect(gpx).toContain('<name>Старт</name>');
+    expect(gpx).toContain('Выезд &lt;1&gt;'); // escaped
+    expect((gpx.match(/<trkpt /g) ?? []).length).toBe(2);
   });
 });
 

@@ -25,8 +25,8 @@ export function purgeRecord(ctx: Ctx, id: string) {
     if (row.type === 'zt_network') {
       ctx.db.prepare("DELETE FROM records WHERE type = 'zt_member' AND json_extract(data, '$.networkRef') = ?").run(id);
     }
-    if (row.type === 'device') {
-      const files = ctx.db.prepare("SELECT id FROM files WHERE owner_type = 'device' AND owner_id = ?").all(id) as { id: string }[];
+    if (row.type === 'device' || row.type === 'route') {
+      const files = ctx.db.prepare('SELECT id FROM files WHERE owner_type = ? AND owner_id = ?').all(row.type, id) as { id: string }[];
       for (const f of files) purgeFile(ctx, f.id);
     }
     ctx.db.prepare('DELETE FROM records WHERE id = ?').run(id);

@@ -147,6 +147,30 @@ export interface SerialTemplateData {
 }
 export type SerialTemplate = SerialTemplateData & Meta;
 
+export type RouteStatus = 'planned' | 'in_progress' | 'done' | 'cancelled';
+export interface RoutePoint {
+  lat: number;
+  lng: number;
+  label: string;
+  note: string;
+}
+export interface RouteData {
+  name: string;
+  clientId: string | null;
+  assigneeId: string | null;
+  date: string;
+  time: string;
+  status: RouteStatus;
+  description: string;
+  tags: string[];
+  points: RoutePoint[];
+}
+export type Route = RouteData &
+  Meta & {
+    distanceKm: number;
+    road: { distanceKm: number; durationMin: number; geometry: [number, number][] } | null;
+  };
+
 export interface VaultItemData {
   ct: string;
   iv: string;

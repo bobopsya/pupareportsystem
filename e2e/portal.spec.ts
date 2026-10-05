@@ -197,6 +197,28 @@ test('full portal flow', async ({ page }) => {
   await shot(page, '14-wifi');
   await page.getByTitle('Список').click();
 
+  // --- Маршруты ---
+  await nav(page, 'Маршруты');
+  await page.getByRole('button', { name: 'Новый маршрут' }).click();
+  await page.getByLabel('Название *').fill('Выезд к Петру Иванову');
+  await page.getByRole('dialog').getByRole('button', { name: 'Создать и открыть' }).click();
+  await expect(page.getByRole('heading', { name: 'Выезд к Петру Иванову' })).toBeVisible();
+  const mapBox = page.locator('.leaflet-container');
+  await expect(mapBox).toBeVisible();
+  const mb = (await mapBox.boundingBox())!;
+  // three clicks on the map → three numbered markers
+  await page.mouse.click(mb.x + mb.width * 0.3, mb.y + mb.height * 0.4);
+  await page.mouse.click(mb.x + mb.width * 0.6, mb.y + mb.height * 0.5);
+  await page.mouse.click(mb.x + mb.width * 0.5, mb.y + mb.height * 0.7);
+  await expect(page.locator('.leaflet-marker-icon')).toHaveCount(3);
+  await expect(page.getByText('3 точек')).toBeVisible();
+  await expect(page.getByText(/По прямой:\s*[0-9]/)).toBeVisible();
+  await page.getByLabel('Клиент').first().selectOption({ label: 'Пётр Иванов' });
+  await page.getByLabel('Дата').fill('2026-05-12');
+  await page.getByRole('button', { name: 'Сохранить' }).first().click();
+  await expect(page.getByText('Маршрут сохранён')).toBeVisible();
+  await shot(page, '16-routes');
+
   await nav(page, 'USB-консоль');
   await expect(page.getByRole('heading', { name: 'USB-консоль' })).toBeVisible();
   await shot(page, '09-console');

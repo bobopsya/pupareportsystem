@@ -13,6 +13,7 @@ import { MAX_FILE_BYTES, registerFileRoutes } from './routes/files.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerEmployeeRoutes } from './routes/employees.js';
 import { registerRecordRoutes } from './routes/records.js';
+import { registerRoutingRoutes } from './routes/routing.js';
 import { registerVaultRoutes } from './routes/vault.js';
 import { registerZerotierRoutes } from './routes/zerotier.js';
 
@@ -70,6 +71,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerZerotierRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
   registerRecordRoutes(app, ctx);
+  registerRoutingRoutes(app, ctx);
   registerFileRoutes(app, ctx);
   registerVaultRoutes(app, ctx);
 

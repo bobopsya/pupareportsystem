@@ -11,6 +11,7 @@ import { createCtx, type Ctx } from './context.js';
 import { openDb } from './db.js';
 import { purgeExpired, TRASH_RETENTION_MS } from './routes/admin.js';
 import { createUser } from './routes/employees.js';
+import { routeByRoads } from './routes/routing.js';
 import { syncNetwork } from './routes/zerotier.js';
 
 const KEY = 'a'.repeat(64);
@@ -151,6 +152,37 @@ describe('records', () => {
 
     const dash = (await app.inject({ method: 'GET', url: '/api/dashboard', headers: h })).json();
     expect(dash.counts.wifi).toBe(2);
+  });
+
+  it('computes route distance server-side and routes by roads via OSRM', async () => {
+    const cookie = await session();
+    const h = { ...H, cookie };
+    // ~111 km between (0,0) and (1,0); two legs.
+    const created = await app.inject({
+      method: 'POST', url: '/api/routes', headers: h,
+      payload: { name: 'Выезд', points: [{ lat: 0, lng: 0 }, { lat: 1, lng: 0 }, { lat: 1, lng: 1 }], distanceKm: 9999 },
+    });
+    expect(created.statusCode).toBe(200);
+    const route = created.json();
+    expect(route.distanceKm).toBeGreaterThan(200);
+    expect(route.distanceKm).toBeLessThan(260);
+    expect(route.road).toBeNull();
+
+    const user = (await app.inject({ method: 'GET', url: '/api/auth/me', headers: h })).json().user;
+    const fakeOsrm = async (url: string) => {
+      expect(url).toContain('/route/v1/driving/0,0;0,1;1,1');
+      return new Response(JSON.stringify({ code: 'Ok', routes: [{ distance: 250000, duration: 9000, geometry: { coordinates: [[0, 0], [0, 1], [1, 1]] } }] }), { status: 200 });
+    };
+    const road = await routeByRoads(ctx, route.id, user.id, fakeOsrm);
+    expect(road).toMatchObject({ distanceKm: 250, durationMin: 150 });
+    expect(road.geometry[0]).toEqual([0, 0]);
+
+    const after = (await app.inject({ method: 'GET', url: `/api/routes/${route.id}`, headers: h })).json();
+    expect(after.road.distanceKm).toBe(250);
+    // Editing points drops the stale road geometry.
+    const edited = await app.inject({ method: 'PUT', url: `/api/routes/${route.id}`, headers: h, payload: { ...after, points: [{ lat: 0, lng: 0 }, { lat: 2, lng: 0 }] } });
+    expect(edited.json().road).toBeNull();
+    expect(edited.json().distanceKm).toBeGreaterThan(200);
   });
 
   it('records device transfers server-side', async () => {

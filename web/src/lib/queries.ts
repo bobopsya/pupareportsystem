@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
-import type { Client, ClientEvent, Device, Employee, Meta, SerialTemplate, Task, VaultItem, Wifi, ZtMember, ZtNetwork } from './types';
+import type { Client, ClientEvent, Device, Employee, Meta, Route as RouteRecord, SerialTemplate, Task, VaultItem, Wifi, ZtMember, ZtNetwork } from './types';
 
 export interface RouteTypes {
   clients: Client;
@@ -12,11 +12,12 @@ export interface RouteTypes {
   'serial-templates': SerialTemplate;
   'vault-items': VaultItem;
   'wifi-networks': Wifi;
+  routes: RouteRecord;
 }
 export type Route = keyof RouteTypes;
 
 /** Fields only the server sets; it ignores them on write. */
-type ServerOnly = keyof Meta | 'lastSync' | 'poolsInfo' | 'transfers';
+type ServerOnly = keyof Meta | 'lastSync' | 'poolsInfo' | 'transfers' | 'distanceKm' | 'road';
 /** Data a record accepts on write. */
 export type Input<R extends Route> = Omit<RouteTypes[R], ServerOnly> & Partial<Meta>;
 

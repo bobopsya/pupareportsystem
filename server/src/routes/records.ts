@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { audit, HttpError, type Ctx } from '../context.js';
 import { randomId } from '../crypto.js';
+import { pathLengthKm, type Point } from '../geo.js';
 import { TYPE_ROUTES, TYPES, type RecordType } from '../schemas.js';
 
 export interface RecordRow {
@@ -98,6 +99,10 @@ export function registerRecordRoutes(app: FastifyInstance, ctx: Ctx) {
 
     app.post(base, async (req) => {
       const data = parseInput(type, req.body);
+      if (type === 'route') {
+        data.distanceKm = pathLengthKm((data.points as Point[]) ?? []);
+        data.road = null;
+      }
       const rec = insertRecord(ctx, type, data, req.user!.id);
       audit(ctx, req, 'create', type, rec.id, def.title(data));
       return rec;
@@ -110,6 +115,13 @@ export function registerRecordRoutes(app: FastifyInstance, ctx: Ctx) {
       const prev = JSON.parse(row.data) as Record<string, unknown>;
       const data = parseInput(type, req.body);
       for (const f of def.serverFields ?? []) data[f] = prev[f];
+
+      if (type === 'route') {
+        const points = (data.points as Point[]) ?? [];
+        data.distanceKm = pathLengthKm(points);
+        // Road geometry is tied to a specific set of points; drop it when they change.
+        if (JSON.stringify(points) !== JSON.stringify(prev.points ?? [])) data.road = null;
+      }
 
       if (type === 'device') {
         const from = prev.holder as { type: string; id: string | null };

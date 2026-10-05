@@ -59,7 +59,7 @@ export function purgeFile(ctx: Ctx, id: string) {
   ctx.db.prepare('DELETE FROM files WHERE id = ?').run(id);
 }
 
-const OWNER_TYPES = ['client', 'employee', 'device'] as const;
+const OWNER_TYPES = ['client', 'employee', 'device', 'route'] as const;
 const KINDS = ['photo', 'file', 'avatar'] as const;
 
 const listQuery = z.object({ ownerType: z.enum(OWNER_TYPES), ownerId: z.string().min(1).max(64), kind: z.enum(KINDS).optional() });

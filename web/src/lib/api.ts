@@ -42,7 +42,7 @@ export function fileUrl(id: string, opts: { thumb?: boolean; download?: boolean 
   return `/api/files/${id}${s ? `?${s}` : ''}`;
 }
 
-export function uploadFile(file: File, meta: { ownerType: 'client' | 'employee' | 'device'; ownerId: string; kind: 'photo' | 'file' | 'avatar'; caption?: string }) {
+export function uploadFile(file: File, meta: { ownerType: 'client' | 'employee' | 'device' | 'route'; ownerId: string; kind: 'photo' | 'file' | 'avatar'; caption?: string }) {
   const form = new FormData();
   form.set('ownerType', meta.ownerType);
   form.set('ownerId', meta.ownerId);

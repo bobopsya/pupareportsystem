@@ -10,6 +10,7 @@ export interface Config {
   cookieSecure: boolean;
   trustProxy: boolean;
   ztApiUrl: string;
+  osrmUrl: string;
   logLevel: string;
 }
 
@@ -30,6 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cookieSecure: env.COOKIE_SECURE !== '0',
     trustProxy: env.TRUST_PROXY === '1',
     ztApiUrl: (env.ZT_API_URL ?? 'https://api.zerotier.com/api/v1').replace(/\/$/, ''),
+    osrmUrl: (env.OSRM_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     logLevel: env.LOG_LEVEL ?? 'info',
   };
 }

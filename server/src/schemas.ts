@@ -114,6 +114,32 @@ export const serialTemplateSchema = z.object({
   lineEnding: z.enum(['none', 'lf', 'cr', 'crlf']).default('lf'),
 });
 
+const lat = z.number().min(-90).max(90);
+const lng = z.number().min(-180).max(180);
+
+export const routeSchema = z.object({
+  name: z.string().trim().min(1, 'Укажите название маршрута').max(200),
+  clientId: nullableId,
+  assigneeId: nullableId,
+  date: str(20),
+  time: str(10),
+  status: z.enum(['planned', 'in_progress', 'done', 'cancelled']).default('planned'),
+  description: str(10000),
+  tags,
+  points: z.array(z.object({ lat, lng, label: str(200), note: str(1000) })).max(100).default([]),
+  // Server-computed: straight-line length (sum of haversine between points).
+  distanceKm: z.number().nonnegative().default(0),
+  // Server-computed via OSRM when the user asks to route by roads.
+  road: z
+    .object({
+      distanceKm: z.number().nonnegative(),
+      durationMin: z.number().nonnegative(),
+      geometry: z.array(z.tuple([lat, lng])).max(2000),
+    })
+    .nullable()
+    .default(null),
+});
+
 /** Encrypted on the client. The server only sees ciphertext plus non-secret organisation fields. */
 export const vaultItemSchema = z.object({
   ct: z.string().min(1).max(200_000),
@@ -153,7 +179,7 @@ export const employeeProfileSchema = z.object({
   avatarFileId: nullableId,
 });
 
-export type RecordType = 'client' | 'client_event' | 'zt_network' | 'zt_member' | 'device' | 'task' | 'serial_template' | 'vault_item' | 'wifi';
+export type RecordType = 'client' | 'client_event' | 'zt_network' | 'zt_member' | 'device' | 'task' | 'serial_template' | 'vault_item' | 'wifi' | 'route';
 
 export interface TypeDef {
   schema: z.ZodObject<z.ZodRawShape>;
@@ -181,6 +207,7 @@ export const TYPES: Record<RecordType, TypeDef> = {
   serial_template: { schema: serialTemplateSchema, filters: [], title: (d) => String(d.name) },
   vault_item: { schema: vaultItemSchema, filters: ['clientId', 'folder'], title: (d) => (d.folder ? `папка «${d.folder}»` : 'без папки') },
   wifi: { schema: wifiSchema, filters: ['clientId', 'status'], title: (d) => String(d.name) },
+  route: { schema: routeSchema, filters: ['clientId', 'assigneeId', 'status'], title: (d) => String(d.name), serverFields: ['distanceKm', 'road'] },
 };
 
 export const TYPE_ROUTES: Record<string, RecordType> = {
@@ -193,4 +220,5 @@ export const TYPE_ROUTES: Record<string, RecordType> = {
   'serial-templates': 'serial_template',
   'vault-items': 'vault_item',
   'wifi-networks': 'wifi',
+  routes: 'route',
 };
