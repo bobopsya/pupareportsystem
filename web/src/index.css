@@ -68,3 +68,30 @@ input[type='datetime-local'] {
   background: #111;
   font-family: var(--font-sans);
 }
+
+/* Hover tooltip for Wi-Fi markers, themed dark. */
+.leaflet-tooltip.zn-tip-wrap {
+  background: #171717;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  color: #fafafa;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.leaflet-tooltip.zn-tip-wrap::before {
+  border-top-color: #3a3a3a;
+}
+.zn-tip b {
+  font-size: 13px;
+}
+.zn-tip > div {
+  color: #a3a3a3;
+}
+.zn-tip-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fafafa;
+}

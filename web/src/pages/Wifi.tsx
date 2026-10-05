@@ -135,7 +135,7 @@ function WifiModal({ net, onClose }: { net: Wifi | 'new'; onClose: () => void })
 }
 
 // ---------------- Map ----------------
-function WifiMap({ nets, onSelect }: { nets: Wifi[]; onSelect: (n: Wifi) => void }) {
+function WifiMap({ nets, onSelect, clientName }: { nets: Wifi[]; onSelect: (n: Wifi) => void; clientName: (id: string | null) => string }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
@@ -176,13 +176,19 @@ function WifiMap({ nets, onSelect }: { nets: Wifi[]; onSelect: (n: Wifi) => void
         iconSize: [18, 18],
         iconAnchor: [9, 9],
       });
-      const marker = L.marker([n.lat!, n.lng!], { icon, title: n.name }).addTo(lg);
+      const marker = L.marker([n.lat!, n.lng!], { icon }).addTo(lg);
       const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-      marker.bindPopup(
-        `<div style="font-family:sans-serif;min-width:140px">
-          <b>${esc(n.name)}</b><br>
-          <span style="color:#555">${WIFI_STATUS[n.status].label}${n.location ? ' · ' + esc(n.location) : ''}</span>
-        </div>`,
+      const st = WIFI_STATUS[n.status];
+      const rows = [
+        `<span class="zn-tip-status"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${st.color}"></span>${st.label}</span>`,
+        `Защита: ${SECURITY[n.security]}${n.band ? ` · ${n.band === 'dual' ? '2.4+5' : n.band} ГГц` : ''}`,
+        n.clientId ? `Клиент: ${esc(clientName(n.clientId))}` : null,
+        n.location ? esc(n.location) : null,
+      ].filter(Boolean);
+      // A hover tooltip with brief info; clicking the marker opens the full card.
+      marker.bindTooltip(
+        `<div class="zn-tip"><b>${esc(n.name)}</b>${rows.map((r) => `<div>${r}</div>`).join('')}</div>`,
+        { direction: 'top', offset: [0, -10], opacity: 1, className: 'zn-tip-wrap' },
       );
       marker.on('click', () => onSelectRef.current(n));
     }
@@ -262,7 +268,7 @@ export default function WifiPage() {
       {isLoading ? (
         <Loading />
       ) : view === 'map' ? (
-        <WifiMap nets={list} onSelect={setEdit} />
+        <WifiMap nets={list} onSelect={setEdit} clientName={cli} />
       ) : list.length === 0 ? (
         <Card>
           <Empty icon={<WifiIcon />} title={data.length ? 'Ничего не найдено' : 'Сетей пока нет'}>
