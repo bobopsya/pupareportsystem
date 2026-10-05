@@ -150,6 +150,10 @@ function WifiMap({ nets, onSelect }: { nets: Wifi[]; onSelect: (n: Wifi) => void
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap',
+      // The page sends no Referer at all; OSM's tile policy rejects such requests (403).
+      // Tiles alone send just the portal origin, as the policy requires.
+      referrerPolicy: 'strict-origin-when-cross-origin',
+      className: 'zn-dark-tiles',
     }).addTo(m);
     layer.current = L.layerGroup().addTo(m);
     map.current = m;

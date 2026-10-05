@@ -59,3 +59,12 @@ input[type='datetime-local'] {
 .uplot {
   font-family: var(--font-mono);
 }
+
+/* Dark map: invert the standard OSM tiles to match the portal theme. */
+.zn-dark-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
+}
+.leaflet-container {
+  background: #111;
+  font-family: var(--font-sans);
+}
