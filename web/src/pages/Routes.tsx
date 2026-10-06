@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import L from 'leaflet';
 import {
-  ArrowDown, ArrowUp, Download, ImagePlus, MapPin, Navigation, Plus, Route as RouteIcon, Save, Trash2, X,
+  ArrowDown, ArrowLeft, ArrowUp, Download, ImagePlus, MapPin, Navigation, Plus, Route as RouteIcon, Save, Trash2, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -391,7 +391,8 @@ export default function Routes() {
       />
 
       <div className="grid gap-5 lg:grid-cols-[22rem_1fr]">
-        <div className="flex flex-col gap-3">
+        {/* On phones the list and the open route take turns instead of stacking. */}
+        <div className={`flex-col gap-3 ${params.id ? 'hidden lg:flex' : 'flex'}`}>
           <SearchInput value={q} onChange={setQ} placeholder="Название, клиент, тег…" />
           <div className="grid grid-cols-2 gap-2">
             <Select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -438,7 +439,12 @@ export default function Routes() {
           )}
         </div>
 
-        <div>
+        <div className={params.id ? '' : 'hidden lg:block'}>
+          {params.id && (
+            <button type="button" onClick={() => navigate('/routes')} className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg lg:hidden">
+              <ArrowLeft className="size-4" /> Все маршруты
+            </button>
+          )}
           {selected ? (
             <>
               <div className="mb-3 flex items-center justify-between gap-2">
@@ -459,9 +465,11 @@ export default function Routes() {
               </div>
               <RouteEditor key={selected.id} route={selected} />
             </>
+          ) : params.id && isLoading ? (
+            <Loading />
           ) : (
             <Card>
-              <Empty icon={<RouteIcon />} title="Выберите маршрут" >
+              <Empty icon={<RouteIcon />} title={params.id ? 'Маршрут не найден' : 'Выберите маршрут'}>
                 Или создайте новый — затем кликайте по карте, чтобы расставить точки.
               </Empty>
             </Card>

@@ -91,6 +91,8 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean; bot?: Telegra
         // Hashed build assets never change; everything else is revalidated.
         return rel.startsWith('assets/') ? reply.sendFile(rel, { maxAge: '365d', immutable: true }) : reply.sendFile(rel, { maxAge: 0 });
       }
+      // A missing build file must not get index.html: an old tab would try to run HTML as JS and crash.
+      if (rel.startsWith('assets/')) return reply.code(404).header('Cache-Control', 'no-store').send({ error: 'Не найдено' });
       return reply.header('Cache-Control', 'no-cache').type('text/html').send(indexHtml);
     });
   }

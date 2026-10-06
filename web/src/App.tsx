@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loading } from './components/ui';
 import { useAuth } from './lib/auth';
 import { VaultProvider } from './lib/vault';
@@ -30,6 +31,7 @@ export function App() {
 
   return (
     <VaultProvider>
+      <ErrorBoundary>
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route element={<Layout />}>
@@ -54,6 +56,7 @@ export function App() {
           </Route>
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </VaultProvider>
   );
 }

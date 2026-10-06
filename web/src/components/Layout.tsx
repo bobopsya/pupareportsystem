@@ -23,13 +23,14 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
 import { useTheme, type ThemePref } from '../lib/theme';
 import { LogoMark, Wordmark } from './Logo';
-import { cx, IconButton, Segmented } from './ui';
+import { ErrorBoundary } from './ErrorBoundary';
+import { cx, IconButton, Loading, Segmented } from './ui';
 
 interface NavItem {
   to: string;
@@ -197,6 +198,9 @@ export function Layout() {
   const location = useLocation();
 
   useEffect(() => setMobileOpen(false), [location.pathname]);
+  // <main> is the scroll container: start each page (and each opened record) at the top.
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => mainRef.current?.scrollTo(0, 0), [location.pathname]);
 
   const toggle = () => {
     setCollapsed((c) => {
@@ -232,9 +236,14 @@ export function Layout() {
           <LogoMark size={24} />
           <Wordmark className="text-[15px]" />
         </header>
-        <main className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-4 py-5 sm:px-6 sm:py-7">
-            <Outlet />
+            {/* Keyed by section so an error in one page does not stick when navigating to another. */}
+            <ErrorBoundary key={location.pathname.split('/')[1]}>
+              <Suspense fallback={<Loading />}>
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>
