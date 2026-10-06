@@ -1,17 +1,29 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-/** Base map with OSM tiles. Tile colours follow the map style via CSS (.zn-map[data-map-style]). */
+/** Base map. Tiles come from the portal's own /api/tiles proxy (OpenStreetMap behind it); colours follow the map style via CSS. */
 export function createMap(el: HTMLElement, center: [number, number] = [55.75, 37.62], zoom = 10): L.Map {
   const m = L.map(el).setView(center, zoom);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  const tiles = L.tileLayer('/api/tiles/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap',
-    // The page itself sends no Referer; OSM's tile policy rejects such requests (403).
-    // Tiles alone send just the portal origin, as the policy requires.
-    referrerPolicy: 'strict-origin-when-cross-origin',
     className: 'zn-tiles',
   }).addTo(m);
+
+  // Without tiles a dark-styled map is just a black box — say so instead.
+  let loaded = 0;
+  let failed = 0;
+  const notice = L.DomUtil.create('div', 'zn-map-notice', el);
+  notice.hidden = true;
+  notice.textContent = 'Подложка карты не загрузилась: сервер не смог получить плитки OpenStreetMap. Точки и маршруты при этом работают.';
+  tiles.on('tileload', () => {
+    loaded++;
+    notice.hidden = true;
+  });
+  tiles.on('tileerror', () => {
+    failed++;
+    if (!loaded && failed >= 3) notice.hidden = false;
+  });
   return m;
 }
 

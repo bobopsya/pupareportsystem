@@ -86,6 +86,27 @@ body {
   filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
 }
 
+/* Shown over the map when no tile could be loaded. */
+.zn-map-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  z-index: 1000;
+  transform: translateX(-50%);
+  width: min(92%, 30rem);
+  padding: 8px 12px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 6px;
+  background: var(--color-elevated);
+  color: var(--color-muted);
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+.zn-map-notice[hidden] {
+  display: none;
+}
+
 /* Route lines; colours via CSS so they follow the theme. */
 .zn-line-road {
   stroke: var(--color-ok);

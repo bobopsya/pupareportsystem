@@ -12,6 +12,7 @@ export interface Config {
   ztApiUrl: string;
   osrmUrl: string;
   tgApiUrl: string;
+  tileUrl: string;
   logLevel: string;
 }
 
@@ -34,6 +35,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ztApiUrl: (env.ZT_API_URL ?? 'https://api.zerotier.com/api/v1').replace(/\/$/, ''),
     osrmUrl: (env.OSRM_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     tgApiUrl: (env.TG_API_URL ?? 'https://api.telegram.org').replace(/\/$/, ''),
+    tileUrl: env.TILE_URL ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     logLevel: env.LOG_LEVEL ?? 'info',
   };
 }

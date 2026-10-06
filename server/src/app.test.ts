@@ -328,3 +328,25 @@ describe('backup', () => {
     expect(r.rawPayload.includes(Buffer.from('SQLite format 3'))).toBe(false);
   });
 });
+
+describe('map tiles proxy', () => {
+  it('fetches tiles server-side, caches them and requires a session', async () => {
+    const cookie = await session();
+    const urls: string[] = [];
+    ctx.http = async (url) => {
+      urls.push(url);
+      return new Response(Buffer.from('PNGDATA'), { headers: { 'content-type': 'image/png' } });
+    };
+    expect((await app.inject({ method: 'GET', url: '/api/tiles/10/619/320.png' })).statusCode).toBe(401);
+    const a = await app.inject({ method: 'GET', url: '/api/tiles/10/619/320.png', headers: { cookie } });
+    expect(a.statusCode).toBe(200);
+    expect(a.headers['content-type']).toBe('image/png');
+    expect(a.body).toBe('PNGDATA');
+    await app.inject({ method: 'GET', url: '/api/tiles/10/619/320.png', headers: { cookie } });
+    expect(urls).toEqual(['https://tile.openstreetmap.org/10/619/320.png']);
+    expect((await app.inject({ method: 'GET', url: '/api/tiles/3/9/1.png', headers: { cookie } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/tiles/x/1/1.png', headers: { cookie } })).statusCode).toBe(400);
+    ctx.http = async () => new Response('down', { status: 503 });
+    expect((await app.inject({ method: 'GET', url: '/api/tiles/11/1/1.png', headers: { cookie } })).statusCode).toBe(502);
+  });
+});

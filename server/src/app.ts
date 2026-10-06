@@ -16,6 +16,7 @@ import { registerEmployeeRoutes } from './routes/employees.js';
 import { registerRecordRoutes } from './routes/records.js';
 import { registerRoutingRoutes } from './routes/routing.js';
 import { registerTelegramRoutes } from './routes/telegram.js';
+import { registerTileRoutes } from './routes/tiles.js';
 import { registerVaultRoutes } from './routes/vault.js';
 import { registerZerotierRoutes } from './routes/zerotier.js';
 
@@ -33,8 +34,8 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean; bot?: Telegra
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        // tile.openstreetmap.org: map tiles for the Wi-Fi map view (images only).
-        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org'],
+        // Map tiles are proxied through /api/tiles, so images stay same-origin.
+        imgSrc: ["'self'", 'data:', 'blob:'],
         fontSrc: ["'self'", 'data:'],
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],
@@ -77,6 +78,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean; bot?: Telegra
   registerFileRoutes(app, ctx);
   registerVaultRoutes(app, ctx);
   registerTelegramRoutes(app, ctx, opts.bot);
+  registerTileRoutes(app, ctx);
 
   const webDist = ctx.cfg.webDist;
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {

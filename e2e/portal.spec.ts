@@ -189,8 +189,8 @@ test('full portal flow', async ({ page }) => {
   await page.getByTitle('Карта').click();
   await expect(page.locator('.leaflet-container')).toBeVisible();
   await expect(page.locator('.leaflet-marker-icon')).toHaveCount(1);
-  // tile layer carries a referrer policy so OSM does not return 403
-  await expect(page.locator('.leaflet-tile-pane img').first()).toHaveAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+  // tiles are served by the portal itself (server-side proxy to OpenStreetMap)
+  await expect(page.locator('.leaflet-tile-pane img').first()).toHaveAttribute('src', /^\/api\/tiles\/\d+\/\d+\/\d+\.png$/);
   // hovering the marker shows a brief-info tooltip
   await page.locator('.leaflet-marker-icon').first().hover();
   await expect(page.locator('.zn-tip')).toContainText('ZhukoNet-Office');

@@ -76,6 +76,9 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ];
 
+declare const __BUILD_TIME__: string;
+const BUILD_LABEL = new Date(__BUILD_TIME__).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' }) + ' МСК';
+
 const COLLAPSE_KEY = 'zn.sidebar.collapsed';
 
 function readCollapsed() {
@@ -187,6 +190,7 @@ function Sidebar({ collapsed, onToggle, onNavigate, mobile }: { collapsed: boole
             {!collapsed && 'Свернуть'}
           </button>
         )}
+        {!collapsed && <div className="px-2.5 text-[10px] text-faint/70">Версия от {BUILD_LABEL}</div>}
       </div>
     </div>
   );

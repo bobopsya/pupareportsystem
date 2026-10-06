@@ -13,7 +13,10 @@ function NewTask() {
   const toast = useToast();
   const [t, setT] = useState({ text: '', assigneeId: user?.id ?? null, due: '', clientId: null as string | null });
   const submit = async () => {
-    if (!t.text.trim()) return;
+    if (!t.text.trim()) {
+      toast('Сначала напишите текст задачи', 'bad');
+      return;
+    }
     try {
       await save.mutateAsync({ ...t, done: false });
       setT({ ...t, text: '', due: '' });
@@ -94,6 +97,7 @@ export function TaskList({ compact, filter = 'open', mine }: { compact?: boolean
 
 function NewTaskCompact() {
   const save = useSaveRecord('tasks');
+  const toast = useToast();
   const { user } = useAuth();
   const [text, setText] = useState('');
   return (
@@ -101,8 +105,8 @@ function NewTaskCompact() {
       className="flex gap-2 border-b border-line p-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!text.trim()) return;
-        save.mutate({ text, assigneeId: user?.id ?? null, due: '', clientId: null, done: false }, { onSuccess: () => setText('') });
+        if (!text.trim()) return toast('Сначала напишите текст задачи', 'bad');
+        save.mutate({ text, assigneeId: user?.id ?? null, due: '', clientId: null, done: false }, { onSuccess: () => setText(''), onError: (err) => toast(err.message, 'bad') });
       }}
     >
       <Input placeholder="Быстро добавить задачу…" value={text} onChange={(e) => setText(e.target.value)} />
