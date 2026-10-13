@@ -18,8 +18,8 @@ export const useShops = () => useQuery({ queryKey: ['shops'], queryFn: () => api
 
 /** /app → first shop or onboarding. */
 export function AppIndex() {
-  const { data } = useShops();
-  if (!data) return <Loading />;
+  const { data, isFetching } = useShops();
+  if (!data || isFetching) return <Loading />;
   if (!data.length) return <Navigate to="/app/new" replace />;
   const last = Number(localStorage.getItem('gpay.shop'));
   const shop = data.find((s) => s.id === last) ?? data[0];
@@ -39,14 +39,14 @@ const NAV = [
 
 export default function MerchantLayout() {
   const { shopId } = useParams();
-  const { data: shops } = useShops();
+  const { data: shops, isFetching } = useShops();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
 
   if (!shops) return <Loading />;
   const shop = shops.find((s) => String(s.id) === shopId);
-  if (!shop) return <Navigate to="/app" replace />;
+  if (!shop) return isFetching ? <Loading /> : <Navigate to="/app" replace />;
   localStorage.setItem('gpay.shop', String(shop.id));
 
   return (

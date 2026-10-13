@@ -6,3 +6,9 @@
 	}
 	reverse_proxy app:8080
 }
+
+# GPAY payment system (profile "gpay"). Without it this site just answers 502.
+{$GPAY_DOMAIN:pay.localhost} {
+	encode zstd gzip
+	reverse_proxy gpay:8081
+}

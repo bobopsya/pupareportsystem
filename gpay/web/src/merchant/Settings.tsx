@@ -94,7 +94,7 @@ export function NewShop() {
               setError(null);
               try {
                 const r = await api<{ shop: Shop }>('/m/shops', { body: v });
-                await qc.invalidateQueries({ queryKey: ['shops'] });
+                qc.setQueryData<Shop[]>(['shops'], (old) => [...(old ?? []), r.shop]);
                 navigate(`/app/${r.shop.id}`);
               } catch (e) {
                 setError(errorText(e));

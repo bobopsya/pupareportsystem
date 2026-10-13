@@ -1,6 +1,7 @@
 # ZhukoNet portal.
 #   Caddy mode (ports 80/443 free):   COMPOSE_PROFILES=caddy in .env
 #   Behind existing nginx:            leave COMPOSE_PROFILES empty, nginx proxies to 127.0.0.1:${APP_PORT}
+#   GPAY payment system:              add "gpay" to COMPOSE_PROFILES (deploy/install-gpay.sh does it)
 services:
   app:
     build: .
@@ -19,6 +20,25 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  gpay:
+    build: ./gpay
+    image: gpay:latest
+    profiles: ["gpay"]
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: "1"
+      PUBLIC_URL: https://${GPAY_DOMAIN:-pay.localhost}
+      GPAY_DB_KEY: ${GPAY_DB_KEY:-}
+    volumes:
+      - ./gpay-data:/data
+    ports:
+      - "127.0.0.1:${GPAY_PORT:-8081}:8081"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   caddy:
     image: caddy:2-alpine
     profiles: ["caddy"]
@@ -26,6 +46,7 @@ services:
     depends_on: [app]
     environment:
       DOMAIN: ${DOMAIN}
+      GPAY_DOMAIN: ${GPAY_DOMAIN:-pay.localhost}
     ports:
       - "80:80"
       - "443:443"
