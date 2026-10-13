@@ -3,12 +3,14 @@
  *   node dist/cli.js create-admin <email> "<Имя>"
  *   node dist/cli.js reset-password <email>
  *   node dist/cli.js has-admins        (exit code 0 if at least one admin exists)
+ *   node dist/cli.js generate-history <shopId> [days]   (fills a shop with past payments via the real payment flow)
  */
 import crypto from 'node:crypto';
 import { createUser, hashPassword } from './auth.js';
 import { loadConfig } from './config.js';
 import { createCtx } from './context.js';
 import { openDb } from './db.js';
+import { generateHistory } from './history.js';
 
 const [cmd, email, name] = process.argv.slice(2);
 const cfg = loadConfig();
@@ -34,12 +36,15 @@ try {
     db.prepare('UPDATE users SET pass_hash = ?, blocked = 0 WHERE id = ?').run(await hashPassword(pw), row.id);
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
     console.log(`Новый пароль для ${email}: ${pw}`);
+  } else if (cmd === 'generate-history' && email) {
+    const n = generateHistory(cfg, db, Number(email), Number(name ?? 60));
+    console.log(`Создано платежей: ${n}`);
   } else if (cmd === 'has-admins') {
     const { c } = db.prepare(`SELECT COUNT(*) c FROM users WHERE role = 'admin'`).get() as { c: number };
     console.log(c);
     process.exitCode = c > 0 ? 0 : 1;
   } else {
-    console.log('Использование:\n  create-admin <email> "<Имя>"\n  reset-password <email>\n  has-admins');
+    console.log('Использование:\n  create-admin <email> "<Имя>"\n  reset-password <email>\n  has-admins\n  generate-history <shopId> [дней]');
     process.exitCode = 1;
   }
 } catch (e) {

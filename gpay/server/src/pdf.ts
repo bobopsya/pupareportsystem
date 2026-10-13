@@ -140,7 +140,8 @@ export async function quittancePdf(q: Quittance): Promise<Buffer> {
 
   // Brand header.
   doc.roundedRect(40, 36, 30, 30, 8).fill('#5b3df5');
-  doc.save().strokeColor('#fff').lineWidth(3.2).lineCap('round').lineJoin('round').moveTo(49, 44).lineTo(58, 51).lineTo(49, 58).stroke().restore();
+  doc.save().strokeColor('#fff').lineWidth(3.2).lineCap('round').lineJoin('round').moveTo(50, 45).lineTo(57, 51).lineTo(50, 57).stroke().restore();
+  doc.circle(60.6, 51, 2.1).fill('#fff');
   doc.font('sans-b').fontSize(17).fillColor('#0b0b14').text('GPAY', 78, 41);
   doc.font('sans').fontSize(8).fillColor('#6b6b80').text('GnusaPay · платёжный сервис', 78, 60);
 

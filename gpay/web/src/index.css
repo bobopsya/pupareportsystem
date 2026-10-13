@@ -1,0 +1,148 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+
+/* Light is the default (Stripe-like); dark follows the system setting. */
+@theme static {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --color-bg: #f6f7fb;
+  --color-surface: #ffffff;
+  --color-sunken: #f1f2f7;
+  --color-hover: #eef0f6;
+  --color-line: #e5e7ef;
+  --color-line-strong: #cfd3df;
+  --color-fg: #0b0b14;
+  --color-muted: #5e6178;
+  --color-faint: #8e91a6;
+
+  --color-brand: #5b3df5;
+  --color-brand-strong: #4326e0;
+  --color-brand-soft: #efebff;
+  --color-on-brand: #ffffff;
+
+  --color-ok: #0f8a4f;
+  --color-ok-soft: #e3f6ec;
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf1df;
+  --color-bad: #d92d3a;
+  --color-bad-soft: #fde8ea;
+  --color-info: #1d5fd6;
+  --color-info-soft: #e5eefc;
+
+  --shadow-card: 0 1px 2px rgb(16 18 40 / 0.04), 0 1px 1px rgb(16 18 40 / 0.03);
+  --shadow-pop: 0 12px 40px -8px rgb(16 18 40 / 0.18), 0 2px 6px rgb(16 18 40 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0c0c12;
+    --color-surface: #15151d;
+    --color-sunken: #101017;
+    --color-hover: #1e1e29;
+    --color-line: #262633;
+    --color-line-strong: #383848;
+    --color-fg: #f2f2f7;
+    --color-muted: #a3a5ba;
+    --color-faint: #73758c;
+
+    --color-brand: #8b74ff;
+    --color-brand-strong: #a08dff;
+    --color-brand-soft: #231d47;
+    --color-on-brand: #ffffff;
+
+    --color-ok: #3ccf8a;
+    --color-ok-soft: #10291d;
+    --color-warn: #f0a83a;
+    --color-warn-soft: #2d2010;
+    --color-bad: #ff6b76;
+    --color-bad-soft: #31141a;
+    --color-info: #6aa2ff;
+    --color-info-soft: #13213b;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 16px 48px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.4);
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--color-brand-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Brand logos stay readable on dark surfaces. */
+.pay-logo {
+  background: #fff;
+}
+
+@keyframes gp-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes gp-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes gp-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+@keyframes gp-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.gp-pop { animation: gp-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.gp-draw { stroke-dasharray: 48; stroke-dashoffset: 48; animation: gp-draw 0.45s 0.25s ease-out forwards; }
+.gp-shake { animation: gp-shake 0.45s both; }
+.gp-fade-up { animation: gp-fade-up 0.25s ease-out both; }
+
+/* Receipt tape: zig-zag torn edges drawn in the page background colour. */
+.gp-tape {
+  position: relative;
+  --tape-edge: var(--color-bg);
+}
+.gp-tape::before,
+.gp-tape::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background-size: 12px 8px;
+  background-repeat: repeat-x;
+}
+.gp-tape::before {
+  top: 0;
+  background-image: linear-gradient(135deg, var(--tape-edge) 33%, transparent 33%), linear-gradient(225deg, var(--tape-edge) 33%, transparent 33%);
+}
+.gp-tape::after {
+  bottom: 0;
+  background-image: linear-gradient(45deg, var(--tape-edge) 33%, transparent 33%), linear-gradient(315deg, var(--tape-edge) 33%, transparent 33%);
+}
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+}

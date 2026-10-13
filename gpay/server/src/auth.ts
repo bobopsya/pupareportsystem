@@ -15,7 +15,7 @@ export const CSRF_VALUE = 'gpay';
 
 /** Routes that work without a cabinet session. /api/v1 authenticates by API key instead. */
 const isPublic = (url: string) =>
-  url === '/api/health' || url === '/api/auth/login' || url === '/api/auth/register' || url.startsWith('/api/v1/') || url.startsWith('/api/checkout/') || url.startsWith('/api/public/');
+  url === '/api/health' || url === '/api/auth/me' || url === '/api/auth/login' || url === '/api/auth/register' || url.startsWith('/api/v1/') || url.startsWith('/api/checkout/') || url.startsWith('/api/public/');
 
 export const passwordSchema = z.string().min(8, 'Пароль должен быть не короче 8 символов').max(200);
 export const hashPassword = (pw: string) => argon2.hash(pw, { type: argon2.argon2id });

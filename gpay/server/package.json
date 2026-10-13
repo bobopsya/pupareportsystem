@@ -5,12 +5,12 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput & node --watch dist/index.js",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "cli": "tsx src/cli.ts"
+    "cli": "node dist/cli.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

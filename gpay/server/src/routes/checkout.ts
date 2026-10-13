@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, type Ctx } from '../context.js';
+import { OUTCOMES } from '../domain/cards.js';
 import { METHOD_TITLE } from '../domain/fees.js';
 import { getRates } from '../domain/fx.js';
 import { linkState, type LinkRow } from '../domain/links.js';
@@ -59,6 +60,11 @@ function payable(ctx: Ctx, id: string): PaymentRow {
 export function registerCheckoutRoutes(app: FastifyInstance, ctx: Ctx) {
   /** SHA-256 of game card numbers: the page rejects anything else before it leaves the browser. */
   app.get('/api/checkout/cards', async () => ({ hashes: (ctx.db.prepare('SELECT pan FROM game_cards').all() as { pan: string }[]).map((c) => sha256(c.pan)) }));
+
+  /** Card numbers and their scripted outcomes, listed in the API docs. */
+  app.get('/api/public/cards', async () => ({
+    items: (ctx.db.prepare('SELECT pan, outcome, label FROM game_cards ORDER BY created_at, pan').all() as { pan: string; outcome: keyof typeof OUTCOMES; label: string }[]).map((c) => ({ ...c, title: OUTCOMES[c.outcome]?.title ?? c.outcome })),
+  }));
 
   app.get<{ Params: { id: string } }>('/api/checkout/payments/:id', async (req) => {
     const p = payable(ctx, req.params.id);

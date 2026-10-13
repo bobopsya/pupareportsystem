@@ -148,7 +148,7 @@ export function registerReceipt(ctx: Ctx, shop: ShopRow, p: PaymentLike, kind: F
     method: 'БЕЗНАЛИЧНЫМИ',
     customerEmail: req?.customer.email ?? p.customer_email ?? null,
     kkt: { rn: shop.kkt_rn, zn: `00${String(shop.id).padStart(8, '0')}${shop.fn_number.slice(-4)}`, fn: shop.fn_number, fd: fd.fd_counter, fpd, shift: fd.shift_no, checkNo: ((fd.fd_counter - 1) % 500) + 1, ts: now },
-    ofd: { name: 'GPAY ОФД', inn: '7704418820', site: `${ctx.cfg.publicUrl}/receipts` },
+    ofd: { name: 'GPAY ОФД', inn: '7704418820', site: ctx.cfg.publicUrl },
     qr: `t=${qrTime(now)}&s=${formatAmount(amount)}&fn=${shop.fn_number}&i=${fd.fd_counter}&fp=${fpd}&n=${kind === 'income' ? 1 : 2}`,
   };
   const id = newId('rcp', 20);
