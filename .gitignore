@@ -7,3 +7,4 @@ playwright-report/
 *.log
 *.tsbuildinfo
 gpay-data/
+bobobank-data/

@@ -1,0 +1,165 @@
+@import '@fontsource-variable/manrope';
+@import 'tailwindcss';
+
+/* Light by default, dark follows the system. Green brand, white cards on a soft grey-green plane. */
+@theme static {
+  --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-bg: #f2f5f3;
+  --color-surface: #ffffff;
+  --color-sunken: #eef1ef;
+  --color-hover: #e6eae8;
+  --color-line: #e3e8e5;
+  --color-line-strong: #c9d1cc;
+  --color-fg: #101513;
+  --color-muted: #66706b;
+  --color-faint: #98a19c;
+
+  --color-brand: #0fa760;
+  --color-brand-hover: #0c9455;
+  --color-brand-strong: #087a47;
+  --color-brand-soft: #e2f6eb;
+  --color-on-brand: #ffffff;
+  --color-ink: #101513;
+  --color-ink-hover: #29302c;
+  --color-on-ink: #ffffff;
+
+  --color-ok: #0f9a58;
+  --color-ok-soft: #e2f6eb;
+  --color-warn: #b8650a;
+  --color-warn-soft: #fcf0e0;
+  --color-bad: #dc2f3c;
+  --color-bad-soft: #fdecee;
+  --color-info: #2563d6;
+  --color-info-soft: #e8effc;
+
+  --shadow-card: 0 1px 2px rgb(16 21 19 / 0.04), 0 4px 16px -8px rgb(16 21 19 / 0.08);
+  --shadow-pop: 0 24px 56px -16px rgb(16 21 19 / 0.25), 0 2px 8px rgb(16 21 19 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0d110f;
+    --color-surface: #161b18;
+    --color-sunken: #1d231f;
+    --color-hover: #252c28;
+    --color-line: #262d29;
+    --color-line-strong: #36403a;
+    --color-fg: #eef2f0;
+    --color-muted: #9aa49f;
+    --color-faint: #6c7671;
+
+    --color-brand: #2fcf7a;
+    --color-brand-hover: #45d98a;
+    --color-brand-strong: #6be3a1;
+    --color-brand-soft: #12261b;
+    --color-on-brand: #06140c;
+    --color-ink: #eef2f0;
+    --color-ink-hover: #d6dcd8;
+    --color-on-ink: #101513;
+
+    --color-ok: #45d98a;
+    --color-ok-soft: #12261b;
+    --color-warn: #eaa65a;
+    --color-warn-soft: #2c2113;
+    --color-bad: #ff7782;
+    --color-bad-soft: #2e1519;
+    --color-info: #82a8ff;
+    --color-info-soft: #151d33;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-pop: 0 24px 56px -16px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4);
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  overflow-x: clip;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--color-brand-soft);
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+  button {
+    cursor: pointer;
+  }
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-logo {
+  background: #fff;
+}
+
+/* Horizontal scrollers (cards carousel, quick actions) without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes bb-pop {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes bb-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes bb-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes bb-sheet {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes bb-pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes bb-card-in {
+  from { transform: translateY(40px) rotate(-6deg); opacity: 0; }
+  to { transform: translateY(0) rotate(0); opacity: 1; }
+}
+.bb-pop { animation: bb-pop 0.3s ease-out both; }
+.bb-draw { stroke-dasharray: 48; stroke-dashoffset: 48; animation: bb-draw 0.45s 0.25s ease-out forwards; }
+.bb-fade { animation: bb-fade 0.25s ease-out both; }
+.bb-sheet { animation: bb-sheet 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.bb-ring { animation: bb-pulse-ring 1.6s ease-out infinite; }
+.bb-card-in { animation: bb-card-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+}
