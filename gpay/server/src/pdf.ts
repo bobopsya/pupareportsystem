@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { humanMoney } from './domain/money.js';
@@ -8,6 +9,8 @@ import type { FiscalReceipt } from './domain/receipts.js';
 const require = createRequire(import.meta.url);
 const FONT_DIR = path.join(path.dirname(require.resolve('dejavu-fonts-ttf/package.json')), 'ttf');
 const font = (name: string) => path.join(FONT_DIR, name);
+// assets/ sits next to src/ and dist/, so the same relative path works in dev, tests and the container.
+const MARK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'gpay-mark.png');
 
 function toBuffer(doc: PDFKit.PDFDocument): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -139,9 +142,7 @@ export async function quittancePdf(q: Quittance): Promise<Buffer> {
   const inner = W - 80;
 
   // Brand header.
-  doc.roundedRect(40, 36, 30, 30, 8).fill('#111111');
-  doc.save().strokeColor('#fff').lineWidth(3.2).lineCap('round').lineJoin('round').moveTo(50, 45).lineTo(57, 51).lineTo(50, 57).stroke().restore();
-  doc.circle(60.6, 51, 2.1).fill('#7a63ff');
+  doc.image(MARK, 40, 36, { width: 30, height: 30 });
   doc.font('sans-b').fontSize(17).fillColor('#0b0b14').text('GPAY', 78, 41);
   doc.font('sans').fontSize(8).fillColor('#6b6b80').text('GnusaPay · платёжный сервис', 78, 60);
 

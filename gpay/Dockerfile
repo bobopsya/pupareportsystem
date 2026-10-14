@@ -30,6 +30,7 @@ WORKDIR /app
 COPY --from=server /server/package.json ./
 COPY --from=server /server/node_modules ./node_modules
 COPY --from=server /server/dist ./dist
+COPY --from=server /server/assets ./assets
 COPY --from=web /web/dist ./web
 RUN mkdir -p /data && chown node:node /data
 USER node

@@ -89,10 +89,9 @@
         var label = this.textContent.trim() || 'Оплатить через GPAY';
         root.innerHTML =
           '<style>button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:10px;height:46px;padding:0 20px;border-radius:12px;' +
-          'background:linear-gradient(135deg,#7a5cff,#4326e0);color:#fff;font:600 15px/1 Inter,system-ui,sans-serif;box-shadow:0 6px 18px -6px rgba(67,38,224,.6);transition:transform .1s}' +
-          'button:active{transform:scale(.98)}button:focus-visible{outline:2px solid #4326e0;outline-offset:2px}svg{width:22px;height:22px}</style>' +
-          '<button part="button" type="button"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="rgba(255,255,255,.18)"/>' +
-          '<path d="M11 9.5 18.5 16 11 22.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="22" cy="16" r="2.2" fill="#fff"/></svg><span></span></button>';
+          'background:#111;color:#fff;font:600 15px/1 system-ui,sans-serif;transition:background .15s}' +
+          'button:hover{background:#2c2c2e}button:focus-visible{outline:2px solid #111;outline-offset:2px}img{width:22px;height:22px;background:#fff;border-radius:6px;padding:1px}</style>' +
+          '<button part="button" type="button"><img src="' + ORIGIN + '/gpay-mark.png" alt="" width="22" height="22"><span></span></button>';
         root.querySelector('span').textContent = label;
         var self = this;
         root.querySelector('button').addEventListener('click', function () {

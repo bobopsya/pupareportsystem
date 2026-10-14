@@ -1,4 +1,4 @@
-<p align="center"><img src="web/public/favicon.svg" width="64" alt="GPAY"></p>
+<p align="center"><img src="docs/logo.png" width="96" alt="GPAY"></p>
 
 # GPAY (GnusaPay) — игровая платёжная система
 
