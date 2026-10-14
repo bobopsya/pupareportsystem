@@ -7,7 +7,7 @@ import { getRates } from '../domain/fx.js';
 import { linkState, type LinkRow } from '../domain/links.js';
 import { formatAmount, LIMITS, parseAmount } from '../domain/money.js';
 import {
-  abortAsync, confirm3ds, createPayment, getShop, loadPayment, MAX_ATTEMPTS, payWithCard, shopMethods, startAsync, type PaymentRow,
+  abortAsync, createPayment, getShop, loadPayment, MAX_ATTEMPTS, payWithCard, shopMethods, startAsync, type PaymentRow,
 } from '../domain/payments.js';
 import type { FiscalReceipt, ReceiptRequest } from '../domain/receipts.js';
 import { quittancePdf, receiptPdf } from '../pdf.js';
@@ -25,7 +25,7 @@ function lastDecline(ctx: Ctx, id: string) {
 
 export function publicPayment(ctx: Ctx, p: PaymentRow) {
   const receipt = safeJson<ReceiptRequest | null>(p.receipt, null);
-  const action = safeJson<{ type: string; attempts_left?: number; method?: { title: string } } | null>(p.pending_action, null);
+  const action = safeJson<{ type: string } | null>(p.pending_action, null);
   const method = safeJson<Record<string, unknown> | null>(p.method, null);
   const receipts = ctx.db.prepare('SELECT id, type, refund_id, created_at FROM receipts WHERE payment_id = ? ORDER BY created_at').all(p.id) as { id: string; type: string; refund_id: string | null; created_at: number }[];
   return {
@@ -42,7 +42,7 @@ export function publicPayment(ctx: Ctx, p: PaymentRow) {
     capturedAt: p.captured_at,
     returnUrl: p.return_url,
     attemptsLeft: MAX_ATTEMPTS - p.attempts,
-    action: action?.type === '3ds' ? { type: '3ds', attemptsLeft: action.attempts_left, card: action.method?.title } : action?.type === 'processing' ? { type: 'processing', until: p.processing_until } : null,
+    action: action?.type === 'processing' ? { type: 'processing', until: p.processing_until } : null,
     method: method ? { type: method.type, title: method.title, crypto: method.crypto, plan: method.plan, sbp: method.type === 'sbp' ? { operationId: method.sbp_operation_id } : undefined } : null,
     methodType: p.method_type,
     cancellation: safeJson(p.cancellation, null),
@@ -83,13 +83,6 @@ export function registerCheckoutRoutes(app: FastifyInstance, ctx: Ctx) {
     const body = cardBody.parse(req.body);
     const p = payable(ctx, req.params.id);
     const result = payWithCard(ctx, p, body);
-    return { result, payment: publicPayment(ctx, loadPayment(ctx, p.id)!) };
-  });
-
-  app.post<{ Params: { id: string } }>('/api/checkout/payments/:id/3ds', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
-    const body = z.object({ code: z.string().max(10).nullable() }).parse(req.body);
-    const p = payable(ctx, req.params.id);
-    const result = confirm3ds(ctx, p, body.code);
     return { result, payment: publicPayment(ctx, loadPayment(ctx, p.id)!) };
   });
 

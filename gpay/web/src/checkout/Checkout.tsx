@@ -6,9 +6,8 @@ import { CardLogos, PayLogo, SbpMark } from '../components/PaymentLogos';
 import { Button, cx, Field, Input, Loading } from '../components/ui';
 import { api, ApiError, errorText } from '../lib/api';
 import { dateTime, money, REASONS } from '../lib/format';
-import { CryptoPanel, InstallmentsPanel, SbpPanel } from './AsyncMethods';
+import { BankCheck, CryptoPanel, InstallmentsPanel, SbpPanel } from './AsyncMethods';
 import { CardForm } from './CardForm';
-import { ThreeDS } from './ThreeDS';
 import { notifyParent, type CheckoutData, type MethodType, type PayResult, type PublicPayment, type PublicShop } from './types';
 
 const METHOD_TABS: { type: MethodType; label: string; icon: ReactNode }[] = [
@@ -105,7 +104,7 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
   const processing = p.status === 'pending' && p.action?.type === 'processing';
   useEffect(() => {
     if (!processing) return;
-    const t = setInterval(() => void reload(), 1500);
+    const t = setInterval(() => void reload(), 1000);
     return () => clearInterval(t);
   }, [processing, reload]);
 
@@ -156,7 +155,8 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
           </div>
         )}
         <div key={lockMethod ?? method} className="gp-fade-up">
-          {(lockMethod ?? method) === 'bank_card' && <CardForm data={data} email={email} emailOk={emailOk} onResult={(r, pay) => { setEmailTouched(true); onResult(r, pay); }} />}
+          {lockMethod === 'bank_card' && <BankCheck data={data} />}
+          {!lockMethod && method === 'bank_card' && <CardForm data={data} email={email} emailOk={emailOk} onResult={(r, pay) => { setEmailTouched(true); onResult(r, pay); }} />}
           {(lockMethod ?? method) === 'sbp' && <SbpPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
           {(lockMethod ?? method) === 'installments' && <InstallmentsPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
           {(lockMethod ?? method) === 'crypto' && <CryptoPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
@@ -242,7 +242,6 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
         </main>
       </div>
 
-      {p.status === 'pending' && p.action?.type === '3ds' && <ThreeDS data={data} card={p.action.card} attemptsLeft={p.action.attemptsLeft} onResult={onResult} />}
     </div>
   );
 }

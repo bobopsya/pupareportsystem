@@ -1,5 +1,5 @@
-import { ArrowLeft, Check, Loader2, Smartphone } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArrowLeft, Check, Landmark, Loader2, Smartphone } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { PayLogo, SbpMark } from '../components/PaymentLogos';
 import { QR } from '../components/QR';
 import { Button, CopyButton, cx, Field, Input, Segmented } from '../components/ui';
@@ -31,9 +31,13 @@ function Steps({ steps, progress }: { steps: string[]; progress: number }) {
     <ol className="flex flex-col gap-3 text-[15px]">
       {steps.map((s, i) => (
         <li key={s} className={cx('flex items-center gap-2.5 transition-colors', i <= active ? 'text-fg' : 'text-faint')}>
-          <span className={cx('flex size-5 items-center justify-center rounded-full border', i < active ? 'bg-ink border-ink text-on-ink' : i === active ? 'border-fg text-fg' : 'border-line-strong')}>
-            {i < active ? <Check className="size-3" strokeWidth={3} /> : i === active ? <Loader2 className="size-3 animate-spin" /> : null}
-          </span>
+          {i < active ? (
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-ink text-on-ink"><Check className="size-3" strokeWidth={3} /></span>
+          ) : i === active ? (
+            <span className="size-5 shrink-0 rounded-full border-2 border-fg border-t-transparent animate-spin" aria-hidden="true" />
+          ) : (
+            <span className="size-5 shrink-0 rounded-full border-2 border-line-strong" />
+          )}
           {s}
         </li>
       ))}
@@ -293,6 +297,31 @@ export function CryptoPanel({ data, email, emailOk, onResult, onBack }: { data: 
       >
         Получить адрес для оплаты
       </Button>
+    </div>
+  );
+}
+
+// ---------- Card confirmation with the issuing bank ----------
+/** Shown while the issuer confirms a card payment (3-D Secure runs on the bank side, nothing to type). */
+export function BankCheck({ data }: { data: CheckoutData }) {
+  const p = data.payment;
+  const until = p.action?.type === 'processing' ? p.action.until : null;
+  const startedAt = useRef(Date.now());
+  const progress = useProgress(until, Math.max(1000, (until ?? 0) - startedAt.current));
+  return (
+    <div className="flex flex-col items-center text-center gap-5 py-4 gp-fade-up">
+      <div className="relative flex size-16 items-center justify-center rounded-full bg-sunken">
+        <Landmark className="size-7" />
+        <Loader2 className="absolute -inset-1 size-[72px] animate-spin text-fg/15" strokeWidth={1} />
+      </div>
+      <div>
+        <div className="text-xl font-bold">Связываемся с банком</div>
+        <p className="mt-1 text-[15px] text-muted max-w-xs">{p.method?.title ?? 'Карта'} · {money(p.amount, p.currency)}. Не закрывайте страницу, это займёт несколько секунд.</p>
+      </div>
+      <div className="w-full max-w-sm flex flex-col gap-4 text-left">
+        <Bar progress={progress} />
+        <Steps steps={['Соединение с банком-эмитентом', 'Банк подтверждает платёж', 'Списание средств']} progress={progress} />
+      </div>
     </div>
   );
 }

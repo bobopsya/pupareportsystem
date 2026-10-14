@@ -54,12 +54,11 @@ test('merchant onboarding, API payment, checkout, receipt and refund', async ({ 
   await expect(page.getByText('Карта не поддерживается')).toBeVisible();
   expect(cardCalls).toBe(0);
 
-  // 3-D Secure card with the code from the SMS banner.
+  // 3-D Secure card: the bank confirms on its own within 3–5 seconds.
   await page.locator('#cc-number').fill('4000000000003220');
   await page.getByRole('button', { name: /Оплатить/ }).click();
-  await expect(page.getByText('Подтверждение покупки')).toBeVisible();
-  await page.locator('#otp').fill('123456');
-  await expect(page.getByText('Оплата прошла успешно')).toBeVisible();
+  await expect(page.getByText('Связываемся с банком')).toBeVisible();
+  await expect(page.getByText('Оплата прошла успешно')).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'остаться' }).click();
 
   // Fiscal receipt.

@@ -522,7 +522,7 @@ export default function Docs() {
           />
 
           <H2 id="cards">Карты и сценарии</H2>
-          <P>Банк-эмитент GPAY Bank обслуживает следующие карты. Срок действия — любая будущая дата, CVC — любые три цифры, код 3-D Secure — 123456. Карты других банков к оплате не принимаются.</P>
+          <P>Банк-эмитент GPAY Bank обслуживает следующие карты. Срок действия — любая будущая дата, CVC — любые три цифры. Для карт с 3-D Secure банк подтверждает платёж сам за 3–5 секунд — покупателю ничего вводить не нужно. Карты других банков к оплате не принимаются.</P>
           <div className="mt-4 rounded-xl border border-line overflow-hidden bg-surface">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-faint border-b border-line"><th className="font-medium py-2.5 px-4">Номер карты</th><th className="font-medium py-2.5 px-4">Результат</th><th className="font-medium py-2.5 px-4 hidden sm:table-cell">Описание</th></tr></thead>

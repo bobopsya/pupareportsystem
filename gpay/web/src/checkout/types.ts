@@ -25,7 +25,7 @@ export interface PublicPayment {
   capturedAt: number | null;
   returnUrl: string | null;
   attemptsLeft: number;
-  action: { type: '3ds'; attemptsLeft: number; card: string } | { type: 'processing'; until: number } | null;
+  action: { type: 'processing'; until: number } | null;
   method: {
     type: MethodType;
     title: string;
@@ -47,7 +47,6 @@ export interface CheckoutData {
 
 export type PayResult =
   | { result: 'succeeded' | 'waiting_for_capture' }
-  | { result: '3ds'; attemptsLeft: number }
   | { result: 'processing'; until: number }
   | { result: 'declined'; reason: string; message: string; canceled: boolean };
 

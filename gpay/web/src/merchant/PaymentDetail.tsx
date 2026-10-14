@@ -24,8 +24,8 @@ interface Detail {
 const EVENT: Record<string, { label: (d: Record<string, string>) => string; icon: ReactNode; tone: string }> = {
   created: { label: (d) => `Платёж создан (${d.source === 'link' ? 'ссылка на оплату' : d.source === 'api' ? 'API' : 'кабинет'})`, icon: <CircleDot className="size-3.5" />, tone: 'text-muted' },
   attempt: { label: (d) => `Попытка оплаты: ${d.method}`, icon: <CreditCard className="size-3.5" />, tone: 'text-muted' },
-  '3ds_required': { label: () => 'Запрошено подтверждение 3-D Secure', icon: <ShieldCheck className="size-3.5" />, tone: 'text-info' },
-  '3ds_passed': { label: () => '3-D Secure пройден', icon: <ShieldCheck className="size-3.5" />, tone: 'text-ok' },
+  '3ds_required': { label: () => 'Банк проверяет платёж (3-D Secure)', icon: <ShieldCheck className="size-3.5" />, tone: 'text-info' },
+  '3ds_passed': { label: () => 'Банк подтвердил платёж', icon: <ShieldCheck className="size-3.5" />, tone: 'text-ok' },
   attempt_failed: { label: (d) => `Отказ: ${REASONS[d.reason] ?? d.reason}${d.method ? ` · ${d.method}` : ''}`, icon: <XCircle className="size-3.5" />, tone: 'text-bad' },
   processing: { label: (d) => `Ожидание подтверждения: ${d.method}`, icon: <Loader2 className="size-3.5" />, tone: 'text-info' },
   method_reset: { label: () => 'Покупатель сменил способ оплаты', icon: <RotateCcw className="size-3.5" />, tone: 'text-muted' },

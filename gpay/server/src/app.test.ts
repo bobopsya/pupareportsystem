@@ -156,12 +156,18 @@ describe('checkout', () => {
     expect(got.cancellation_details).toEqual({ party: 'gpay', reason: 'too_many_attempts' });
   });
 
-  it('handles 3-D Secure', async () => {
+  it('confirms 3-D Secure cards with the bank after a few seconds', async () => {
     const { secret } = await merchant();
     const p = (await newPayment(secret)).json();
-    expect((await pay(p.id, card('4000000000003220'))).json().result).toEqual({ result: '3ds', attemptsLeft: 3 });
-    expect((await pay(p.id, { code: '000000' }, '3ds')).json().result).toEqual({ result: '3ds', attemptsLeft: 2 });
-    expect((await pay(p.id, { code: '123456' }, '3ds')).json().result.result).toBe('succeeded');
+    const r = (await pay(p.id, card('4000000000003220'))).json();
+    expect(r.result.result).toBe('processing');
+    expect(r.result.until - now).toBeGreaterThanOrEqual(3000);
+    expect(r.result.until - now).toBeLessThanOrEqual(5000);
+    expect(r.payment.action).toEqual({ type: 'processing', until: r.result.until });
+    now += 2_000;
+    expect((await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment.status).toBe('pending');
+    now += 3_100;
+    expect((await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment.status).toBe('succeeded');
     const got = (await api(secret, 'GET', `/payments/${p.id}`)).json();
     expect(got.authorization_details.three_d_secure.applied).toBe(true);
   });

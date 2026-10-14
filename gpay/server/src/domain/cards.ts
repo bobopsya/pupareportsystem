@@ -30,7 +30,7 @@ export function brandOf(pan: string): Brand | null {
 /** What happens when a game card is charged. */
 export const OUTCOMES = {
   success: { title: 'Успешная оплата' },
-  three_ds: { title: 'Успех после 3-D Secure (код 123456)' },
+  three_ds: { title: 'Успех после проверки банком (3-D Secure)' },
   insufficient_funds: { title: 'Недостаточно средств', party: 'payment_network', message: 'Недостаточно средств на карте. Пополните баланс или выберите другую карту.' },
   card_expired: { title: 'Истёк срок действия карты', party: 'issuer', message: 'Срок действия карты истёк. Оплатите другой картой.' },
   issuer_unavailable: { title: 'Банк-эмитент недоступен', party: 'issuer', message: 'Банк, выпустивший карту, не отвечает. Попробуйте ещё раз через несколько минут.' },

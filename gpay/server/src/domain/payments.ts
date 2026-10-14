@@ -65,6 +65,8 @@ export const CAPTURE_TTL_MS = 7 * 24 * 3600 * 1000;
 export const MAX_ATTEMPTS = 5;
 /** Simulated processing time of asynchronous methods. */
 export const PROCESSING_MS: Record<Exclude<MethodType, 'bank_card'>, number> = { sbp: 9_000, installments: 11_000, crypto: 14_000 };
+/** How long the issuer "takes" to confirm a card that requires 3-D Secure. */
+export const BANK_CHECK_MS = { min: 3_000, max: 5_000 };
 
 export const getShop = (ctx: Ctx, id: number) => ctx.db.prepare('SELECT * FROM shops WHERE id = ?').get(id) as ShopRow | undefined;
 export const getPaymentRow = (ctx: Ctx, id: string) => ctx.db.prepare('SELECT * FROM payments WHERE id = ?').get(id) as PaymentRow | undefined;
@@ -197,6 +199,7 @@ export function settle(ctx: Ctx, p: PaymentRow): PaymentRow {
   const now = ctx.now();
   if (p.status === 'pending' && p.processing_until && now >= p.processing_until) {
     const method = safeJson<Record<string, unknown>>(p.method, {});
+    if (method.type === 'bank_card') addEvent(ctx, p.id, '3ds_passed', { method: method.title });
     if (method.type === 'crypto') {
       const crypto = method.crypto as Record<string, unknown>;
       method.crypto = { ...crypto, tx_hash: randomString(64, '0123456789abcdef'), confirmations: crypto.asset === 'BTC' ? 3 : 20 };
@@ -229,7 +232,6 @@ function setEmail(ctx: Ctx, p: PaymentRow, email?: string) {
 
 export type PayResult =
   | { result: 'succeeded' | 'waiting_for_capture' }
-  | { result: '3ds'; attemptsLeft: number }
   | { result: 'processing'; until: number }
   | { result: 'declined'; reason: string; message: string; canceled: boolean };
 
@@ -281,28 +283,16 @@ export function payWithCard(ctx: Ctx, p: PaymentRow, card: CardInput): PayResult
     return resultOf(ctx, p.id);
   }
   if (outcome === 'three_ds') {
-    ctx.db.prepare('UPDATE payments SET pending_action = ? WHERE id = ?').run(JSON.stringify({ type: '3ds', attempts_left: 3, method }), p.id);
+    // The issuer confirms the purchase on its side (3-D Secure) — the buyer just waits a few seconds.
+    const until = ctx.now() + BANK_CHECK_MS.min + Math.floor(Math.random() * (BANK_CHECK_MS.max - BANK_CHECK_MS.min));
+    ctx.db
+      .prepare('UPDATE payments SET method_type = ?, method = ?, processing_until = ?, pending_action = ? WHERE id = ?')
+      .run('bank_card', JSON.stringify({ ...method, three_d_secure: true }), until, JSON.stringify({ type: 'processing' }), p.id);
     addEvent(ctx, p.id, '3ds_required', { method: method.title });
-    return { result: '3ds', attemptsLeft: 3 };
+    return { result: 'processing', until };
   }
   const o = OUTCOMES[outcome];
   return decline(ctx, p, outcome, o.message, method.title);
-}
-
-export function confirm3ds(ctx: Ctx, p: PaymentRow, code: string | null): PayResult {
-  const action = safeJson<{ type: string; attempts_left: number; method: Record<string, unknown> } | null>(p.pending_action, null);
-  if (p.status !== 'pending' || action?.type !== '3ds') throw new ApiError(400, 'invalid_state', 'Подтверждение 3-D Secure не требуется');
-  const title = action.method.title as string;
-  if (code === null) return decline(ctx, p, '3d_secure_failed', 'Подтверждение платежа отменено.', title);
-  if (code === '123456') {
-    addEvent(ctx, p.id, '3ds_passed', { method: title });
-    authorize(ctx, p, { ...action.method, three_d_secure: true });
-    return resultOf(ctx, p.id);
-  }
-  const left = action.attempts_left - 1;
-  if (left <= 0) return decline(ctx, p, '3d_secure_failed', 'Код подтверждения введён неверно три раза.', title);
-  ctx.db.prepare('UPDATE payments SET pending_action = ? WHERE id = ?').run(JSON.stringify({ ...action, attempts_left: left }), p.id);
-  return { result: '3ds', attemptsLeft: left };
 }
 
 export interface AsyncInput {
