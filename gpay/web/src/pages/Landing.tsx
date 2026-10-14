@@ -224,8 +224,8 @@ function PhoneMock() {
           <span className="py-1.5 text-muted">Частями</span>
         </div>
         <div className="mt-3 rounded-xl bg-sunken">
-          <div className="h-12 px-4 flex items-center justify-between font-mono text-sm">2200 1234 5678 9012 <PayLogo name="mir" /></div>
-          <div className="grid grid-cols-2 border-t border-bg font-mono text-sm text-muted">
+          <div className="h-12 px-4 flex items-center justify-between text-[15px] tabular-nums">2200 1234 5678 9012 <PayLogo name="mir" /></div>
+          <div className="grid grid-cols-2 border-t border-bg text-[15px] tabular-nums text-muted">
             <div className="h-12 px-4 flex items-center border-r border-bg">09 / 28</div>
             <div className="h-12 px-4 flex items-center">•••</div>
           </div>

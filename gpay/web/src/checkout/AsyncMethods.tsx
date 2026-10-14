@@ -88,7 +88,7 @@ export function SbpPanel({ data, email, emailOk, onResult, onBack }: { data: Che
             <Loader2 className="size-3.5 animate-spin" /> {progress < 0.55 ? 'Ожидаем оплату в приложении банка…' : 'Банк подтверждает перевод…'}
           </div>
         </div>
-        <div className="text-[11px] text-faint font-mono">ID операции СБП: {p.method?.sbp?.operationId}</div>
+        <div className="text-[13px] text-faint tabular-nums">ID операции СБП: {p.method?.sbp?.operationId}</div>
         <BackLink id={p.id} onBack={onBack} />
       </div>
     );
@@ -235,7 +235,7 @@ export function CryptoPanel({ data, email, emailOk, onResult, onBack }: { data: 
           <div className="min-w-0 flex flex-col gap-2">
             <div className="text-sm text-muted">Отправьте ровно</div>
             <div className="flex items-center gap-1.5">
-              <span className="font-mono text-lg font-semibold">{c.amount} {c.asset}</span>
+              <span className="text-lg font-semibold tabular-nums">{c.amount} {c.asset}</span>
               <CopyButton text={c.amount} label="Скопировать сумму" />
             </div>
             <div className="text-xs text-muted">Сеть: {c.asset === 'BTC' ? 'Bitcoin' : 'TRON (TRC-20)'}</div>
@@ -269,7 +269,7 @@ export function CryptoPanel({ data, email, emailOk, onResult, onBack }: { data: 
       />
       <div className="rounded-2xl bg-sunken px-5 py-4 flex items-center justify-between">
         <span className="text-sm text-muted">К оплате</span>
-        <span className="font-mono font-semibold">≈ {approx(asset)} {asset}</span>
+        <span className="font-semibold tabular-nums">≈ {approx(asset)} {asset}</span>
       </div>
       {error && <p className="text-[13px] text-bad">{error}</p>}
       <Button

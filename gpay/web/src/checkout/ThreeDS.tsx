@@ -63,7 +63,7 @@ export function ThreeDS({ data, card, attemptsLeft, onResult }: { data: Checkout
                 <b>GPAY Bank</b>
                 <span className="text-[11px] opacity-60">сейчас</span>
               </div>
-              Код <b className="font-mono tracking-wider">123456</b> для покупки {money(p.amount, p.currency)} в {data.shop.name}. Карта *{last4}. Никому не сообщайте код.
+              Код <b className="tabular-nums tracking-wide">123456</b> для покупки {money(p.amount, p.currency)} в {data.shop.name}. Карта *{last4}. Никому не сообщайте код.
             </div>
           </div>
         </div>
@@ -92,7 +92,7 @@ export function ThreeDS({ data, card, attemptsLeft, onResult }: { data: Checkout
             <dt className="text-[#5e6178]">Дата</dt>
             <dd className="text-right">{dateTime(Date.now())}</dd>
             <dt className="text-[#5e6178]">Карта</dt>
-            <dd className="text-right font-mono">{card}</dd>
+            <dd className="text-right tabular-nums">{card}</dd>
           </dl>
           <form
             className="mt-5"
@@ -114,7 +114,7 @@ export function ThreeDS({ data, card, attemptsLeft, onResult }: { data: Checkout
                 setCode(v);
                 if (v.length === 6) void send(v);
               }}
-              className={cx('mt-1.5 w-full h-14 rounded-xl border-[1.5px] text-center font-mono text-2xl tracking-[0.5em] focus:outline-none', error ? 'border-[#d6293a] bg-[#fcebed]' : 'border-transparent bg-[#f2f3f5] focus:bg-white focus:border-[#111]')}
+              className={cx('mt-1.5 w-full h-14 rounded-xl border-[1.5px] text-center text-[26px] font-semibold tabular-nums tracking-[0.4em] focus:outline-none', error ? 'border-[#d6293a] bg-[#fcebed]' : 'border-transparent bg-[#f2f3f5] focus:bg-white focus:border-[#111]')}
             />
             {error && <p className="mt-2 text-[13px] text-[#d92d3a]">{error}</p>}
             <Button type="submit" variant="dark" size="lg" loading={busy} disabled={code.length !== 6} className="w-full mt-4 !bg-[#111] !text-white">

@@ -114,7 +114,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
             value={formatPan(pan)}
             onChange={(e) => onPan(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, pan: true }))}
-            className="w-full h-14 bg-transparent pl-11 pr-[52px] font-mono text-[16px] tracking-wide placeholder:font-sans placeholder:tracking-normal placeholder:text-faint focus:outline-none"
+            className="w-full h-14 bg-transparent pl-11 pr-[52px] text-[17px] tabular-nums tracking-[0.02em] placeholder:tracking-normal placeholder:text-faint focus:outline-none"
           />
           <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 size-[18px] text-faint" />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity" style={{ opacity: supported ? 1 : 0 }}>
@@ -134,7 +134,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
               onChange={(e) => onExp(e.target.value)}
               onKeyDown={(e) => e.key === 'Backspace' && exp.endsWith('/') && (e.preventDefault(), setExp(exp.slice(0, 1)))}
               onBlur={() => setTouched((t) => ({ ...t, exp: true }))}
-              className="w-full h-14 bg-transparent px-4 font-mono text-[16px] placeholder:font-sans placeholder:text-faint focus:outline-none"
+              className="w-full h-14 bg-transparent px-4 text-[17px] tabular-nums placeholder:text-faint focus:outline-none"
             />
           </div>
           <div className="relative">
@@ -149,7 +149,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
               value={csc}
               onChange={(e) => setCsc(e.target.value.replace(/\D/g, '').slice(0, 3))}
               onBlur={() => setTouched((t) => ({ ...t, csc: true }))}
-              className="w-full h-14 bg-transparent pl-4 pr-10 font-mono text-[16px] tracking-[0.3em] placeholder:font-sans placeholder:tracking-normal placeholder:text-faint focus:outline-none"
+              className="w-full h-14 bg-transparent pl-4 pr-10 text-[17px] tabular-nums tracking-[0.2em] placeholder:tracking-normal placeholder:text-faint focus:outline-none"
             />
             <span className="group absolute right-3 top-1/2 -translate-y-1/2 text-faint" tabIndex={0} aria-label="Что такое CVC">
               <Info className="size-4" />
