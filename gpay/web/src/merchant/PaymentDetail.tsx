@@ -114,7 +114,7 @@ export default function PaymentDetail() {
               </div>
             </div>
             {tab === 'json' ? (
-              <pre className="rounded-xl bg-sunken border border-line p-4 text-[12px] font-mono overflow-x-auto max-h-[480px]">{JSON.stringify(data.api, null, 2)}</pre>
+              <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-x-auto max-h-[480px]">{JSON.stringify(data.api, null, 2)}</pre>
             ) : (
               <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
                 <Item k="Описание" v={p.description || '—'} />

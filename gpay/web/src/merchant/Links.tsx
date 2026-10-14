@@ -73,7 +73,7 @@ export default function Links() {
             <Card key={l.id} className="flex flex-col !p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className={cx('flex size-8 shrink-0 items-center justify-center rounded-lg', l.type === 'invoice' ? 'bg-info-soft text-info' : 'bg-brand-soft text-brand')}>
+                  <span className={cx('flex size-8 shrink-0 items-center justify-center rounded-lg', l.type === 'invoice' ? 'bg-info-soft text-info' : 'bg-sunken text-fg')}>
                     {l.type === 'invoice' ? <FileText className="size-4" /> : <Link2 className="size-4" />}
                   </span>
                   <div className="min-w-0">
@@ -84,7 +84,7 @@ export default function Links() {
                 <Badge tone={STATUS[l.status].tone}>{STATUS[l.status].label}</Badge>
               </div>
               <div className="mt-3 text-xl font-semibold tracking-tight tabular-nums">{l.amountMinor ? money(l.amountMinor, l.currency, { exact: l.amountMinor % 100 !== 0 }) : <span className="text-muted text-base font-medium">Свободная сумма, {CURRENCY_SYMBOL[l.currency]}</span>}</div>
-              <div className="mt-3 flex items-center gap-1 rounded-lg bg-sunken border border-line pl-2.5 pr-1 h-8">
+              <div className="mt-3 flex items-center gap-1 rounded-lg bg-sunken pl-2.5 pr-1 h-8">
                 <span className="flex-1 truncate font-mono text-[12px] text-muted">{l.url.replace(/^https?:\/\//, '')}</span>
                 <CopyButton text={l.url} label="Скопировать ссылку" />
               </div>

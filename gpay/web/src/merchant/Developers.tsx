@@ -106,7 +106,7 @@ function Keys() {
             <AlertTriangle className="size-4 mt-0.5 shrink-0" /> Скопируйте ключ сейчас — после закрытия окна его нельзя будет посмотреть снова.
           </div>
           {secret && <CopyField value={secret} />}
-          <pre className="rounded-xl bg-sunken border border-line p-3 text-[12px] font-mono overflow-x-auto">{`curl ${location.origin}/api/v1/me \\\n  -H "Authorization: Bearer ${secret ?? ''}"`}</pre>
+          <pre className="rounded-xl bg-sunken p-3 text-[12px] font-mono overflow-x-auto">{`curl ${location.origin}/api/v1/me \\\n  -H "Authorization: Bearer ${secret ?? ''}"`}</pre>
         </div>
       </Modal>
       <Modal
@@ -293,11 +293,11 @@ function Webhooks() {
                     <div className="grid lg:grid-cols-2 gap-3">
                       <div>
                         <div className="text-xs text-faint mb-1">Тело запроса</div>
-                        <pre className="rounded-lg bg-surface border border-line p-3 text-[11px] font-mono overflow-auto max-h-72">{JSON.stringify(JSON.parse(d.payload), null, 2)}</pre>
+                        <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-auto max-h-72">{JSON.stringify(JSON.parse(d.payload), null, 2)}</pre>
                       </div>
                       <div>
                         <div className="text-xs text-faint mb-1">Ответ сервера</div>
-                        <pre className="rounded-lg bg-surface border border-line p-3 text-[11px] font-mono overflow-auto max-h-72 whitespace-pre-wrap">{d.lastBody || '—'}</pre>
+                        <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-auto max-h-72 whitespace-pre-wrap">{d.lastBody || '—'}</pre>
                       </div>
                     </div>
                     <div>
@@ -390,11 +390,11 @@ function Logs() {
                 <li className="px-5 py-4 bg-sunken/60 grid lg:grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs text-faint mb-1">Запрос{l.idemKey && <> · Idempotence-Key: <span className="font-mono">{l.idemKey}</span></>}</div>
-                    <pre className="rounded-lg bg-surface border border-line p-3 text-[11px] font-mono overflow-auto max-h-80">{pretty(l.reqBody)}</pre>
+                    <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-auto max-h-80">{pretty(l.reqBody)}</pre>
                   </div>
                   <div>
                     <div className="text-xs text-faint mb-1">Ответ</div>
-                    <pre className="rounded-lg bg-surface border border-line p-3 text-[11px] font-mono overflow-auto max-h-80">{pretty(l.resBody)}</pre>
+                    <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-auto max-h-80">{pretty(l.resBody)}</pre>
                   </div>
                 </li>
               )}

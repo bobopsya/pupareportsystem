@@ -1,173 +1,300 @@
-import { ArrowRight, BadgePercent, Code2, FileText, Link2, Lock, QrCode, Receipt, RotateCcw, ShieldCheck, Webhook, Zap } from 'lucide-react';
+import { ArrowRight, Check, Lock } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { CardLogos, PayLogo } from '../components/PaymentLogos';
+import { QR } from '../components/QR';
 import { Button, cx } from '../components/ui';
 import { useAuth } from '../lib/auth';
 
-const FEATURES = [
-  { icon: Zap, title: 'Все популярные способы', text: 'Карты МИР, Visa, Mastercard, UnionPay, СБП, оплата частями и криптовалюта — на одной странице оплаты.' },
-  { icon: Receipt, title: 'Онлайн-касса и чеки', text: 'Чеки по 54-ФЗ формируются автоматически: приход, возврат прихода, QR для проверки. PDF в один клик.' },
-  { icon: Link2, title: 'Ссылки и счета', text: 'Принимайте оплату без сайта: ссылка в мессенджере, счёт с позициями или QR-табличка на кассе.' },
-  { icon: Code2, title: 'REST API и виджет', text: 'Идемпотентные запросы, двухстадийные платежи, возвраты и выплаты. Виджет оплаты подключается одной строкой.' },
-  { icon: Webhook, title: 'Вебхуки с подписью', text: 'Уведомления о статусах с HMAC-SHA256, автоповторы в течение суток и журнал доставок.' },
-  { icon: ShieldCheck, title: 'Безопасность', text: 'PCI DSS, 3-D Secure 2.0 и антифрод. Данные карт не попадают на сервер магазина.' },
-];
-
-const TARIFFS = [
-  { title: 'Банковские карты', pct: '2,8%', sub: 'МИР, Visa, Mastercard, UnionPay' },
-  { title: 'СБП', pct: '0,7%', sub: 'Оплата по QR-коду' },
-  { title: 'Оплата частями', pct: '4,9%', sub: 'Деньги магазину сразу' },
-  { title: 'Криптовалюта', pct: '1,5%', sub: 'USDT, Bitcoin' },
+const NAV = [
+  { href: '#features', label: 'Возможности' },
+  { href: '#pricing', label: 'Тарифы' },
+  { href: '/docs', label: 'Разработчикам' },
 ];
 
 export default function Landing() {
   const { user } = useAuth();
+  const cta = user ? '/app' : '/register';
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-30 bg-bg/80 backdrop-blur border-b border-line/60">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Logo />
-          <nav className="flex items-center gap-1 sm:gap-2">
-            <Link to="/docs" className="hidden sm:inline-flex h-9 items-center px-3 text-sm text-muted hover:text-fg">Документация</Link>
+    <div className="min-h-screen bg-bg">
+      <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-sm">
+        <div className="max-w-[1200px] mx-auto px-5 sm:px-8 h-[72px] flex items-center justify-between gap-6">
+          <Link to="/"><Logo /></Link>
+          <nav className="hidden md:flex items-center gap-8 text-[15px]">
+            {NAV.map((n) => (n.href.startsWith('/') ? <Link key={n.href} to={n.href} className="hover:text-muted">{n.label}</Link> : <a key={n.href} href={n.href} className="hover:text-muted">{n.label}</a>))}
+          </nav>
+          <div className="flex items-center gap-2">
             {user ? (
               <Link to="/app"><Button variant="primary" size="sm">Личный кабинет</Button></Link>
             ) : (
               <>
-                <Link to="/login" className="inline-flex h-9 items-center px-3 text-sm text-muted hover:text-fg">Войти</Link>
-                <Link to="/register"><Button variant="primary" size="sm">Подключиться</Button></Link>
+                <Link to="/login"><Button variant="ghost" size="sm" className="text-fg">Войти</Button></Link>
+                <Link to="/register"><Button variant="primary" size="sm">Подключить</Button></Link>
               </>
             )}
-          </nav>
+          </div>
         </div>
       </header>
 
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(60%_60%_at_70%_0%,var(--color-brand-soft),transparent_70%)]" />
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-16 grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted shadow-card">
-              <BadgePercent className="size-3.5 text-brand" /> СБП — от 0,7% за платёж
-            </span>
-            <h1 className="mt-5 text-[40px] sm:text-[56px] leading-[1.03] font-semibold tracking-[-0.035em]">
-              Приём платежей <span className="text-brand">для бизнеса</span> любого размера
-            </h1>
-            <p className="mt-5 text-lg text-muted max-w-xl">Интернет-эквайринг, онлайн-касса, ссылки на оплату и API для разработчиков. Подключение за 5 минут, деньги на счёт — на следующий день.</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link to={user ? '/app' : '/register'}><Button variant="primary" size="lg" icon={<ArrowRight className="size-4" />}>Начать принимать платежи</Button></Link>
-              <Link to="/docs"><Button size="lg" icon={<Code2 className="size-4" />}>API для разработчиков</Button></Link>
+      <main className="max-w-[1200px] mx-auto px-5 sm:px-8">
+        {/* Hero */}
+        <section className="rounded-[40px] bg-sunken mt-2 px-6 sm:px-14 pt-12 sm:pt-16 pb-0 grid lg:grid-cols-[1.15fr_1fr] gap-10 overflow-hidden">
+          <div className="pb-12 sm:pb-16 self-center">
+            <h1 className="text-[40px] sm:text-[60px] leading-[1.04] font-bold tracking-[-0.035em]">Приём онлайн-платежей для&nbsp;бизнеса</h1>
+            <p className="mt-6 text-lg sm:text-xl text-muted max-w-[520px]">Эквайринг, онлайн-касса и ссылки на оплату в одном договоре. Карты, СБП, оплата частями и криптовалюта.</p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <Link to={cta}><Button variant="primary" size="lg">Подключить GPAY</Button></Link>
+              <Link to="/docs"><Button size="lg" className="!bg-surface hover:!bg-hover">Документация API</Button></Link>
             </div>
-            <div className="mt-8 flex items-center gap-3 text-xs text-muted">
+            <div className="mt-10 flex flex-wrap items-center gap-2">
               <CardLogos />
               <PayLogo name="sbp" />
-              <PayLogo name="tether" />
-              <PayLogo name="bitcoin" />
             </div>
           </div>
-          <HeroMock />
-        </div>
-      </section>
+          <PhoneMock />
+        </section>
 
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
-        <h2 className="text-3xl font-semibold tracking-tight">Всё для оплаты в одном сервисе</h2>
-        <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="rounded-2xl border border-line bg-surface p-6 shadow-card">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand"><f.icon className="size-5" /></span>
-              <div className="mt-4 font-semibold">{f.title}</div>
-              <p className="mt-1.5 text-sm text-muted">{f.text}</p>
+        {/* Numbers */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-8 py-16 sm:py-20 border-b border-line">
+          {[
+            ['от 0,7%', 'комиссия за платёж через СБП'],
+            ['5 минут', 'на подключение магазина'],
+            ['1 день', 'до зачисления денег на счёт'],
+            ['54-ФЗ', 'чеки отправляются автоматически'],
+          ].map(([v, t]) => (
+            <div key={v}>
+              <div className="text-[34px] sm:text-[44px] font-bold tracking-[-0.03em] leading-none">{v}</div>
+              <div className="mt-3 text-muted max-w-[220px]">{t}</div>
             </div>
           ))}
-        </div>
-      </section>
+        </section>
 
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
-        <div className="rounded-3xl bg-[#0f0d24] text-white p-8 sm:p-12 grid lg:grid-cols-2 gap-10 items-center overflow-hidden relative">
-          <div className="absolute -right-20 -top-20 size-80 rounded-full bg-[#5b3df5]/40 blur-3xl" />
-          <div className="relative">
-            <h2 className="text-3xl font-semibold tracking-tight">Платёж — три строки кода</h2>
-            <p className="mt-3 text-white/70">Создайте платёж на сервере, перенаправьте покупателя на confirmation_url и получите вебхук <span className="font-mono">payment.succeeded</span>.</p>
-            <Link to="/docs" className="inline-block mt-6"><Button variant="primary" icon={<ArrowRight className="size-4" />}>Открыть документацию</Button></Link>
+        {/* Features */}
+        <section id="features" className="py-16 sm:py-24 flex flex-col gap-6 scroll-mt-20">
+          <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-tight max-w-[760px]">Всё, чтобы принимать оплату на сайте, в приложении и офлайн</h2>
+          <Feature
+            title="Платёжная форма, которой доверяют"
+            text="Карты МИР, Visa, Mastercard и UnionPay, СБП, оплата частями и криптовалюта. 3-D Secure, понятные ошибки и повторная попытка в один клик."
+            points={['Адаптивная страница оплаты', 'Виджет поверх вашего сайта', 'Возврат покупателя в магазин']}
+            art={<FormArt />}
+          />
+          <Feature
+            reverse
+            title="Онлайн-касса уже включена"
+            text="Чеки прихода и возврата формируются при каждом платеже и отправляются покупателю. Не нужно покупать кассу и договор с ОФД."
+            points={['НДС 0–22% и без НДС', 'QR-код для проверки чека', 'PDF и печать']}
+            art={<ReceiptArt />}
+          />
+          <Feature
+            title="Ссылки и счета без сайта"
+            text="Создайте ссылку с фиксированной или свободной суммой, выставьте счёт с позициями или распечатайте QR-код для кассы."
+            points={['Многоразовые и разовые ссылки', 'Срок действия', 'Статистика переходов и оплат']}
+            art={<LinkArt />}
+          />
+          <Feature
+            reverse
+            title="API для разработчиков"
+            text="REST API с идемпотентными запросами, двухстадийные платежи, возвраты и выплаты. Вебхуки с подписью и журналом доставок."
+            points={['Примеры на 4 языках', 'Песочница в документации', 'Подпись HMAC-SHA256']}
+            art={<CodeArt />}
+            link={{ to: '/docs', label: 'Открыть документацию' }}
+          />
+        </section>
+
+        {/* Steps */}
+        <section className="py-16 sm:py-20 border-t border-line">
+          <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-tight">Подключение за три шага</h2>
+          <ol className="mt-12 grid md:grid-cols-3 gap-10">
+            {[
+              ['Регистрация', 'Укажите email и пароль — договор-оферта принимается онлайн.'],
+              ['Анкета магазина', 'Название, ИНН и система налогообложения. Проверка занимает секунды.'],
+              ['Первый платёж', 'Отправьте ссылку покупателю или подключите API — деньги придут на баланс.'],
+            ].map(([t, d], i) => (
+              <li key={t}>
+                <div className="text-[64px] leading-none font-bold text-line-strong">{i + 1}</div>
+                <div className="mt-5 text-xl font-semibold">{t}</div>
+                <p className="mt-2 text-muted">{d}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* Pricing */}
+        <section id="pricing" className="py-16 sm:py-20 border-t border-line scroll-mt-20">
+          <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-tight">Тарифы</h2>
+          <p className="mt-3 text-lg text-muted">Без абонентской платы. Платите только за успешные платежи.</p>
+          <div className="mt-10 rounded-3xl border border-line overflow-hidden">
+            {[
+              ['Банковские карты', 'МИР, Visa, Mastercard, UnionPay', '2,8%'],
+              ['СБП', 'Оплата по QR-коду из приложения банка', '0,7%'],
+              ['Оплата частями', '4 платежа для покупателя, деньги магазину сразу', '4,9%'],
+              ['Криптовалюта', 'USDT (TRC-20) и Bitcoin', '1,5%'],
+            ].map(([t, d, p]) => (
+              <div key={t} className="flex items-center justify-between gap-6 px-6 sm:px-8 py-6 border-b border-line last:border-0">
+                <div>
+                  <div className="text-lg font-semibold">{t}</div>
+                  <div className="text-muted mt-0.5">{d}</div>
+                </div>
+                <div className="text-[28px] sm:text-[32px] font-bold tracking-[-0.02em] tabular-nums">{p}</div>
+              </div>
+            ))}
           </div>
-          <pre className="relative rounded-2xl bg-black/40 border border-white/10 p-5 text-[12.5px] leading-relaxed font-mono overflow-x-auto text-white/90">
-{`curl ${location.origin}/api/v1/payments \\
-  -H "Authorization: Bearer sk_live_…" \\
-  -H "Idempotence-Key: 7d1f…" \\
-  -d '{
-    "amount": { "value": "1290.00", "currency": "RUB" },
-    "description": "Заказ №4821",
-    "confirmation": {
-      "type": "redirect",
-      "return_url": "https://shop.ru/thanks"
-    }
-  }'`}
-          </pre>
-        </div>
-      </section>
+        </section>
 
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
-        <h2 className="text-3xl font-semibold tracking-tight">Прозрачные тарифы</h2>
-        <p className="mt-2 text-muted">Без абонентской платы, подключение бесплатно.</p>
-        <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {TARIFFS.map((t, i) => (
-            <div key={t.title} className={cx('rounded-2xl border p-6', i === 1 ? 'border-brand bg-brand-soft' : 'border-line bg-surface shadow-card')}>
-              <div className="text-sm text-muted">{t.title}</div>
-              <div className="mt-2 text-4xl font-semibold tracking-tight">{t.pct}</div>
-              <div className="mt-2 text-sm text-muted">{t.sub}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <footer className="border-t border-line mt-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row gap-6 justify-between text-sm text-muted">
+        {/* CTA */}
+        <section className="my-10 sm:my-16 rounded-[40px] bg-ink text-on-ink px-6 sm:px-14 py-14 sm:py-16 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
           <div>
-            <Logo size="sm" />
-            <p className="mt-3 max-w-sm text-xs text-faint">GnusaPay — сервис приёма платежей для интернет-магазинов, приложений и офлайн-бизнеса.</p>
+            <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-tight">Начните принимать платежи сегодня</h2>
+            <p className="mt-3 text-lg opacity-70">Подключение бесплатно, первый платёж — через 5 минут.</p>
           </div>
-          <div className="flex gap-8">
-            <div className="flex flex-col gap-2"><span className="text-fg font-medium">Продукты</span><span>Эквайринг</span><span>Онлайн-касса</span><span>Ссылки на оплату</span></div>
-            <div className="flex flex-col gap-2"><span className="text-fg font-medium">Разработчикам</span><Link to="/docs">Документация API</Link><Link to="/docs#widget">Виджет оплаты</Link><Link to="/docs#webhooks">Вебхуки</Link></div>
+          <Link to={cta} className="shrink-0">
+            <Button size="lg" className="!bg-on-ink !text-ink hover:!opacity-90">Подключить GPAY <ArrowRight className="size-4" /></Button>
+          </Link>
+        </section>
+      </main>
+
+      <footer className="bg-sunken mt-10">
+        <div className="max-w-[1200px] mx-auto px-5 sm:px-8 py-14 grid sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] gap-10 text-[15px]">
+          <div>
+            <Logo />
+            <p className="mt-4 text-muted max-w-xs">Сервис приёма платежей для интернет-магазинов, приложений и офлайн-бизнеса.</p>
           </div>
+          <FooterCol title="Продукты" links={[['Эквайринг', '#features'], ['Онлайн-касса', '#features'], ['Ссылки и счета', '#features'], ['Тарифы', '#pricing']]} />
+          <FooterCol title="Разработчикам" links={[['Документация API', '/docs'], ['Вебхуки', '/docs#webhooks'], ['Виджет оплаты', '/docs#widget'], ['Песочница', '/docs#sandbox']]} />
+          <FooterCol title="Аккаунт" links={[['Войти', '/login'], ['Подключиться', '/register']]} />
+        </div>
+        <div className="max-w-[1200px] mx-auto px-5 sm:px-8 py-6 border-t border-line text-sm text-faint flex flex-wrap justify-between gap-3">
+          <span>© {new Date().getFullYear()} GnusaPay</span>
+          <span>GPAY — платёжный сервис GnusaPay</span>
         </div>
       </footer>
     </div>
   );
 }
 
-function HeroMock() {
+function FooterCol({ title, links }: { title: string; links: [string, string][] }) {
   return (
-    <div className="relative mx-auto w-full max-w-[420px]">
-      <div className="absolute -inset-6 -z-10 rounded-[40px] bg-[conic-gradient(from_200deg,#7a5cff33,#22d3ee22,#f472b622,#7a5cff33)] blur-2xl" />
-      <div className="rounded-3xl border border-line bg-surface shadow-pop p-6">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-[#0f766e] text-white font-semibold">Ф</span>
-          <div>
-            <div className="text-sm font-semibold">Фитнес-клуб «Пульс»</div>
-            <div className="text-xs text-muted">Абонемент на 3 месяца</div>
-          </div>
-        </div>
-        <div className="mt-5 text-4xl font-semibold tracking-tight">9 900 ₽</div>
-        <div className="mt-5 grid grid-cols-4 gap-2">
-          {['Карта', 'СБП', 'Частями', 'Крипта'].map((t, i) => (
-            <div key={t} className={cx('rounded-xl border px-2 py-2 text-xs font-medium', i === 0 ? 'border-brand ring-4 ring-brand/10' : 'border-line text-muted')}>{t}</div>
+    <div className="flex flex-col gap-3">
+      <span className="font-semibold">{title}</span>
+      {links.map(([t, h]) => (h.startsWith('/') ? <Link key={t} to={h} className="text-muted hover:text-fg">{t}</Link> : <a key={t} href={h} className="text-muted hover:text-fg">{t}</a>))}
+    </div>
+  );
+}
+
+function Feature({ title, text, points, art, reverse, link }: { title: string; text: string; points: string[]; art: ReactNode; reverse?: boolean; link?: { to: string; label: string } }) {
+  return (
+    <div className="rounded-[40px] bg-sunken grid lg:grid-cols-2 gap-10 px-6 sm:px-14 py-12 sm:py-14 items-center">
+      <div className={cx(reverse && 'lg:order-2')}>
+        <h3 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.025em] leading-tight">{title}</h3>
+        <p className="mt-4 text-lg text-muted">{text}</p>
+        <ul className="mt-6 flex flex-col gap-2.5">
+          {points.map((p) => (
+            <li key={p} className="flex items-center gap-3"><Check className="size-5 shrink-0" strokeWidth={2.2} />{p}</li>
           ))}
-        </div>
-        <div className="mt-4 rounded-xl border border-line">
-          <div className="h-11 px-3 flex items-center justify-between font-mono text-sm">2200 1234 5678 9012 <PayLogo name="mir" /></div>
-          <div className="grid grid-cols-2 border-t border-line font-mono text-sm text-muted">
-            <div className="h-11 px-3 flex items-center border-r border-line">09 / 28</div>
-            <div className="h-11 px-3 flex items-center">•••</div>
+        </ul>
+        {link && (
+          <Link to={link.to} className="mt-7 inline-flex items-center gap-1.5 font-medium text-brand hover:underline">
+            {link.label} <ArrowRight className="size-4" />
+          </Link>
+        )}
+      </div>
+      <div className={cx('flex justify-center', reverse && 'lg:order-1')}>{art}</div>
+    </div>
+  );
+}
+
+// ---------- Product illustrations, drawn with the real UI pieces ----------
+function PhoneMock() {
+  return (
+    <div className="flex justify-center lg:justify-end self-end">
+      <div className="w-[300px] sm:w-[320px] rounded-t-[44px] border-[10px] border-b-0 border-ink bg-surface px-5 pt-8 pb-10">
+        <div className="mx-auto -mt-4 mb-6 h-1.5 w-20 rounded-full bg-sunken" />
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-[#0f766e] text-sm font-semibold text-white">П</span>
+          <div className="text-sm">
+            <div className="font-semibold">Фитнес-клуб «Пульс»</div>
+            <div className="text-muted text-[13px]">Абонемент на 3 месяца</div>
           </div>
         </div>
-        <div className="mt-4 h-12 rounded-xl bg-brand text-white flex items-center justify-center gap-2 text-sm font-medium"><Lock className="size-4" /> Оплатить 9 900 ₽</div>
-        <div className="mt-4 flex items-center justify-between text-[11px] text-faint">
-          <span className="inline-flex items-center gap-1"><ShieldCheck className="size-3.5" /> PCI DSS</span>
-          <span className="inline-flex items-center gap-1"><QrCode className="size-3.5" /> Чек по 54-ФЗ</span>
-          <span className="inline-flex items-center gap-1"><RotateCcw className="size-3.5" /> Возвраты</span>
-          <span className="inline-flex items-center gap-1"><FileText className="size-3.5" /> Счета</span>
+        <div className="mt-5 text-[32px] font-bold tracking-[-0.02em]">9 900 ₽</div>
+        <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-sunken p-1 text-[13px] font-medium text-center">
+          <span className="rounded-[10px] bg-surface py-1.5">Карта</span>
+          <span className="py-1.5 text-muted">СБП</span>
+          <span className="py-1.5 text-muted">Частями</span>
         </div>
+        <div className="mt-3 rounded-xl bg-sunken">
+          <div className="h-12 px-4 flex items-center justify-between font-mono text-sm">2200 1234 5678 9012 <PayLogo name="mir" /></div>
+          <div className="grid grid-cols-2 border-t border-bg font-mono text-sm text-muted">
+            <div className="h-12 px-4 flex items-center border-r border-bg">09 / 28</div>
+            <div className="h-12 px-4 flex items-center">•••</div>
+          </div>
+        </div>
+        <div className="mt-4 h-12 rounded-xl bg-ink text-on-ink flex items-center justify-center gap-2 text-[15px] font-medium"><Lock className="size-4" /> Оплатить 9 900 ₽</div>
       </div>
     </div>
+  );
+}
+
+function FormArt() {
+  return (
+    <div className="w-full max-w-[400px] rounded-3xl bg-surface p-6">
+      <div className="text-sm text-muted">Способ оплаты</div>
+      <div className="mt-3 flex flex-col gap-2">
+        {[
+          ['Банковская карта', <CardLogos key="c" />],
+          ['СБП', <PayLogo key="s" name="sbp" />],
+          ['Оплата частями', <span key="p" className="text-sm text-muted">4 × 2 475 ₽</span>],
+          ['Криптовалюта', <span key="k" className="inline-flex gap-1"><PayLogo name="tether" /><PayLogo name="bitcoin" /></span>],
+        ].map(([t, r], i) => (
+          <div key={String(t)} className={cx('flex items-center justify-between gap-3 rounded-xl px-4 h-14', i === 0 ? 'border-[1.5px] border-fg' : 'bg-sunken')}>
+            <span className="font-medium text-[15px]">{t}</span>
+            <span className="hidden sm:inline-flex">{r}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReceiptArt() {
+  return (
+    <div className="w-full max-w-[300px] rounded-3xl bg-surface p-6 font-mono text-[12px] leading-relaxed">
+      <div className="text-center font-bold">КАССОВЫЙ ЧЕК · ПРИХОД</div>
+      <div className="mt-3 border-t border-dashed border-line-strong pt-3">
+        <div className="flex justify-between"><span>Капучино × 2</span><span>640.00</span></div>
+        <div className="flex justify-between"><span>Круассан</span><span>290.00</span></div>
+        <div className="flex justify-between text-muted"><span>НДС 22%</span><span>115.41</span></div>
+      </div>
+      <div className="mt-3 border-t border-dashed border-line-strong pt-3 flex justify-between font-bold text-[14px]"><span>ИТОГ</span><span>=930.00</span></div>
+      <div className="mt-3 text-muted">ФН 7380440512345678<br />ФД 57 · ФП 3829105562</div>
+      <QR text="t=20261013T0900&s=930.00&fn=7380440512345678&i=57&fp=3829105562&n=1" className="mt-4 mx-auto size-24 dark:invert" />
+    </div>
+  );
+}
+
+function LinkArt() {
+  return (
+    <div className="w-full max-w-[380px] rounded-3xl bg-surface p-6">
+      <div className="text-sm text-muted">Ссылка на оплату</div>
+      <div className="mt-1 text-xl font-semibold">Абонемент на 10 кофе</div>
+      <div className="mt-1 text-[28px] font-bold">2 800 ₽</div>
+      <div className="mt-4 rounded-xl bg-sunken px-4 h-12 flex items-center font-mono text-[13px] text-muted truncate">pay.gpay/l/LoOoli7ldf</div>
+      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+        {[['128', 'переходов'], ['94', 'оплаты'], ['263 200 ₽', 'собрано']].map(([v, t]) => (
+          <div key={t} className="rounded-xl bg-sunken py-2.5"><div className="font-semibold text-[15px]">{v}</div><div className="text-[12px] text-muted">{t}</div></div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CodeArt() {
+  return (
+    <pre className="w-full max-w-[460px] rounded-3xl bg-surface p-6 text-[12.5px] leading-relaxed font-mono overflow-x-auto">
+      <span className="text-ok">POST</span> /api/v1/payments{'\n'}
+      <span className="text-faint">Idempotence-Key: 7d1f…</span>{'\n\n'}
+      {'{\n  "amount": { "value": "1290.00",\n              "currency": "RUB" },\n  "confirmation": {\n    "type": "redirect",\n    "return_url": "https://shop.ru/ok"\n  }\n}'}
+    </pre>
   );
 }

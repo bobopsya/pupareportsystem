@@ -103,7 +103,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
       }}
       noValidate
     >
-      <div key={shake} className={cx('rounded-xl border bg-surface transition-shadow focus-within:ring-4 focus-within:ring-brand/15', shake ? 'gp-shake' : '', show('pan') || show('exp') || show('csc') || error ? 'border-bad/60' : 'border-line focus-within:border-brand')}>
+      <div key={shake} className={cx('rounded-[14px] border-[1.5px] bg-sunken transition-colors focus-within:bg-surface', shake ? 'gp-shake' : '', show('pan') || show('exp') || show('csc') || error ? 'border-bad' : 'border-transparent focus-within:border-fg')}>
         <div className="relative">
           <label htmlFor="cc-number" className="sr-only">Номер карты</label>
           <input
@@ -114,15 +114,15 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
             value={formatPan(pan)}
             onChange={(e) => onPan(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, pan: true }))}
-            className="w-full h-12 bg-transparent pl-11 pr-[52px] font-mono text-[16px] tracking-wide placeholder:font-sans placeholder:tracking-normal placeholder:text-faint focus:outline-none"
+            className="w-full h-14 bg-transparent pl-11 pr-[52px] font-mono text-[16px] tracking-wide placeholder:font-sans placeholder:tracking-normal placeholder:text-faint focus:outline-none"
           />
           <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 size-[18px] text-faint" />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity" style={{ opacity: supported ? 1 : 0 }}>
             {supported && <PayLogo name={brand} />}
           </span>
         </div>
-        <div className="grid grid-cols-2 border-t border-line">
-          <div className="border-r border-line">
+        <div className="grid grid-cols-2 border-t-[1.5px] border-bg">
+          <div className="border-r-[1.5px] border-bg">
             <label htmlFor="cc-exp" className="sr-only">Срок действия</label>
             <input
               id="cc-exp"
@@ -134,7 +134,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
               onChange={(e) => onExp(e.target.value)}
               onKeyDown={(e) => e.key === 'Backspace' && exp.endsWith('/') && (e.preventDefault(), setExp(exp.slice(0, 1)))}
               onBlur={() => setTouched((t) => ({ ...t, exp: true }))}
-              className="w-full h-12 bg-transparent px-4 font-mono text-[16px] placeholder:font-sans placeholder:text-faint focus:outline-none"
+              className="w-full h-14 bg-transparent px-4 font-mono text-[16px] placeholder:font-sans placeholder:text-faint focus:outline-none"
             />
           </div>
           <div className="relative">
@@ -149,11 +149,11 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
               value={csc}
               onChange={(e) => setCsc(e.target.value.replace(/\D/g, '').slice(0, 3))}
               onBlur={() => setTouched((t) => ({ ...t, csc: true }))}
-              className="w-full h-12 bg-transparent pl-4 pr-10 font-mono text-[16px] tracking-[0.3em] placeholder:font-sans placeholder:tracking-normal placeholder:text-faint focus:outline-none"
+              className="w-full h-14 bg-transparent pl-4 pr-10 font-mono text-[16px] tracking-[0.3em] placeholder:font-sans placeholder:tracking-normal placeholder:text-faint focus:outline-none"
             />
             <span className="group absolute right-3 top-1/2 -translate-y-1/2 text-faint" tabIndex={0} aria-label="Что такое CVC">
               <Info className="size-4" />
-              <span className="pointer-events-none absolute bottom-7 right-[-8px] w-52 rounded-lg bg-fg text-bg text-xs p-2.5 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity shadow-pop">
+              <span className="pointer-events-none absolute bottom-7 right-[-8px] w-52 rounded-lg bg-ink text-on-ink text-[13px] p-3 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity shadow-pop">
                 Три цифры на обратной стороне карты, рядом с полосой для подписи
               </span>
             </span>
@@ -163,7 +163,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
       {(error || show('pan') || show('exp') || show('csc')) && (
         <p className="-mt-2 text-[13px] text-bad gp-fade-up">{error ?? errors.pan ?? errors.exp ?? errors.csc}</p>
       )}
-      {panComplete && supported && !errors.pan && <p className="-mt-2 text-xs text-muted">{BRAND_NAME[brand]} · карта будет проверена банком-эмитентом</p>}
+      {panComplete && supported && !errors.pan && <p className="-mt-2 text-[13px] text-muted">{BRAND_NAME[brand]} · карта будет проверена банком-эмитентом</p>}
 
       <Button type="submit" variant="primary" size="lg" loading={busy} className="w-full mt-1" icon={!busy && <Lock className="size-4" />}>
         {busy ? 'Проверяем карту…' : `Оплатить ${money(data.payment.amount, data.payment.currency)}`}

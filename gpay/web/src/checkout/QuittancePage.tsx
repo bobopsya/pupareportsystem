@@ -46,7 +46,7 @@ export default function QuittancePage() {
   ];
   const refundedAll = q.refunded >= q.amount;
   return (
-    <div className="min-h-screen py-8 px-3 flex flex-col items-center gap-5">
+    <div className="min-h-screen bg-sunken py-8 px-3 flex flex-col items-center gap-5">
       <div className="no-print flex items-center justify-between w-full max-w-[460px]">
         <Logo size="sm" />
         <div className="flex gap-1.5">
@@ -56,10 +56,10 @@ export default function QuittancePage() {
           </a>
         </div>
       </div>
-      <article className="w-full max-w-[460px] rounded-3xl bg-surface border border-line shadow-pop overflow-hidden">
-        <div className="px-6 pt-7 pb-6 text-center bg-[linear-gradient(180deg,var(--color-brand-soft),transparent)]">
-          <div className="text-[13px] text-muted">Квитанция об оплате</div>
-          <div className="mt-2 text-[34px] font-semibold tracking-tight">{money(q.amount, q.currency, { exact: true })}</div>
+      <article className="w-full max-w-[460px] rounded-[32px] bg-surface overflow-hidden">
+        <div className="px-6 pt-8 pb-6 text-center">
+          <div className="text-[15px] text-muted">Квитанция об оплате</div>
+          <div className="mt-2 text-[38px] font-bold tracking-[-0.02em]">{money(q.amount, q.currency, { exact: true })}</div>
           <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${q.refunded ? 'bg-warn-soft text-warn' : 'bg-ok-soft text-ok'}`}>
             {q.refunded ? <RotateCcw className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
             {refundedAll ? 'Возвращён' : q.refunded ? `Возвращено ${money(q.refunded, q.currency)}` : 'Успешно'}
@@ -73,7 +73,7 @@ export default function QuittancePage() {
             </div>
           ))}
         </dl>
-        <div className="mx-6 mb-6 mt-2 rounded-2xl border-2 border-brand/70 text-brand text-center py-3 -rotate-1">
+        <div className="mx-6 mb-6 mt-2 rounded-2xl border-2 border-fg/70 text-fg/80 text-center py-3 -rotate-1">
           <div className="font-bold tracking-[0.2em] text-sm">ПРОВЕДЕНО</div>
           <div className="text-[11px] opacity-80 font-mono">GPAY · {dateTime(q.ts)}</div>
         </div>

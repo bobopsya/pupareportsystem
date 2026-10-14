@@ -59,11 +59,11 @@ function useLang(): [Lang, (l: Lang) => void] {
 
 function Code({ children, title }: { children: string; title?: string }) {
   return (
-    <div className="rounded-xl bg-[#0f0d1f] text-[#e6e4f5] overflow-hidden border border-[#2a2745]">
+    <div className="rounded-xl bg-sunken text-fg overflow-hidden ">
       {title && (
-        <div className="flex items-center justify-between px-4 h-9 border-b border-white/10 text-xs text-white/60">
+        <div className="flex items-center justify-between px-4 h-9 border-b border-line text-[13px] text-muted">
           <span>{title}</span>
-          <CopyButton text={children} className="!text-white/60 hover:!text-white hover:!bg-white/10" />
+          <CopyButton text={children} />
         </div>
       )}
       <pre className="p-4 text-[12.5px] leading-relaxed font-mono overflow-x-auto">{children}</pre>
@@ -74,16 +74,16 @@ function Code({ children, title }: { children: string; title?: string }) {
 function MultiCode({ samples }: { samples: Record<Lang, string> }) {
   const [lang, setLang] = useLang();
   return (
-    <div className="rounded-xl bg-[#0f0d1f] text-[#e6e4f5] overflow-hidden border border-[#2a2745]">
-      <div className="flex items-center justify-between pl-2 pr-1 h-10 border-b border-white/10">
+    <div className="rounded-xl bg-sunken text-fg overflow-hidden ">
+      <div className="flex items-center justify-between pl-2 pr-1 h-10 border-b border-line">
         <div className="flex">
           {LANGS.map((l) => (
-            <button key={l.id} type="button" onClick={() => setLang(l.id)} className={cx('h-10 px-3 text-xs border-b-2 -mb-px', lang === l.id ? 'border-[#8b74ff] text-white' : 'border-transparent text-white/50 hover:text-white/80')}>
+            <button key={l.id} type="button" onClick={() => setLang(l.id)} className={cx('h-10 px-3 text-xs border-b-2 -mb-px', lang === l.id ? 'border-fg text-fg font-medium' : 'border-transparent text-muted hover:text-fg')}>
               {l.label}
             </button>
           ))}
         </div>
-        <CopyButton text={samples[lang]} className="!text-white/60 hover:!text-white hover:!bg-white/10" />
+        <CopyButton text={samples[lang]} />
       </div>
       <pre className="p-4 text-[12.5px] leading-relaxed font-mono overflow-x-auto">{samples[lang]}</pre>
     </div>
@@ -295,7 +295,7 @@ export default function Docs() {
           {user && <Link to="/app" className="flex items-center gap-1.5 text-sm text-muted hover:text-fg mb-5"><ArrowLeft className="size-4" />В кабинет</Link>}
           <nav className="flex flex-col gap-0.5">
             {SECTIONS.map((s) => (
-              <a key={s.id} href={`#${s.id}`} onClick={() => setNav(false)} className={cx('h-8 flex items-center px-3 rounded-lg text-sm', active === s.id ? 'bg-brand-soft text-brand font-medium' : 'text-muted hover:text-fg hover:bg-hover')}>
+              <a key={s.id} href={`#${s.id}`} onClick={() => setNav(false)} className={cx('h-8 flex items-center px-3 rounded-lg text-sm', active === s.id ? 'bg-sunken text-fg font-medium' : 'text-muted hover:text-fg hover:bg-hover')}>
                 {s.title}
               </a>
             ))}
@@ -675,14 +675,14 @@ function Sandbox() {
         <Button variant="primary" loading={busy} disabled={!key.trim()} icon={<Play className="size-4" />} onClick={send}>Отправить запрос</Button>
         {!key.trim() && <p className="text-xs text-faint">Ключ можно выпустить в кабинете: «Разработчикам» → «API-ключи».</p>}
       </div>
-      <div className="rounded-2xl bg-[#0f0d1f] text-[#e6e4f5] border border-[#2a2745] overflow-hidden flex flex-col min-h-72">
-        <div className="flex items-center justify-between px-4 h-10 border-b border-white/10 text-xs">
-          <span className="text-white/60">Ответ</span>
-          {res && <span className={cx('font-mono', res.status >= 200 && res.status < 300 ? 'text-[#3ccf8a]' : 'text-[#ff6b76]')}>HTTP {res.status} · {res.ms} мс</span>}
+      <div className="rounded-2xl bg-sunken text-fg  overflow-hidden flex flex-col min-h-72">
+        <div className="flex items-center justify-between px-4 h-10 border-b border-line text-xs">
+          <span className="text-muted">Ответ</span>
+          {res && <span className={cx('font-mono', res.status >= 200 && res.status < 300 ? 'text-ok' : 'text-bad')}>HTTP {res.status} · {res.ms} мс</span>}
         </div>
         <pre className="flex-1 p-4 text-[12px] font-mono overflow-auto max-h-[560px]">{res?.body ?? 'Отправьте запрос, чтобы увидеть ответ'}</pre>
         {confirmUrl && (
-          <div className="px-4 py-3 border-t border-white/10">
+          <div className="px-4 py-3 border-t border-line">
             <a href={confirmUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="primary">Открыть страницу оплаты</Button></a>
           </div>
         )}

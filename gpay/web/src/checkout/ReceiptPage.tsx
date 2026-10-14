@@ -48,7 +48,7 @@ export default function ReceiptPage() {
   const r = data.receipt;
 
   return (
-    <div className="min-h-screen py-8 px-3 flex flex-col items-center gap-5">
+    <div className="min-h-screen bg-sunken py-8 px-3 flex flex-col items-center gap-5">
       <div className="no-print flex items-center justify-between w-full max-w-[360px]">
         <Logo size="sm" suffix="ОФД" />
         <div className="flex gap-1.5">
@@ -58,7 +58,7 @@ export default function ReceiptPage() {
           </a>
         </div>
       </div>
-      <article className="gp-tape w-full max-w-[360px] bg-white text-[#16161d] shadow-pop font-mono text-[12px] leading-[1.45] px-6 py-9">
+      <article className="gp-tape [--tape-edge:var(--color-sunken)] w-full max-w-[360px] bg-white text-[#16161d] font-mono text-[12px] leading-[1.45] px-6 py-9">
         <div className="text-center">
           <div className="font-bold">{r.seller.legalName}</div>
           <div>ИНН {r.seller.inn}</div>

@@ -16,11 +16,11 @@ export function useAnalytics(shopId: number, days: number) {
 
 export function Kpi({ label, value, delta, hint }: { label: string; value: string; delta?: React.ReactNode; hint?: string }) {
   return (
-    <Card className="!p-4">
-      <div className="text-[13px] text-muted">{label}</div>
-      <div className="mt-1.5 text-[26px] leading-tight font-semibold tracking-tight tabular-nums">{value}</div>
-      <div className="mt-1.5 min-h-4">{delta ?? (hint && <span className="text-xs text-faint">{hint}</span>)}</div>
-    </Card>
+    <div className="rounded-3xl bg-sunken p-5">
+      <div className="text-sm text-muted">{label}</div>
+      <div className="mt-2 text-[21px] sm:text-[28px] leading-tight font-bold tracking-[-0.02em] break-words">{value}</div>
+      <div className="mt-2 min-h-4">{delta ?? (hint && <span className="text-[13px] text-faint">{hint}</span>)}</div>
+    </div>
   );
 }
 
@@ -116,14 +116,14 @@ function GettingStarted({ shopId }: { shopId: number }) {
   ];
   return (
     <Card className="!p-0 overflow-hidden">
-      <div className="px-5 pt-5 pb-4 bg-[linear-gradient(120deg,var(--color-brand-soft),transparent_70%)]">
+      <div className="px-6 pt-6 pb-5">
         <h2 className="text-[15px] font-semibold">Магазин готов принимать платежи</h2>
         <p className="text-[13px] text-muted mt-0.5">Карты Visa, Mastercard, МИР, UnionPay, СБП, оплата частями и криптовалюта уже подключены.</p>
       </div>
       <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-line border-t border-line">
         {steps.map((s) => (
           <div key={s.title} className="p-5 flex flex-col gap-2">
-            <s.icon className="size-5 text-brand" />
+            <s.icon className="size-5" />
             <div className="font-medium text-sm">{s.title}</div>
             <p className="text-[13px] text-muted flex-1">{s.text}</p>
             <Link to={s.to} className="mt-1">

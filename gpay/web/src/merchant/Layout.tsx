@@ -51,16 +51,17 @@ export default function MerchantLayout() {
 
   return (
     <ShopCtx.Provider value={shop}>
-      <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
+      <div className="min-h-screen lg:grid lg:grid-cols-[272px_1fr]">
         {/* Mobile top bar */}
-        <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between h-14 px-4 bg-surface/90 backdrop-blur border-b border-line">
+        <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between h-16 px-4 bg-surface border-b border-line">
           <Logo size="sm" />
           <button type="button" aria-label="Меню" className="flex size-9 items-center justify-center rounded-lg hover:bg-hover" onClick={() => setOpen(true)}>
             <Menu className="size-5" />
           </button>
         </header>
         {open && <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setOpen(false)} />}
-        <aside className={cx('fixed lg:sticky top-0 z-50 lg:z-auto h-screen w-[268px] lg:w-auto flex flex-col bg-surface lg:bg-transparent border-r border-line transition-transform lg:translate-x-0', open ? 'translate-x-0' : '-translate-x-full')}>
+        <div className="lg:bg-sunken">
+        <aside className={cx('fixed lg:sticky top-0 z-50 lg:z-auto h-screen w-[280px] lg:w-auto flex flex-col bg-sunken transition-transform lg:translate-x-0', open ? 'translate-x-0' : '-translate-x-full')}>
           <div className="flex items-center justify-between h-16 px-5">
             <Link to="/app"><Logo /></Link>
             <button type="button" className="lg:hidden flex size-8 items-center justify-center rounded-lg hover:bg-hover" aria-label="Закрыть меню" onClick={() => setOpen(false)}>
@@ -76,11 +77,11 @@ export default function MerchantLayout() {
                 key={n.to}
                 to={`/app/${shop.id}${n.to ? `/${n.to}` : ''}`}
                 end={n.end}
-                className={({ isActive }) => cx('flex items-center gap-3 h-9 px-3 rounded-lg text-sm transition-colors', isActive ? 'bg-surface lg:bg-surface text-fg font-medium shadow-card border border-line' : 'text-muted hover:text-fg hover:bg-hover border border-transparent')}
+                className={({ isActive }) => cx('flex items-center gap-3 h-11 px-3.5 rounded-xl text-[15px] transition-colors', isActive ? 'bg-surface text-fg font-medium' : 'text-muted hover:text-fg')}
               >
                 {({ isActive }) => (
                   <>
-                    <n.icon className={cx('size-4', isActive && 'text-brand')} />
+                    <n.icon className={cx('size-[18px]', isActive ? 'text-fg' : 'text-faint')} />
                     {n.label}
                   </>
                 )}
@@ -94,7 +95,8 @@ export default function MerchantLayout() {
             <UserMenu />
           </div>
         </aside>
-        <main className="min-w-0 px-4 sm:px-6 lg:px-10 py-6 lg:py-8 max-w-[1240px] w-full">
+        </div>
+        <main className="min-w-0 px-4 sm:px-8 lg:px-12 py-8 lg:py-10 max-w-[1280px] w-full">
           {shop.status === 'blocked' && (
             <div className="mb-5 rounded-xl border border-bad/30 bg-bad-soft px-4 py-3 text-sm text-bad">Магазин заблокирован службой безопасности GPAY. Приём платежей приостановлен.</div>
           )}
@@ -117,7 +119,7 @@ function ShopSwitcher({ shops, current }: { shops: Shop[]; current: Shop }) {
   }, []);
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2.5 rounded-xl border border-line bg-surface px-2.5 py-2 text-left shadow-card hover:border-line-strong">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-2.5 rounded-2xl bg-surface px-3 py-2.5 text-left hover:bg-hover">
         <ShopAvatar shop={current} className="size-8 text-sm rounded-lg" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium truncate">{current.name}</span>
@@ -126,7 +128,7 @@ function ShopSwitcher({ shops, current }: { shops: Shop[]; current: Shop }) {
         <ChevronsUpDown className="size-4 text-faint" />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl border border-line bg-surface p-1 shadow-pop gp-fade-up">
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-2xl bg-surface p-1.5 shadow-pop gp-fade-up">
           {shops.map((s) => (
             <button
               key={s.id}
@@ -140,7 +142,7 @@ function ShopSwitcher({ shops, current }: { shops: Shop[]; current: Shop }) {
             >
               <ShopAvatar shop={s} className="size-6 text-xs rounded-md" />
               <span className="flex-1 truncate text-sm">{s.name}</span>
-              {s.id === current.id && <Check className="size-4 text-brand" />}
+              {s.id === current.id && <Check className="size-4" />}
             </button>
           ))}
           <div className="my-1 border-t border-line" />
@@ -159,14 +161,14 @@ function UserMenu() {
   const navigate = useNavigate();
   if (!user) return null;
   return (
-    <div className="mt-2 pt-3 border-t border-line">
+    <div className="mt-3 pt-3 border-t border-line-strong/40">
       {user.role === 'admin' && (
         <Link to="/admin" className="flex items-center gap-3 h-9 px-3 rounded-lg text-sm text-muted hover:text-fg hover:bg-hover">
           <ShieldHalf className="size-4" /> Админка GPAY <Badge tone="brand" className="ml-auto">admin</Badge>
         </Link>
       )}
       <div className="flex items-center gap-2.5 px-3 py-2">
-        <span className="flex size-8 items-center justify-center rounded-full bg-sunken border border-line text-xs font-semibold">{user.name.slice(0, 1).toUpperCase()}</span>
+        <span className="flex size-9 items-center justify-center rounded-full bg-surface text-sm font-semibold">{user.name.slice(0, 1).toUpperCase()}</span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm truncate">{user.name}</span>
           <span className="block text-xs text-faint truncate">{user.email}</span>

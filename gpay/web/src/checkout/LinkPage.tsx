@@ -91,11 +91,11 @@ export default function LinkPage() {
             <div className="text-xs text-muted truncate">{shop.legalName} · ИНН {shop.inn}</div>
           </div>
         </div>
-        <Card className="!p-6">
-          <div className="flex items-center gap-2 text-xs font-medium text-brand">
+        <Card className="!p-8 !border-0 bg-surface">
+          <div className="flex items-center gap-2 text-sm text-muted">
             <FileText className="size-3.5" /> {link.kind === 'invoice' ? 'Счёт на оплату' : 'Оплата'}
           </div>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight">{link.title}</h1>
+          <h1 className="mt-2 text-2xl font-bold">{link.title}</h1>
           {link.description && <p className="mt-1 text-sm text-muted whitespace-pre-line">{link.description}</p>}
           {link.customer?.name && <p className="mt-2 text-sm">Плательщик: {link.customer.name}</p>}
 
@@ -114,12 +114,12 @@ export default function LinkPage() {
             {link.amount ? (
               <div className="flex items-baseline justify-between border-t border-line pt-4">
                 <span className="text-sm text-muted">К оплате</span>
-                <span className="text-3xl font-semibold tracking-tight">{money(link.amount, link.currency, { exact: link.amount % 100 !== 0 })}</span>
+                <span className="text-[34px] font-bold tracking-[-0.02em]">{money(link.amount, link.currency, { exact: link.amount % 100 !== 0 })}</span>
               </div>
             ) : (
               <Field label="Сумма" error={formError} hint={`От ${money(link.minAmount, link.currency)} до ${money(link.maxAmount, link.currency)}`}>
                 <div className="relative">
-                  <Input inputMode="decimal" autoFocus placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,\s]/g, ''))} onKeyDown={(e) => e.key === 'Enter' && void go()} className="!h-14 !text-2xl font-semibold pr-10" />
+                  <Input inputMode="decimal" autoFocus placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,\s]/g, ''))} onKeyDown={(e) => e.key === 'Enter' && void go()} className="!h-16 !text-[28px] font-bold pr-10" />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xl text-muted">{CURRENCY_SYMBOL[link.currency]}</span>
                 </div>
               </Field>
@@ -145,13 +145,13 @@ export default function LinkPage() {
 }
 
 function Center({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen flex items-center justify-center px-4 py-10">{children}</div>;
+  return <div className="min-h-screen bg-sunken flex items-center justify-center px-4 py-10">{children}</div>;
 }
 
 function Unavailable({ title, text, ok }: { title: string; text: string; ok?: boolean }) {
   return (
     <div className="max-w-sm text-center">
-      <div className={`mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl ${ok ? 'bg-ok-soft text-ok' : 'bg-sunken text-muted'}`}>
+      <div className={`mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl ${ok ? 'bg-ok-soft text-ok' : 'bg-surface text-muted'}`}>
         {ok ? <FileText className="size-6" /> : <X className="size-6" />}
       </div>
       <div className="font-semibold text-lg">{title}</div>

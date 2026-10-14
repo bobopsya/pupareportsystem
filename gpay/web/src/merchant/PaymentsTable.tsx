@@ -13,9 +13,9 @@ export function MethodCell({ p }: { p: Pick<PaymentRowT, 'methodType' | 'methodT
   const icon =
     p.methodType === 'bank_card' && p.cardBrand ? <PayLogo name={CARD_LOGO[p.cardBrand] ?? 'visa'} className="!h-5 !w-8" /> :
     p.methodType === 'bank_card' ? <CreditCard className="size-4 text-muted" /> :
-    p.methodType === 'sbp' ? <span className="flex h-5 w-8 items-center justify-center rounded-[5px] border border-line bg-white"><SbpMark className="size-3.5" /></span> :
-    p.methodType === 'installments' ? <span className="flex h-5 w-8 items-center justify-center rounded-[5px] border border-line bg-sunken"><SplitSquareHorizontal className="size-3.5 text-muted" /></span> :
-    <span className="flex h-5 w-8 items-center justify-center rounded-[5px] border border-line bg-sunken"><Wallet className="size-3.5 text-muted" /></span>;
+    p.methodType === 'sbp' ? <span className="flex h-5 w-8 items-center justify-center rounded-[5px] border border-[#e5e7ef] bg-white"><SbpMark className="size-3.5" /></span> :
+    p.methodType === 'installments' ? <span className="flex h-5 w-8 items-center justify-center rounded-[5px] bg-sunken"><SplitSquareHorizontal className="size-3.5 text-muted" /></span> :
+    <span className="flex h-5 w-8 items-center justify-center rounded-[5px] bg-sunken"><Wallet className="size-3.5 text-muted" /></span>;
   return (
     <span className="inline-flex items-center gap-2 min-w-0">
       {icon}
@@ -33,27 +33,27 @@ export function PaymentsTable({ items, shopId, compact }: { items: PaymentRowT[]
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs text-faint border-b border-line">
-              <th className="font-medium py-2.5 pl-5 pr-3">Сумма</th>
-              <th className="font-medium py-2.5 px-3">Статус</th>
-              <th className="font-medium py-2.5 px-3">Описание</th>
-              <th className="font-medium py-2.5 px-3">Способ</th>
-              {!compact && <th className="font-medium py-2.5 px-3">Покупатель</th>}
-              <th className="font-medium py-2.5 pl-3 pr-5 text-right">Дата</th>
+            <tr className="text-left text-[13px] text-faint border-b border-line">
+              <th className="font-normal py-3 pl-5 pr-3">Сумма</th>
+              <th className="font-normal py-3 px-3">Статус</th>
+              <th className="font-normal py-3 px-3">Описание</th>
+              <th className="font-normal py-3 px-3">Способ</th>
+              {!compact && <th className="font-normal py-3 px-3">Покупатель</th>}
+              <th className="font-normal py-3 pl-3 pr-5 text-right">Дата</th>
             </tr>
           </thead>
           <tbody>
             {items.map((p) => (
-              <tr key={p.id} onClick={() => open(p.id)} className="border-b border-line last:border-0 hover:bg-hover/60 cursor-pointer">
-                <td className="py-3 pl-5 pr-3 whitespace-nowrap">
+              <tr key={p.id} onClick={() => open(p.id)} className="border-b border-line last:border-0 hover:bg-sunken/70 cursor-pointer">
+                <td className="py-4 pl-5 pr-3 whitespace-nowrap">
                   <span className={cx('font-semibold tabular-nums', p.status === 'canceled' && 'text-muted line-through decoration-faint')}>{money(p.amount, p.currency, { exact: true })}</span>
                   <span className="ml-1.5 text-xs text-faint">{p.currency}</span>
                 </td>
-                <td className="py-3 px-3"><PaymentStatus status={p.status} refunded={p.refunded} amount={p.amount} /></td>
-                <td className="py-3 px-3 max-w-[260px]"><div className="truncate">{p.description || <span className="text-faint">—</span>}</div><div className="text-[11px] text-faint font-mono truncate">{p.id}</div></td>
-                <td className="py-3 px-3 max-w-[160px]"><MethodCell p={p} /></td>
-                {!compact && <td className="py-3 px-3 max-w-[200px] truncate text-muted">{p.email ?? '—'}</td>}
-                <td className="py-3 pl-3 pr-5 text-right whitespace-nowrap text-muted">{dateTime(p.createdAt)}</td>
+                <td className="py-4 px-3"><PaymentStatus status={p.status} refunded={p.refunded} amount={p.amount} /></td>
+                <td className="py-4 px-3 max-w-[260px]"><div className="truncate">{p.description || <span className="text-faint">—</span>}</div><div className="text-[11px] text-faint font-mono truncate">{p.id}</div></td>
+                <td className="py-4 px-3 max-w-[160px]"><MethodCell p={p} /></td>
+                {!compact && <td className="py-4 px-3 max-w-[200px] truncate text-muted">{p.email ?? '—'}</td>}
+                <td className="py-4 pl-3 pr-5 text-right whitespace-nowrap text-muted">{dateTime(p.createdAt)}</td>
               </tr>
             ))}
           </tbody>

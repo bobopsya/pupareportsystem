@@ -157,7 +157,7 @@ export default function Settings() {
         <ul className="flex flex-col divide-y divide-line">
           {METHOD_ROWS.map((m) => (
             <li key={m.type} className="flex items-center gap-4 py-3">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-sunken border border-line text-brand">{m.icon}</span>
+              <span className="flex size-10 items-center justify-center rounded-xl bg-sunken text-brand">{m.icon}</span>
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-medium">{m.title}</span>
                 <span className="block text-xs text-muted">{m.sub} · комиссия {shop.fees[m.type].toLocaleString('ru-RU')}%</span>
@@ -182,9 +182,9 @@ export default function Settings() {
           </Field>
         </div>
         <dl className="mt-5 grid sm:grid-cols-3 gap-3 text-sm">
-          <div className="rounded-xl bg-sunken border border-line px-3.5 py-2.5"><dt className="text-xs text-muted">РН ККТ</dt><dd className="font-mono">{shop.kkt.rn}</dd></div>
-          <div className="rounded-xl bg-sunken border border-line px-3.5 py-2.5"><dt className="text-xs text-muted">Фискальный накопитель</dt><dd className="font-mono">{shop.kkt.fn}</dd></div>
-          <div className="rounded-xl bg-sunken border border-line px-3.5 py-2.5"><dt className="text-xs text-muted">Чеков пробито</dt><dd className="font-mono">{shop.kkt.fd}</dd></div>
+          <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">РН ККТ</dt><dd className="font-mono">{shop.kkt.rn}</dd></div>
+          <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">Фискальный накопитель</dt><dd className="font-mono">{shop.kkt.fn}</dd></div>
+          <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">Чеков пробито</dt><dd className="font-mono">{shop.kkt.fd}</dd></div>
         </dl>
         <div className="mt-5 flex justify-end"><Button variant="primary" loading={busy === 'pay'} onClick={() => save('pay', { returnUrl, defaultVat })}>Сохранить</Button></div>
       </Card>

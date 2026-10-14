@@ -179,7 +179,7 @@ export function Payouts() {
         <CardHeader title="Тарифы" sub="Комиссия удерживается при зачислении платежа" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {Object.entries(shop.fees).map(([m, pct]) => (
-            <div key={m} className="rounded-xl bg-sunken border border-line px-3.5 py-3">
+            <div key={m} className="rounded-xl bg-sunken px-3.5 py-3">
               <div className="text-[13px] text-muted">{METHOD_TITLE[m]}</div>
               <div className="text-lg font-semibold tabular-nums">{pct.toLocaleString('ru-RU')}%</div>
             </div>

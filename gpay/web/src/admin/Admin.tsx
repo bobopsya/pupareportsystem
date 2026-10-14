@@ -198,7 +198,7 @@ function Users() {
       <ul className="divide-y divide-line">
         {data.items.map((u) => (
           <li key={u.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
-            <span className="flex size-8 items-center justify-center rounded-full bg-sunken border border-line text-xs font-semibold">{u.name[0]?.toUpperCase()}</span>
+            <span className="flex size-8 items-center justify-center rounded-full bg-sunken text-xs font-semibold">{u.name[0]?.toUpperCase()}</span>
             <span className="flex-1 min-w-[200px]">
               <span className="block font-medium">{u.name} {u.role === 'admin' && <Badge tone="brand">admin</Badge>} {u.blocked ? <Badge tone="bad">заблокирован</Badge> : null}</span>
               <span className="block text-xs text-muted">{u.email} · магазинов: {u.shops} · с {dateTime(u.createdAt)}</span>

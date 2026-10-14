@@ -134,8 +134,8 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
         )}
         {!lockMethod && methods.length > 1 && (
           <div>
-            <div className="text-[13px] font-medium text-muted mb-1.5">Способ оплаты</div>
-            <div role="tablist" className="grid grid-cols-4 gap-2">
+            <div className="text-sm text-muted mb-2">Способ оплаты</div>
+            <div role="tablist" className="grid grid-cols-4 gap-1 rounded-[14px] bg-sunken p-1">
               {methods.map((m) => (
                 <button
                   key={m.type}
@@ -144,11 +144,11 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
                   aria-selected={method === m.type}
                   onClick={() => setMethod(m.type)}
                   className={cx(
-                    'flex flex-col items-start gap-2 rounded-xl border px-3 py-2.5 text-left text-[13px] font-medium transition-all',
-                    method === m.type ? 'border-brand ring-4 ring-brand/12 text-fg bg-surface' : 'border-line text-muted hover:border-line-strong bg-surface',
+                    'flex items-center justify-center gap-1.5 rounded-[10px] h-11 px-2 text-sm font-medium transition-colors',
+                    method === m.type ? 'bg-surface text-fg shadow-[0_1px_2px_rgb(0_0_0/0.06)]' : 'text-muted hover:text-fg',
                   )}
                 >
-                  <span className={method === m.type ? 'text-brand' : ''}>{m.icon}</span>
+                  <span className="hidden sm:inline-flex">{m.icon}</span>
                   {m.label}
                 </button>
               ))}
@@ -166,10 +166,10 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
   }
 
   return (
-    <div className={cx('min-h-screen flex flex-col', embed ? 'bg-surface' : '')}>
-      <div className={cx('flex-1 w-full mx-auto grid md:grid-cols-[1fr_1.08fr]', embed ? '' : 'max-w-[1040px] md:py-10 md:px-6')}>
+    <div className="min-h-screen flex flex-col bg-surface">
+      <div className={cx('flex-1 w-full mx-auto grid md:grid-cols-[1fr_1.1fr] md:gap-6', embed ? '' : 'max-w-[1080px] md:py-10 md:px-6')}>
         {/* Order summary */}
-        <aside className={cx('relative md:rounded-l-3xl px-5 pt-5 pb-4 md:p-10 flex flex-col', embed ? 'border-b md:border-b-0 md:border-r border-line' : 'md:border md:border-r-0 border-line')} style={{ background: `linear-gradient(160deg, ${shop.color}14, ${shop.color}05 60%), var(--color-surface)` }}>
+        <aside className={cx('relative bg-sunken px-5 pt-5 pb-5 md:p-10 flex flex-col', embed ? 'md:rounded-none' : 'md:rounded-[32px]')}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {!embed && p.returnUrl && !final && (
@@ -191,17 +191,17 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
           </div>
 
           <div className="mt-6 md:mt-10">
-            <div className="text-[13px] text-muted">{p.description || 'Оплата заказа'}</div>
-            <div className="mt-1 text-[34px] md:text-[40px] leading-tight font-semibold tracking-[-0.03em]">{money(p.amount, p.currency, { exact: p.amount % 100 !== 0 })}</div>
+            <div className="text-[15px] text-muted">{p.description || 'Оплата заказа'}</div>
+            <div className="mt-1 text-[36px] md:text-[44px] leading-tight font-bold tracking-[-0.03em]">{money(p.amount, p.currency, { exact: p.amount % 100 !== 0 })}</div>
             {!final && (
-              <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted">
+              <div className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted">
                 <Clock className="size-3.5" /> Оплатите в течение {countdown}
               </div>
             )}
           </div>
 
           <div className="md:hidden mt-3">
-            <button type="button" className="inline-flex items-center gap-1 text-[13px] text-brand font-medium" onClick={() => setSummaryOpen((o) => !o)}>
+            <button type="button" className="inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4" onClick={() => setSummaryOpen((o) => !o)}>
               {summaryOpen ? 'Скрыть детали' : 'Детали заказа'}
               <ChevronDown className={cx('size-4 transition-transform', summaryOpen && 'rotate-180')} />
             </button>
@@ -209,20 +209,20 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
           </div>
           <div className="hidden md:block mt-8">{summary}</div>
 
-          <div className="hidden md:flex mt-auto pt-10 items-center gap-2 text-xs text-faint">
+          <div className="hidden md:flex mt-auto pt-10 items-center gap-2 text-sm text-faint">
             <span>Работает на</span>
-            <Logo size="sm" className="opacity-80" />
+            <Logo size="sm" />
           </div>
         </aside>
 
         {/* Payment form */}
-        <main className={cx('bg-surface px-5 py-6 md:p-10 flex flex-col', embed ? '' : 'md:rounded-r-3xl md:border border-line md:shadow-pop')}>
-          <h1 className="text-lg font-semibold tracking-tight mb-5">{final ? 'Статус платежа' : 'Оплата'}</h1>
+        <main className="bg-surface px-5 py-7 md:px-4 md:py-10 flex flex-col">
+          <h1 className="text-[28px] font-bold leading-tight mb-6">{final ? 'Статус платежа' : 'Оплата'}</h1>
           {body}
           {!final && (
             <div className="mt-auto pt-8 flex flex-col gap-4">
-              <div className="flex items-center gap-2 text-xs text-muted">
-                <Lock className="size-3.5 text-ok" />
+              <div className="flex items-center gap-2 text-[13px] text-muted">
+                <Lock className="size-4 shrink-0" />
                 Данные защищены по стандарту PCI DSS. Магазин не получает реквизиты вашей карты.
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -230,13 +230,13 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
                   <CardLogos />
                   <PayLogo name="sbp" />
                 </span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-faint">
+                <span className="inline-flex items-center gap-1 text-[13px] text-faint">
                   <ShieldCheck className="size-3.5" /> 3-D Secure
                 </span>
               </div>
             </div>
           )}
-          <footer className="md:hidden mt-8 flex items-center justify-center gap-2 text-xs text-faint">
+          <footer className="md:hidden mt-8 flex items-center justify-center gap-2 text-sm text-faint">
             Работает на <Logo size="sm" />
           </footer>
         </main>
@@ -280,10 +280,10 @@ function Summary({ data }: { data: CheckoutData }) {
 function Declined({ declined, attemptsLeft, onRetry, onOther }: { declined: { message: string; reason: string; canceled: boolean }; attemptsLeft: number; onRetry: () => void; onOther: () => void }) {
   return (
     <div className="flex flex-col items-center text-center py-4 gp-fade-up">
-      <div className="gp-shake flex size-16 items-center justify-center rounded-full bg-bad-soft text-bad">
+      <div className="flex size-16 items-center justify-center rounded-full bg-bad-soft text-bad">
         <X className="size-8" strokeWidth={2.5} />
       </div>
-      <div className="mt-4 text-lg font-semibold">{REASONS[declined.reason] ?? 'Платёж не прошёл'}</div>
+      <div className="mt-5 text-2xl font-bold">{REASONS[declined.reason] ?? 'Платёж не прошёл'}</div>
       <p className="mt-1 text-sm text-muted max-w-xs">{declined.message}</p>
       {!declined.canceled && (
         <>
@@ -321,7 +321,7 @@ function ResultView({ data, embed }: { data: CheckoutData; embed: boolean }) {
         <div className="flex size-16 items-center justify-center rounded-full bg-bad-soft text-bad">
           <X className="size-8" strokeWidth={2.5} />
         </div>
-        <div className="mt-4 text-lg font-semibold">Платёж отменён</div>
+        <div className="mt-5 text-2xl font-bold">Платёж отменён</div>
         <p className="mt-1 text-sm text-muted max-w-xs">
           {reason === 'expired_on_confirmation' ? 'Время на оплату истекло. Вернитесь в магазин и оформите заказ заново.' : REASONS[reason] ?? 'Оплата не была завершена.'} Деньги не списаны.
         </p>
@@ -337,18 +337,18 @@ function ResultView({ data, embed }: { data: CheckoutData; embed: boolean }) {
   const held = p.status === 'waiting_for_capture';
   return (
     <div className="flex flex-col items-center text-center py-2 gp-fade-up">
-      <div className="gp-pop flex size-[72px] items-center justify-center rounded-full bg-ok text-white shadow-[0_8px_24px_-6px_var(--color-ok)]">
+      <div className="gp-pop flex size-16 items-center justify-center rounded-full bg-ok-soft text-ok">
         <svg viewBox="0 0 24 24" className="size-9" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path className="gp-draw" d="M5 12.5l4.5 4.5L19 7.5" />
         </svg>
       </div>
-      <div className="mt-5 text-xl font-semibold tracking-tight">{held ? 'Средства зарезервированы' : 'Оплата прошла успешно'}</div>
+      <div className="mt-5 text-2xl font-bold">{held ? 'Средства зарезервированы' : 'Оплата прошла успешно'}</div>
       <p className="mt-1 text-sm text-muted max-w-xs">
         {held ? `${data.shop.name} подтвердит списание после проверки заказа.` : `${money(p.amount, p.currency, { exact: true })} — ${data.shop.name}`}
         {p.customerEmail && !held && <><br />Чек отправлен на {p.customerEmail}</>}
       </p>
 
-      <dl className="mt-6 w-full rounded-2xl border border-line bg-sunken px-4 py-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px] text-left">
+      <dl className="mt-7 w-full rounded-2xl bg-sunken px-5 py-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm text-left">
         <dt className="text-muted">Сумма</dt>
         <dd className="text-right font-medium">{money(p.amount, p.currency, { exact: true })}</dd>
         {p.refunded > 0 && (
@@ -386,7 +386,7 @@ function ResultView({ data, embed }: { data: CheckoutData; embed: boolean }) {
           {redirectIn !== null && (
             <p className="mt-2 text-xs text-muted">
               Автоматический переход через {redirectIn} с ·{' '}
-              <button type="button" className="text-brand" onClick={() => setRedirectIn(null)}>остаться</button>
+              <button type="button" className="underline underline-offset-4 text-fg" onClick={() => setRedirectIn(null)}>остаться</button>
             </p>
           )}
         </div>

@@ -54,7 +54,7 @@ export function ColumnChart({ data, height = 220, formatY, formatX, tooltip, lab
       <svg width={w} height={height} role="img" aria-label={label} className="block overflow-visible">
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={padL} x2={w} y1={y(max * t)} y2={y(max * t)} stroke="var(--color-line)" strokeWidth={1} strokeDasharray={t === 0 ? undefined : '2 3'} />
+            <line x1={padL} x2={w} y1={y(max * t)} y2={y(max * t)} stroke="var(--color-line)" strokeWidth={1} />
             <text x={padL - 8} y={y(max * t)} dy="0.32em" textAnchor="end" className="fill-faint text-[11px]">{formatY(max * t)}</text>
           </g>
         ))}
@@ -69,8 +69,8 @@ export function ColumnChart({ data, height = 220, formatY, formatX, tooltip, lab
               {h > 0 && (
                 <path
                   d={`M${x},${padT + plotH} V${top + r} Q${x},${top} ${x + r},${top} H${x + barW - r} Q${x + barW},${top} ${x + barW},${top + r} V${padT + plotH} Z`}
-                  fill="var(--color-brand)"
-                  opacity={dim ? 0.35 : 1}
+                  fill={hover === i ? "var(--color-brand)" : "var(--color-fg)"}
+                  opacity={dim ? 0.25 : 1}
                   className="transition-opacity"
                 />
               )}
@@ -81,11 +81,10 @@ export function ColumnChart({ data, height = 220, formatY, formatX, tooltip, lab
             </g>
           );
         })}
-        {hover !== null && <line x1={padL + hover * slot + slot / 2} x2={padL + hover * slot + slot / 2} y1={padT} y2={padT + plotH} stroke="var(--color-line-strong)" strokeDasharray="3 3" pointerEvents="none" />}
       </svg>
       {hover !== null && (
         <div
-          className="pointer-events-none absolute top-0 z-10 rounded-xl border border-line bg-surface px-3 py-2 text-xs shadow-pop whitespace-nowrap"
+          className="pointer-events-none absolute top-0 z-10 rounded-xl bg-ink text-on-ink px-3 py-2 text-[13px] whitespace-nowrap [&_.text-muted]:text-on-ink/70 [&_.text-faint]:text-on-ink/60"
           style={{ left: Math.min(Math.max(padL + hover * slot + slot / 2 - 70, 0), w - 150), transform: 'translateY(-4px)' }}
         >
           {tooltip(hover)}
@@ -103,15 +102,15 @@ export function BarList({ items, format, empty = 'Нет данных' }: { item
     <ul className="flex flex-col gap-3">
       {items.map((it, i) => (
         <li key={i} className="group">
-          <div className="flex items-baseline justify-between gap-3 text-[13px] mb-1.5">
+          <div className="flex items-baseline justify-between gap-3 text-sm mb-2">
             <span className="min-w-0 truncate">{it.label}</span>
             <span className="shrink-0 font-medium tabular-nums">
               {format(it.value)}
               {it.sub && <span className="text-faint font-normal"> · {it.sub}</span>}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-sunken overflow-hidden">
-            <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${(it.value / max) * 100}%` }} />
+          <div className="h-1.5 rounded-full bg-sunken overflow-hidden">
+            <div className="h-full rounded-full bg-fg transition-[width] duration-500" style={{ width: `${(it.value / max) * 100}%` }} />
           </div>
         </li>
       ))}

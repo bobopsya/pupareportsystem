@@ -51,7 +51,7 @@ export function ThreeDS({ data, card, attemptsLeft, onResult }: { data: Checkout
   const last4 = card.slice(-4);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(10_10_25/0.55)] backdrop-blur-[3px] p-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
       {sms && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 w-[min(94vw,380px)] gp-fade-up z-[60]">
           <div className="flex gap-3 rounded-2xl bg-[rgb(245_245_250/0.92)] dark:bg-[rgb(40_40_52/0.92)] backdrop-blur-xl shadow-pop px-3.5 py-3 border border-white/40">
@@ -69,10 +69,10 @@ export function ThreeDS({ data, card, attemptsLeft, onResult }: { data: Checkout
         </div>
       )}
 
-      <div className="w-full max-w-[400px] rounded-2xl bg-white text-[#14142b] shadow-pop overflow-hidden gp-fade-up" role="dialog" aria-modal="true" aria-label="Подтверждение покупки">
+      <div className="w-full max-w-[400px] rounded-3xl bg-white text-[#111] shadow-pop overflow-hidden gp-fade-up" role="dialog" aria-modal="true" aria-label="Подтверждение покупки">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#ececf2]">
           <div className="flex items-center gap-2 font-semibold">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-[#14142b] text-white">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[#111] text-white">
               <Landmark className="size-4" />
             </span>
             GPAY Bank
@@ -82,9 +82,9 @@ export function ThreeDS({ data, card, attemptsLeft, onResult }: { data: Checkout
           </div>
         </div>
         <div className="px-5 pt-5 pb-6">
-          <h2 className="text-lg font-semibold tracking-tight">Подтверждение покупки</h2>
+          <h2 className="text-xl font-bold">Подтверждение покупки</h2>
           <p className="text-[13px] text-[#5e6178] mt-1">Мы отправили SMS с одноразовым кодом на номер <span className="whitespace-nowrap">+7 *** ***-**-47</span></p>
-          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px] rounded-xl bg-[#f6f7fb] px-4 py-3">
+          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px] rounded-2xl bg-[#f2f3f5] px-4 py-3">
             <dt className="text-[#5e6178]">Магазин</dt>
             <dd className="text-right font-medium truncate">{data.shop.name}</dd>
             <dt className="text-[#5e6178]">Сумма</dt>
@@ -114,10 +114,10 @@ export function ThreeDS({ data, card, attemptsLeft, onResult }: { data: Checkout
                 setCode(v);
                 if (v.length === 6) void send(v);
               }}
-              className={cx('mt-1.5 w-full h-12 rounded-xl border bg-white text-center font-mono text-2xl tracking-[0.5em] focus:outline-none focus:ring-4', error ? 'border-[#d92d3a] focus:ring-[#d92d3a]/15' : 'border-[#d5d7e2] focus:border-[#14142b] focus:ring-[#14142b]/10')}
+              className={cx('mt-1.5 w-full h-14 rounded-xl border-[1.5px] text-center font-mono text-2xl tracking-[0.5em] focus:outline-none', error ? 'border-[#d6293a] bg-[#fcebed]' : 'border-transparent bg-[#f2f3f5] focus:bg-white focus:border-[#111]')}
             />
             {error && <p className="mt-2 text-[13px] text-[#d92d3a]">{error}</p>}
-            <Button type="submit" variant="dark" size="lg" loading={busy} disabled={code.length !== 6} className="w-full mt-4 !bg-[#14142b] !text-white">
+            <Button type="submit" variant="dark" size="lg" loading={busy} disabled={code.length !== 6} className="w-full mt-4 !bg-[#111] !text-white">
               Подтвердить
             </Button>
           </form>

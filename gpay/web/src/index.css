@@ -1,68 +1,77 @@
-@import '@fontsource-variable/inter';
+@import '@fontsource-variable/onest';
 @import '@fontsource-variable/jetbrains-mono';
 @import 'tailwindcss';
 
 /* Light is the default (Stripe-like); dark follows the system setting. */
+/* Light by default; dark follows the system. Black ink, grey planes, one accent. */
 @theme static {
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Onest Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
-  --color-bg: #f6f7fb;
+  --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-sunken: #f1f2f7;
-  --color-hover: #eef0f6;
-  --color-line: #e5e7ef;
-  --color-line-strong: #cfd3df;
-  --color-fg: #0b0b14;
-  --color-muted: #5e6178;
-  --color-faint: #8e91a6;
+  --color-sunken: #f2f3f5;
+  --color-hover: #ebecef;
+  --color-line: #e6e7eb;
+  --color-line-strong: #cdd0d6;
+  --color-fg: #111111;
+  --color-muted: #6b6f7a;
+  --color-faint: #9a9ea8;
 
+  /* Accent: links, focus, charts, active states. Primary buttons are ink, not accent. */
   --color-brand: #5b3df5;
-  --color-brand-strong: #4326e0;
-  --color-brand-soft: #efebff;
+  --color-brand-strong: #4527d6;
+  --color-brand-soft: #eeebff;
   --color-on-brand: #ffffff;
+  --color-ink: #111111;
+  --color-ink-hover: #2c2c2e;
+  --color-on-ink: #ffffff;
 
-  --color-ok: #0f8a4f;
-  --color-ok-soft: #e3f6ec;
-  --color-warn: #b45309;
-  --color-warn-soft: #fdf1df;
-  --color-bad: #d92d3a;
-  --color-bad-soft: #fde8ea;
-  --color-info: #1d5fd6;
-  --color-info-soft: #e5eefc;
+  --color-ok: #138a4a;
+  --color-ok-soft: #e6f4ec;
+  --color-warn: #b25e09;
+  --color-warn-soft: #fbf0e2;
+  --color-bad: #d6293a;
+  --color-bad-soft: #fcebed;
+  --color-info: #2a5bd7;
+  --color-info-soft: #e9effc;
 
-  --shadow-card: 0 1px 2px rgb(16 18 40 / 0.04), 0 1px 1px rgb(16 18 40 / 0.03);
-  --shadow-pop: 0 12px 40px -8px rgb(16 18 40 / 0.18), 0 2px 6px rgb(16 18 40 / 0.06);
+  --shadow-card: none;
+  --shadow-pop: 0 20px 48px -12px rgb(17 17 17 / 0.18), 0 2px 8px rgb(17 17 17 / 0.06);
+
+  --radius-card: 24px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0c0c12;
-    --color-surface: #15151d;
-    --color-sunken: #101017;
-    --color-hover: #1e1e29;
-    --color-line: #262633;
-    --color-line-strong: #383848;
-    --color-fg: #f2f2f7;
-    --color-muted: #a3a5ba;
-    --color-faint: #73758c;
+    --color-bg: #0f0f10;
+    --color-surface: #18181a;
+    --color-sunken: #1e1e21;
+    --color-hover: #26262a;
+    --color-line: #2a2a2e;
+    --color-line-strong: #3a3a40;
+    --color-fg: #f2f2f3;
+    --color-muted: #a1a3ab;
+    --color-faint: #73757d;
 
-    --color-brand: #8b74ff;
-    --color-brand-strong: #a08dff;
-    --color-brand-soft: #231d47;
-    --color-on-brand: #ffffff;
+    --color-brand: #9b8aff;
+    --color-brand-strong: #b3a6ff;
+    --color-brand-soft: #24203d;
+    --color-on-brand: #0f0f10;
+    --color-ink: #f2f2f3;
+    --color-ink-hover: #dcdce0;
+    --color-on-ink: #111111;
 
-    --color-ok: #3ccf8a;
-    --color-ok-soft: #10291d;
-    --color-warn: #f0a83a;
-    --color-warn-soft: #2d2010;
-    --color-bad: #ff6b76;
-    --color-bad-soft: #31141a;
-    --color-info: #6aa2ff;
-    --color-info-soft: #13213b;
+    --color-ok: #4cc485;
+    --color-ok-soft: #12261b;
+    --color-warn: #e6a456;
+    --color-warn-soft: #2b2012;
+    --color-bad: #ff7280;
+    --color-bad-soft: #2e1519;
+    --color-info: #7ea3ff;
+    --color-info-soft: #151d33;
 
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-pop: 0 16px 48px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 20px 48px -12px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
   }
 }
 
@@ -76,7 +85,8 @@ body {
   background: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
-  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -85,9 +95,15 @@ body {
   background: var(--color-brand-soft);
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-brand);
-  outline-offset: 2px;
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-fg);
+    outline-offset: 2px;
+  }
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
 }
 
 /* Brand logos stay readable on dark surfaces. */
@@ -96,9 +112,8 @@ body {
 }
 
 @keyframes gp-pop {
-  0% { transform: scale(0.6); opacity: 0; }
-  60% { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); }
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 @keyframes gp-draw {
   to { stroke-dashoffset: 0; }
@@ -113,7 +128,7 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
-.gp-pop { animation: gp-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.gp-pop { animation: gp-pop 0.3s ease-out both; }
 .gp-draw { stroke-dasharray: 48; stroke-dashoffset: 48; animation: gp-draw 0.45s 0.25s ease-out forwards; }
 .gp-shake { animation: gp-shake 0.45s both; }
 .gp-fade-up { animation: gp-fade-up 0.25s ease-out both; }
@@ -121,7 +136,6 @@ body {
 /* Receipt tape: zig-zag torn edges drawn in the page background colour. */
 .gp-tape {
   position: relative;
-  --tape-edge: var(--color-bg);
 }
 .gp-tape::before,
 .gp-tape::after {
@@ -135,11 +149,11 @@ body {
 }
 .gp-tape::before {
   top: 0;
-  background-image: linear-gradient(135deg, var(--tape-edge) 33%, transparent 33%), linear-gradient(225deg, var(--tape-edge) 33%, transparent 33%);
+  background-image: linear-gradient(135deg, var(--tape-edge, var(--color-bg)) 33%, transparent 33%), linear-gradient(225deg, var(--tape-edge, var(--color-bg)) 33%, transparent 33%);
 }
 .gp-tape::after {
   bottom: 0;
-  background-image: linear-gradient(45deg, var(--tape-edge) 33%, transparent 33%), linear-gradient(315deg, var(--tape-edge) 33%, transparent 33%);
+  background-image: linear-gradient(45deg, var(--tape-edge, var(--color-bg)) 33%, transparent 33%), linear-gradient(315deg, var(--tape-edge, var(--color-bg)) 33%, transparent 33%);
 }
 
 @media print {

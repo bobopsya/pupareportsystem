@@ -139,9 +139,9 @@ export async function quittancePdf(q: Quittance): Promise<Buffer> {
   const inner = W - 80;
 
   // Brand header.
-  doc.roundedRect(40, 36, 30, 30, 8).fill('#5b3df5');
+  doc.roundedRect(40, 36, 30, 30, 8).fill('#111111');
   doc.save().strokeColor('#fff').lineWidth(3.2).lineCap('round').lineJoin('round').moveTo(50, 45).lineTo(57, 51).lineTo(50, 57).stroke().restore();
-  doc.circle(60.6, 51, 2.1).fill('#fff');
+  doc.circle(60.6, 51, 2.1).fill('#7a63ff');
   doc.font('sans-b').fontSize(17).fillColor('#0b0b14').text('GPAY', 78, 41);
   doc.font('sans').fontSize(8).fillColor('#6b6b80').text('GnusaPay · платёжный сервис', 78, 60);
 
@@ -172,9 +172,9 @@ export async function quittancePdf(q: Quittance): Promise<Buffer> {
   if (q.authCode) row('Код авторизации', q.authCode);
 
   y += 14;
-  doc.save().roundedRect(40, y, inner, 64, 10).lineWidth(1.4).strokeColor('#5b3df5').stroke().restore();
-  doc.font('sans-b').fontSize(10).fillColor('#5b3df5').text('ПРОВЕДЕНО', 40, y + 14, { width: inner, align: 'center' });
-  doc.font('sans').fontSize(7.5).fillColor('#5b3df5').text(`GPAY · ${moscow(q.ts)} · ${q.operationId.slice(-12)}`, 40, y + 32, { width: inner, align: 'center' });
+  doc.save().roundedRect(40, y, inner, 64, 10).lineWidth(1.4).strokeColor('#333333').stroke().restore();
+  doc.font('sans-b').fontSize(10).fillColor('#333333').text('ПРОВЕДЕНО', 40, y + 14, { width: inner, align: 'center' });
+  doc.font('sans').fontSize(7.5).fillColor('#555555').text(`GPAY · ${moscow(q.ts)} · ${q.operationId.slice(-12)}`, 40, y + 32, { width: inner, align: 'center' });
 
   doc.font('sans').fontSize(7).fillColor('#9a9aae').text('ООО «ГнусаПэй» · Лицензия на осуществление переводов денежных средств № 3517-П. Квитанция сформирована автоматически и не требует подписи.', 40, doc.page.height - 70, { width: inner, align: 'center' });
   return toBuffer(doc);
