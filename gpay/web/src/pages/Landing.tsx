@@ -161,7 +161,7 @@ export default function Landing() {
             <p className="mt-4 text-muted max-w-xs">Сервис приёма платежей для интернет-магазинов, приложений и офлайн-бизнеса.</p>
           </div>
           <FooterCol title="Продукты" links={[['Эквайринг', '#features'], ['Онлайн-касса', '#features'], ['Ссылки и счета', '#features'], ['Тарифы', '#pricing']]} />
-          <FooterCol title="Разработчикам" links={[['Документация API', '/docs'], ['Вебхуки', '/docs#webhooks'], ['Виджет оплаты', '/docs#widget'], ['Песочница', '/docs#sandbox']]} />
+          <FooterCol title="Разработчикам" links={[['Документация API', '/docs'], ['Вебхуки', '/docs#webhooks'], ['Виджет оплаты', '/docs#widget'], ['Песочница', '/docs#sandbox'], ['Для ИИ-агентов', '/docs#ai']]} />
           <FooterCol title="Аккаунт" links={[['Войти', '/login'], ['Подключиться', '/register']]} />
         </div>
         <div className="max-w-[1200px] mx-auto px-5 sm:px-8 py-6 border-t border-line text-sm text-faint flex flex-wrap justify-between gap-3">

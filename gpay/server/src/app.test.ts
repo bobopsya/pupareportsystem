@@ -260,3 +260,20 @@ describe('cabinet', () => {
     expect(logs.length).toBeGreaterThan(0);
   });
 });
+
+describe('llms.txt', () => {
+  it('serves the AI-agent guide with real addresses, cards and fees', async () => {
+    const index = await app.inject({ url: '/llms.txt' });
+    expect(index.statusCode).toBe(200);
+    expect(index.headers['content-type']).toContain('text/plain');
+    expect(index.body).toContain('https://pay.test/llms-full.txt');
+    const full = await app.inject({ url: '/llms-full.txt' });
+    expect(full.statusCode).toBe(200);
+    expect(full.body).not.toContain('{{');
+    expect(full.body).toContain('https://pay.test/api/v1/payments');
+    expect(full.body).toContain('Host: pay.test');
+    expect(full.body).toContain('`4111 1111 1111 1111`');
+    expect(full.body).toContain('`payment.succeeded`');
+    expect(full.body).toContain('(`sbp`) | 0,7%');
+  });
+});

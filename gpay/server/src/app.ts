@@ -12,6 +12,7 @@ import { seedGameCards } from './domain/cards.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { apiErrorBody, registerApiV1 } from './routes/api-v1.js';
 import { registerCheckoutRoutes } from './routes/checkout.js';
+import { registerLlmsRoutes } from './routes/llms.js';
 import { registerMerchantRoutes } from './routes/merchant.js';
 
 /** Pages that the gpay.js widget opens inside an iframe on merchant sites. */
@@ -80,6 +81,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerAuth(app, ctx);
   registerApiV1(app, ctx);
   registerCheckoutRoutes(app, ctx);
+  registerLlmsRoutes(app, ctx);
   registerMerchantRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Menu, Play, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, Bot, FileText, Menu, Play, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
@@ -13,6 +13,7 @@ const BASE = `${ORIGIN}/api/v1`;
 
 const SECTIONS = [
   { id: 'start', title: 'Быстрый старт' },
+  { id: 'ai', title: 'ИИ-агентам' },
   { id: 'auth', title: 'Аутентификация' },
   { id: 'idempotency', title: 'Идемпотентность' },
   { id: 'payments', title: 'Платежи' },
@@ -57,7 +58,7 @@ function useLang(): [Lang, (l: Lang) => void] {
   }];
 }
 
-function Code({ children, title }: { children: string; title?: string }) {
+function Code({ children, title, wrap }: { children: string; title?: ReactNode; wrap?: boolean }) {
   return (
     <div className="rounded-xl bg-sunken text-fg overflow-hidden ">
       {title && (
@@ -66,7 +67,7 @@ function Code({ children, title }: { children: string; title?: string }) {
           <CopyButton text={children} />
         </div>
       )}
-      <pre className="p-4 text-[12.5px] leading-relaxed font-mono overflow-x-auto">{children}</pre>
+      <pre className={cx('p-4 text-[12.5px] leading-relaxed font-mono', wrap ? 'whitespace-pre-wrap break-words' : 'overflow-x-auto')}>{children}</pre>
     </div>
   );
 }
@@ -170,6 +171,19 @@ function Two({ left, right }: { left: ReactNode; right: ReactNode }) {
     </div>
   );
 }
+
+const AGENT_PROMPT = `Подключи приём оплаты через GPAY к этому проекту.
+
+Сначала полностью прочитай инструкцию для ИИ-агентов:
+${ORIGIN}/llms-full.txt
+
+Что нужно сделать:
+1. Создание платежа на сервере (POST /api/v1/payments с Idempotence-Key) и переход покупателя на confirmation_url.
+2. Обработчик вебхука с проверкой подписи GPAY-Signature; заказ считается оплаченным только по payment.succeeded.
+3. Страница возврата return_url, которая показывает статус заказа.
+
+Ключи бери из переменных окружения GPAY_SECRET_KEY и GPAY_WEBHOOK_SECRET, в код их не вписывай.
+Проверь оплату картой 4111 1111 1111 1111 и отказ картой 4000 0000 0000 9995.`;
 
 const PAYMENT_EXAMPLE = {
   amount: { value: '1290.00', currency: 'RUB' },
@@ -318,6 +332,31 @@ export default function Docs() {
               </>
             }
             right={<MultiCode samples={req('POST', '/payments', { amount: { value: '1290.00', currency: 'RUB' }, description: 'Заказ №4821', confirmation: { type: 'redirect', return_url: 'https://shop.ru/thanks' } })} />}
+          />
+
+          <H2 id="ai">ИИ-агентам</H2>
+          <Two
+            left={
+              <>
+                <P>Интеграцию можно поручить ИИ-агенту — Claude, ChatGPT, Cursor, Copilot и другим. Для них есть отдельная инструкция в формате <Kbd>llms.txt</Kbd>: один Markdown-файл со всем необходимым — пошаговое подключение, справочник API, проверка подписи вебхука, готовый код на Node.js, Python и PHP, список карт и чек-лист. Адреса и карты в ней всегда актуальные.</P>
+                <div className="mt-5 flex flex-col gap-2">
+                  {[
+                    { href: '/llms-full.txt', title: 'Полная инструкция', hint: 'Всё для интеграции одним файлом' },
+                    { href: '/llms.txt', title: 'Краткий индекс', hint: 'Для агентов, которые сами ищут llms.txt' },
+                  ].map((l) => (
+                    <a key={l.href} href={l.href} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-line px-4 py-3 hover:bg-hover transition-colors min-w-0">
+                      <FileText className="size-5 text-brand shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-medium">{l.title}</span>
+                        <span className="block text-[13px] text-muted truncate">{ORIGIN}{l.href} · {l.hint}</span>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+                <P>Скопируйте готовый запрос и отправьте агенту, открытому в папке вашего проекта. Секретный ключ агенту не показывайте: пусть он ждёт его в переменной окружения <Kbd>GPAY_SECRET_KEY</Kbd>, а значение вы впишете сами.</P>
+              </>
+            }
+            right={<Code title={<span className="inline-flex items-center gap-1.5"><Bot className="size-4" />Запрос для агента</span>} wrap>{AGENT_PROMPT}</Code>}
           />
 
           <H2 id="auth">Аутентификация</H2>

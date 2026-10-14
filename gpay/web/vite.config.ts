@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5174,
-    proxy: { '/api': 'http://localhost:8081' },
+    proxy: { '/api': 'http://localhost:8081', '/llms.txt': 'http://localhost:8081', '/llms-full.txt': 'http://localhost:8081' },
   },
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 1500 },
 });
