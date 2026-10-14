@@ -259,6 +259,23 @@ describe('cabinet', () => {
     const logs = (await app.inject({ url: `/api/m/shops/${shopId}/logs`, headers })).json().items;
     expect(logs.length).toBeGreaterThan(0);
   });
+  it('refuses a refund the shop balance cannot cover', async () => {
+    const { secret, headers, shopId } = await merchant();
+    const p = (await newPayment(secret)).json();
+    await pay(p.id, card('4111111111111111'));
+    await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '1000.00', currency: 'RUB', cardLast4: '1234' } });
+    const rub = async () => (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json().balances.find((b: { currency: string }) => b.currency === 'RUB').available;
+    expect(await rub()).toBe(45800);
+    const full = await api(secret, 'POST', '/refunds', { payment_id: p.id }, 'rf-full');
+    expect(full.statusCode).toBe(400);
+    expect(full.json().code).toBe('insufficient_funds');
+    const cab = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payments/${p.id}/refund`, headers, payload: { amount: '500.00' } });
+    expect(cab.statusCode).toBe(400);
+    expect(await rub()).toBe(45800);
+    const part = await api(secret, 'POST', '/refunds', { payment_id: p.id, amount: { value: '458.00', currency: 'RUB' } }, 'rf-part');
+    expect(part.statusCode).toBe(200);
+    expect(await rub()).toBe(0);
+  });
 });
 
 describe('llms.txt', () => {

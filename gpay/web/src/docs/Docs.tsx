@@ -584,7 +584,7 @@ export default function Docs() {
                 rows={[
                   ['400 invalid_request', 'error', 'Ошибка в параметрах; поле указано в parameter.'],
                   ['400 invalid_state', 'error', 'Операция недопустима для текущего статуса.'],
-                  ['400 insufficient_funds', 'error', 'Недостаточно средств на балансе магазина.'],
+                  ['400 insufficient_funds', 'error', 'Недостаточно средств на балансе магазина для выплаты или возврата.'],
                   ['401 invalid_credentials', 'error', 'Неверный или отозванный ключ.'],
                   ['403 forbidden', 'error', 'Магазин заблокирован.'],
                   ['404 not_found', 'error', 'Объект не найден.'],

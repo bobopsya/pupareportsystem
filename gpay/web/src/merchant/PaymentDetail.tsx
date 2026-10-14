@@ -56,6 +56,7 @@ export default function PaymentDetail() {
     void qc.invalidateQueries({ queryKey: ['payment', shop.id, pid] });
     void qc.invalidateQueries({ queryKey: ['payments', shop.id] });
     void qc.invalidateQueries({ queryKey: ['analytics', shop.id] });
+    void qc.invalidateQueries({ queryKey: ['payouts', shop.id] });
   };
 
   return (
@@ -262,6 +263,13 @@ type ModalProps = { open: boolean; onClose: () => void; p: PaymentRowT; shopId: 
 
 function RefundModal({ open, onClose, p, shopId, onDone }: ModalProps) {
   const left = p.amount - p.refunded;
+  // Refunds are paid from the shop balance; the server rejects them when it does not cover the sum.
+  const { data: bal } = useQuery({
+    queryKey: ['payouts', shopId],
+    queryFn: () => api<{ balances: { currency: string; available: number }[] }>(`/m/shops/${shopId}/payouts`),
+    enabled: open,
+  });
+  const available = bal?.balances.find((b) => b.currency === p.currency)?.available;
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -283,8 +291,10 @@ function RefundModal({ open, onClose, p, shopId, onDone }: ModalProps) {
       setBusy(false);
     }
   };
+  const wanted = amount ? Math.round(Number(toAmount(amount) ?? 0) * 100) : left;
+  const short = available !== undefined && available < wanted;
   return (
-    <Modal open={open} onClose={onClose} title="Возврат платежа" footer={<><Button onClick={onClose}>Отмена</Button><Button variant="primary" loading={busy} onClick={submit}>Вернуть {amount ? toAmount(amount) ?? '' : money(left, p.currency, { exact: true })}</Button></>}>
+    <Modal open={open} onClose={onClose} title="Возврат платежа" footer={<><Button onClick={onClose}>Отмена</Button><Button variant="primary" loading={busy} disabled={short} onClick={submit}>Вернуть {amount ? toAmount(amount) ?? '' : money(left, p.currency, { exact: true })}</Button></>}>
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted">Деньги вернутся покупателю тем же способом, которым он платил. Будет сформирован чек «Возврат прихода». Комиссия GPAY за исходный платёж не возвращается.</p>
         <Field label="Сумма возврата" hint={`Можно вернуть до ${money(left, p.currency, { exact: true })}. Оставьте пустым для полного возврата.`}>
@@ -293,6 +303,13 @@ function RefundModal({ open, onClose, p, shopId, onDone }: ModalProps) {
         <Field label="Причина (видна в истории)">
           <Input placeholder="Например: товар не подошёл" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={250} />
         </Field>
+        {available !== undefined && (
+          <div className={cx('flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm', short ? 'bg-bad-soft text-bad' : 'bg-sunken text-muted')}>
+            <span>Доступно на балансе</span>
+            <span className="tabular-nums font-medium">{money(Math.max(available, 0), p.currency, { exact: true })}</span>
+          </div>
+        )}
+        {short && !error && <ErrorNote>Недостаточно средств на балансе магазина для возврата. Дождитесь новых поступлений или уменьшите сумму.</ErrorNote>}
         {error && <ErrorNote>{error}</ErrorNote>}
       </div>
     </Modal>

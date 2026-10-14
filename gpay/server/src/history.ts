@@ -60,7 +60,11 @@ export function generateHistory(cfg: Config, db: DB, shopId: number, days: numbe
       }
       if (getPaymentRow(ctx, p.id)!.status === 'succeeded' && rnd() < 0.05) {
         clock += 7200_000;
-        refundPayment(ctx, shop, getPaymentRow(ctx, p.id)!, rnd() < 0.5 ? undefined : Math.round(amount / 3), 'Покупатель отказался от части заказа');
+        try {
+          refundPayment(ctx, shop, getPaymentRow(ctx, p.id)!, rnd() < 0.5 ? undefined : Math.round(amount / 3), 'Покупатель отказался от части заказа');
+        } catch {
+          // The shop balance does not cover the refund yet; history just skips it.
+        }
       }
     }
   }

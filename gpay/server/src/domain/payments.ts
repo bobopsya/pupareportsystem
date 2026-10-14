@@ -378,6 +378,11 @@ export function refundPayment(ctx: Ctx, shop: ShopRow, p: PaymentRow, amount: nu
   const id = newId('rf');
   const now = ctx.now();
   ctx.db.transaction(() => {
+    // Refunds are paid from the shop balance, so it must cover them (checked inside the transaction).
+    const available = balances(ctx, shop.id).find((b) => b.currency === p.currency)?.available ?? 0;
+    if (available < sum) {
+      throw new ApiError(400, 'insufficient_funds', `Недостаточно средств на балансе магазина для возврата: доступно ${formatAmount(Math.max(available, 0))} ${p.currency}. Дождитесь новых поступлений или уменьшите сумму возврата.`, 'amount.value');
+    }
     ctx.db.prepare(`INSERT INTO refunds(id, payment_id, shop_id, amount, currency, status, description, created_at) VALUES(?,?,?,?,?,'succeeded',?,?)`).run(id, p.id, shop.id, sum, p.currency, description, now);
     ctx.db.prepare('UPDATE payments SET refunded = refunded + ? WHERE id = ?').run(sum, p.id);
     addEvent(ctx, p.id, 'refunded', { refund_id: id, amount: formatAmount(sum), full: sum === left });
