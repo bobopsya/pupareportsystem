@@ -25,7 +25,7 @@ interface ShopFields {
 
 function ShopFieldsForm({ v, set }: { v: ShopFields; set: (p: Partial<ShopFields>) => void }) {
   return (
-    <div className="grid sm:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <Field label="Название магазина" hint="Его увидят покупатели на странице оплаты">
         <Input value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Кофейня «Зерно»" maxLength={60} />
       </Field>
@@ -171,7 +171,7 @@ export default function Settings() {
       </Card>
       <Card>
         <CardHeader title="Платежи и чеки" />
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="URL возврата по умолчанию" hint="Куда вернуть покупателя после оплаты, если не передан return_url">
             <Input value={returnUrl} onChange={(e) => setReturnUrl(e.target.value)} placeholder="https://example.com/thanks" />
           </Field>
@@ -181,7 +181,7 @@ export default function Settings() {
             </Select>
           </Field>
         </div>
-        <dl className="mt-5 grid sm:grid-cols-3 gap-3 text-sm">
+        <dl className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">РН ККТ</dt><dd className="font-mono">{shop.kkt.rn}</dd></div>
           <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">Фискальный накопитель</dt><dd className="font-mono">{shop.kkt.fn}</dd></div>
           <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">Чеков пробито</dt><dd className="font-mono">{shop.kkt.fd}</dd></div>
@@ -204,7 +204,7 @@ function Profile() {
   return (
     <Card>
       <CardHeader title="Профиль" sub={user?.email} />
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Field label="Имя"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <Field label="Текущий пароль"><Input type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} /></Field>
         <Field label="Новый пароль" hint="Не короче 8 символов"><Input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} /></Field>

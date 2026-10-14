@@ -100,7 +100,7 @@ export default function PaymentDetail() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
         <div className="flex flex-col gap-5 min-w-0">
           <Card>
             <div className="flex items-center justify-between mb-4">
@@ -116,7 +116,7 @@ export default function PaymentDetail() {
             {tab === 'json' ? (
               <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-x-auto max-h-[480px]">{JSON.stringify(data.api, null, 2)}</pre>
             ) : (
-              <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
                 <Item k="Описание" v={p.description || '—'} />
                 <Item k="Создан" v={dateTime(p.createdAt)} />
                 <Item k="Способ оплаты" v={<MethodCell p={p} />} />

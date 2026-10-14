@@ -75,10 +75,19 @@
   }
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body,
 #root {
   min-height: 100%;
+}
+
+body {
+  overflow-x: clip;
 }
 
 body {
@@ -124,9 +133,10 @@ h1, h2, h3 {
   30%, 50%, 70% { transform: translateX(-4px); }
   40%, 60% { transform: translateX(4px); }
 }
+/* Opacity only: moving elements while they appear makes buttons below them jump. */
 @keyframes gp-fade-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .gp-pop { animation: gp-pop 0.3s ease-out both; }
 .gp-draw { stroke-dasharray: 48; stroke-dashoffset: 48; animation: gp-draw 0.45s 0.25s ease-out forwards; }

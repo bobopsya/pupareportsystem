@@ -106,7 +106,7 @@ export function AnalyticsPage() {
           )}
         />
       </Card>
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader title="Способы оплаты" sub="Оборот по способам" />
           <BarList items={Object.entries(data.byMethod).sort((a, b) => b[1].turnover - a[1].turnover).map(([m, v]) => ({ label: METHOD_TITLE[m] ?? m, value: v.turnover, sub: `${v.count} шт.` }))} format={(v) => money(v)} />
@@ -152,7 +152,7 @@ export function Payouts() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Баланс и выплаты" sub="Выручка за вычетом комиссии GPAY и возвратов. Выплата на карту зачисляется за несколько секунд." />
-      <div className="grid md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {data.balances.map((b) => {
           const fee = data.fees.find((f) => f.currency === b.currency);
           return (

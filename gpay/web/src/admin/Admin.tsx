@@ -273,7 +273,7 @@ function RatesFees() {
   const f = fees ?? Object.fromEntries(Object.entries(data.fees).map(([k, v]) => [k, String(v)]));
   const num = (o: Record<string, string>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Number(v.replace(',', '.'))]));
   return (
-    <div className="grid lg:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
         <CardHeader title="Курсы валют" sub={`Рублей за единицу · обновлено ${data.rates.updatedAt ? dateTime(data.rates.updatedAt) : 'никогда'}`} />
         <div className="grid grid-cols-2 gap-3">

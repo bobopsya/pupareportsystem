@@ -53,7 +53,7 @@ export default function MerchantLayout() {
     <ShopCtx.Provider value={shop}>
       <div className="min-h-screen lg:grid lg:grid-cols-[272px_1fr]">
         {/* Mobile top bar */}
-        <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between h-16 px-4 bg-surface border-b border-line">
+        <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between h-16 px-4 pt-[env(safe-area-inset-top)] box-content bg-surface border-b border-line">
           <Logo size="sm" />
           <button type="button" aria-label="Меню" className="flex size-9 items-center justify-center rounded-lg hover:bg-hover" onClick={() => setOpen(true)}>
             <Menu className="size-5" />
@@ -61,7 +61,7 @@ export default function MerchantLayout() {
         </header>
         {open && <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setOpen(false)} />}
         <div className="lg:bg-sunken">
-        <aside className={cx('fixed lg:sticky top-0 z-50 lg:z-auto h-screen w-[280px] lg:w-auto flex flex-col bg-sunken transition-transform lg:translate-x-0', open ? 'translate-x-0' : '-translate-x-full')}>
+        <aside className={cx('fixed lg:sticky top-0 z-50 lg:z-auto h-dvh w-[280px] max-w-[85vw] lg:w-auto lg:max-w-none flex flex-col overflow-y-auto bg-sunken transition-transform lg:translate-x-0', open ? 'translate-x-0' : '-translate-x-full')}>
           <div className="flex items-center justify-between h-16 px-5">
             <Link to="/app"><Logo /></Link>
             <button type="button" className="lg:hidden flex size-8 items-center justify-center rounded-lg hover:bg-hover" aria-label="Закрыть меню" onClick={() => setOpen(false)}>
@@ -88,7 +88,7 @@ export default function MerchantLayout() {
               </NavLink>
             ))}
           </nav>
-          <div className="mt-auto px-3 pb-4 flex flex-col gap-0.5">
+          <div className="mt-auto px-3 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col gap-0.5">
             <Link to="/docs" className="flex items-center gap-3 h-9 px-3 rounded-lg text-sm text-muted hover:text-fg hover:bg-hover">
               <BookOpen className="size-4" /> Документация API
             </Link>

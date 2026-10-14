@@ -251,7 +251,7 @@ function Webhooks() {
                 <div className="flex flex-wrap gap-1.5 pl-7">
                   {h.events.map((e) => <Badge key={e} className="font-mono">{e}</Badge>)}
                 </div>
-                <div className="pl-7 grid sm:grid-cols-[1fr_auto] gap-3 items-center">
+                <div className="pl-7 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-center">
                   <CopyField value={h.secret} secret />
                   <div className="text-xs text-muted flex gap-3">
                     <span className="text-ok">✓ {h.stats.ok}</span>
@@ -290,7 +290,7 @@ function Webhooks() {
                       {d.url && <span className="font-mono">{d.url}</span>}
                     </div>
                     {d.lastError && <ErrorNote>{d.lastError}</ErrorNote>}
-                    <div className="grid lg:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       <div>
                         <div className="text-xs text-faint mb-1">Тело запроса</div>
                         <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-auto max-h-72">{JSON.stringify(JSON.parse(d.payload), null, 2)}</pre>
@@ -387,7 +387,7 @@ function Logs() {
                 <span className="text-xs text-faint whitespace-nowrap w-36 text-right">{dateTimeSec(l.ts)}</span>
               </li>
               {open === l.id && (
-                <li className="px-5 py-4 bg-sunken/60 grid lg:grid-cols-2 gap-3">
+                <li className="px-5 py-4 bg-sunken/60 grid grid-cols-1 lg:grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs text-faint mb-1">Запрос{l.idemKey && <> · Idempotence-Key: <span className="font-mono">{l.idemKey}</span></>}</div>
                     <pre className="rounded-xl bg-sunken p-4 text-[12px] font-mono overflow-auto max-h-80">{pretty(l.reqBody)}</pre>

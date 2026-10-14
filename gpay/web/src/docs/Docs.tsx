@@ -140,32 +140,31 @@ function P({ children }: { children: ReactNode }) {
 }
 function Endpoint({ method, path }: { method: string; path: string }) {
   return (
-    <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5 font-mono text-[13px] shadow-card">
-      <span className={cx('font-semibold', method === 'GET' ? 'text-info' : 'text-ok')}>{method}</span>
-      <span>/api/v1{path}</span>
+    <div className="mt-4 inline-flex max-w-full items-baseline gap-2 rounded-lg bg-sunken px-2.5 py-1.5 font-mono text-[13px]">
+      <span className={cx('font-semibold shrink-0', method === 'GET' ? 'text-info' : 'text-ok')}>{method}</span>
+      <span className="break-all">/api/v1{path}</span>
     </div>
   );
 }
 function Params({ rows }: { rows: [string, string, string][] }) {
   return (
-    <div className="mt-4 rounded-xl border border-line overflow-hidden bg-surface">
-      <table className="w-full text-sm">
-        <tbody>
-          {rows.map(([name, type, text]) => (
-            <tr key={name} className="border-b border-line last:border-0 align-top">
-              <td className="py-2.5 px-4 font-mono text-[13px] whitespace-nowrap">{name}</td>
-              <td className="py-2.5 px-2 text-xs text-faint whitespace-nowrap">{type}</td>
-              <td className="py-2.5 px-4 text-muted">{text}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="mt-4 rounded-2xl border border-line divide-y divide-line text-sm">
+      {rows.map(([name, type, text]) => (
+        // Stacked on phones (name over description), three columns from sm up.
+        <div key={name} className="px-4 py-3 flex flex-col gap-1 sm:grid sm:grid-cols-[minmax(0,auto)_auto_minmax(0,1fr)] sm:gap-4">
+          <span className="flex items-baseline gap-2 sm:contents">
+            <span className="font-mono text-[13px] break-all">{name}</span>
+            <span className="text-xs text-faint whitespace-nowrap">{type}</span>
+          </span>
+          <span className="text-muted">{text}</span>
+        </div>
+      ))}
     </div>
   );
 }
 function Two({ left, right }: { left: ReactNode; right: ReactNode }) {
   return (
-    <div className="grid xl:grid-cols-2 gap-6 xl:gap-8 items-start">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8 items-start">
       <div className="min-w-0">{left}</div>
       <div className="min-w-0 xl:sticky xl:top-20 flex flex-col gap-3 mt-4 xl:mt-0">{right}</div>
     </div>
@@ -280,17 +279,17 @@ export default function Docs() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 h-14 bg-bg/85 backdrop-blur border-b border-line">
         <div className="h-full max-w-[1400px] mx-auto px-4 sm:px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button type="button" className="lg:hidden flex size-9 items-center justify-center rounded-lg hover:bg-hover" onClick={() => setNav(true)} aria-label="Разделы"><Menu className="size-5" /></button>
-            <Link to="/"><Logo size="sm" suffix="Docs" /></Link>
+            <Link to="/"><Logo size="sm" suffix="Docs" className="[&>span:last-child]:hidden min-[400px]:[&>span:last-child]:inline" /></Link>
             <Badge tone="brand" className="hidden sm:inline-flex">API v1</Badge>
           </div>
-          <Link to={user ? '/app' : '/register'}><Button size="sm" variant="primary">{user ? 'Личный кабинет' : 'Получить ключ'}</Button></Link>
+          <Link to={user ? '/app' : '/register'}><Button size="sm" variant="primary">{user ? 'Кабинет' : 'Получить ключ'}</Button></Link>
         </div>
       </header>
       <div className="max-w-[1400px] mx-auto lg:grid lg:grid-cols-[230px_1fr]">
         {nav && <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setNav(false)} />}
-        <aside className={cx('fixed lg:sticky top-0 lg:top-14 z-50 lg:z-auto h-screen lg:h-[calc(100vh-56px)] w-64 lg:w-auto overflow-y-auto bg-surface lg:bg-transparent border-r border-line lg:border-0 px-4 py-6 transition-transform lg:translate-x-0', nav ? 'translate-x-0' : '-translate-x-full')}>
+        <aside className={cx('fixed lg:sticky top-0 lg:top-14 z-50 lg:z-auto h-dvh lg:h-[calc(100dvh-56px)] w-64 lg:w-auto overflow-y-auto bg-surface lg:bg-transparent border-r border-line lg:border-0 px-4 py-6 transition-transform lg:translate-x-0', nav ? 'translate-x-0' : '-translate-x-full')}>
           <div className="lg:hidden flex justify-end mb-2"><button type="button" onClick={() => setNav(false)} aria-label="Закрыть"><X className="size-5" /></button></div>
           {user && <Link to="/app" className="flex items-center gap-1.5 text-sm text-muted hover:text-fg mb-5"><ArrowLeft className="size-4" />В кабинет</Link>}
           <nav className="flex flex-col gap-0.5">
@@ -373,7 +372,7 @@ export default function Docs() {
           />
 
           <H2 id="statuses">Статусы платежа</H2>
-          <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {[
               ['pending', 'Создан и ожидает оплаты. Покупатель может сделать до 5 попыток. Через 1 час без оплаты — canceled.', 'neutral'],
               ['waiting_for_capture', 'Деньги заморожены (capture: false). Подтвердите или отмените в течение 7 дней.', 'info'],
@@ -645,9 +644,9 @@ function Sandbox() {
   })();
 
   return (
-    <div className="mt-5 grid xl:grid-cols-2 gap-4">
+    <div className="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div className="rounded-2xl border border-line bg-surface p-5 shadow-card flex flex-col gap-4">
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5 text-[13px] font-medium text-muted">
             Секретный ключ
             <Input type="password" placeholder="sk_live_…" value={key} onChange={(e) => setKey(e.target.value)} mono />

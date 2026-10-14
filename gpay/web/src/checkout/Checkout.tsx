@@ -167,7 +167,7 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
-      <div className={cx('flex-1 w-full mx-auto grid md:grid-cols-[1fr_1.1fr] md:gap-6', embed ? '' : 'max-w-[1080px] md:py-10 md:px-6')}>
+      <div className={cx('flex-1 w-full mx-auto grid grid-cols-1 md:grid-cols-[1fr_1.1fr] md:gap-6', embed ? '' : 'max-w-[1080px] md:py-10 md:px-6')}>
         {/* Order summary */}
         <aside className={cx('relative bg-sunken px-5 pt-5 pb-5 md:p-10 flex flex-col', embed ? 'md:rounded-none' : 'md:rounded-[32px]')}>
           <div className="flex items-center justify-between gap-3">
@@ -195,7 +195,7 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
             <div className="mt-1 text-[36px] md:text-[44px] leading-tight font-bold tracking-[-0.03em]">{money(p.amount, p.currency, { exact: p.amount % 100 !== 0 })}</div>
             {!final && (
               <div className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted">
-                <Clock className="size-3.5" /> Оплатите в течение {countdown}
+                <Clock className="size-3.5" /> Оплатите в течение <span className="tabular-nums">{countdown}</span>
               </div>
             )}
           </div>

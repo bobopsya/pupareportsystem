@@ -47,7 +47,7 @@ export function IconButton({ label, className, children, ...rest }: ButtonHTMLAt
 
 // ---------- Form controls ----------
 const FieldId = createContext<string | undefined>(undefined);
-const control = 'w-full rounded-xl border-[1.5px] border-transparent bg-sunken px-4 text-[15px] text-fg placeholder:text-faint transition-colors hover:bg-hover focus:outline-none focus:bg-surface focus:border-fg disabled:opacity-60 aria-invalid:border-bad aria-invalid:bg-bad-soft';
+const control = 'w-full rounded-xl border-[1.5px] border-transparent bg-sunken px-4 text-base text-fg placeholder:text-faint transition-colors hover:bg-hover focus:outline-none focus:bg-surface focus:border-fg disabled:opacity-60 aria-invalid:border-bad aria-invalid:bg-bad-soft';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { mono?: boolean; invalid?: boolean }>(function Input({ className, mono, invalid, id, ...rest }, ref) {
   const fid = useContext(FieldId);
@@ -56,7 +56,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { mono?: boolean }>(function Textarea({ className, mono, id, ...rest }, ref) {
   const fid = useContext(FieldId);
-  return <textarea ref={ref} id={id ?? fid} className={cx(control, 'py-3 min-h-24', mono && 'font-mono text-[13px]', className)} {...rest} />;
+  return <textarea ref={ref} id={id ?? fid} className={cx(control, 'py-3 min-h-24', mono && 'font-mono text-base sm:text-[13px]', className)} {...rest} />;
 });
 
 export function Select({ className, children, id, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
@@ -138,7 +138,7 @@ export function PageHeader({ title, sub, actions }: { title: ReactNode; sub?: Re
         <h1 className="text-[32px] leading-tight font-bold">{title}</h1>
         {sub && <p className="text-[15px] text-muted mt-1.5">{sub}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 max-w-full min-w-0">{actions}</div>}
     </div>
   );
 }
@@ -251,15 +251,15 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" className={cx('w-full max-h-[92vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-surface shadow-pop gp-fade-up', size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg')}>
-        <div className="flex items-center justify-between gap-3 px-6 pt-6 pb-4">
+      <div ref={ref} role="dialog" aria-modal="true" className={cx('w-full max-h-[92dvh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-surface shadow-pop gp-fade-up', size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg')}>
+        <div className="flex items-center justify-between gap-3 px-5 sm:px-6 pt-5 sm:pt-6 pb-4">
           <h2 className="text-xl font-semibold">{title}</h2>
           <IconButton label="Закрыть" onClick={onClose}>
             <X className="size-4" />
           </IconButton>
         </div>
-        <div className="px-6 pb-6 overflow-y-auto">{children}</div>
-        {footer && <div className="flex flex-wrap justify-end gap-2 px-6 pb-6">{footer}</div>}
+        <div className={cx('px-5 sm:px-6 overflow-y-auto overscroll-contain', footer ? 'pb-5' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]')}>{children}</div>
+        {footer && <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap sm:justify-end gap-2 px-5 sm:px-6 pt-1 pb-[max(1.25rem,env(safe-area-inset-bottom))] [&>*]:w-full sm:[&>*]:w-auto">{footer}</div>}
       </div>
     </div>,
     document.body,
@@ -282,7 +282,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastCtx.Provider value={push}>
       {children}
       {createPortal(
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none" aria-live="polite">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] inset-x-4 z-[60] flex flex-col items-center gap-2 pointer-events-none" aria-live="polite">
           {items.map((t) => (
             <div key={t.id} className="gp-fade-up flex items-center gap-2 rounded-xl bg-ink text-on-ink px-4 py-3 text-sm shadow-pop">
               {t.tone === 'ok' ? <Check className="size-4 text-ok" /> : <X className="size-4 text-bad" />}
@@ -299,7 +299,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 // ---------- Segmented control ----------
 export function Segmented<T extends string>({ value, onChange, options, className }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode }[]; className?: string }) {
   return (
-    <div role="tablist" className={cx('inline-flex rounded-xl bg-sunken p-1', className)}>
+    <div role="tablist" className={cx('inline-flex max-w-full overflow-x-auto [scrollbar-width:none] rounded-xl bg-sunken p-1', className)}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -307,7 +307,7 @@ export function Segmented<T extends string>({ value, onChange, options, classNam
           role="tab"
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cx('h-9 px-4 rounded-[10px] text-sm font-medium transition-colors whitespace-nowrap', value === o.value ? 'bg-surface text-fg shadow-[0_1px_2px_rgb(0_0_0/0.06)]' : 'text-muted hover:text-fg')}
+          className={cx('h-9 px-3 sm:px-4 rounded-[10px] text-sm font-medium transition-colors whitespace-nowrap shrink-0', value === o.value ? 'bg-surface text-fg shadow-[0_1px_2px_rgb(0_0_0/0.06)]' : 'text-muted hover:text-fg')}
         >
           {o.label}
         </button>

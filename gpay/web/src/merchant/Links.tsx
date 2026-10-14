@@ -68,7 +68,7 @@ export default function Links() {
       ) : data.items.length === 0 ? (
         <Card><Empty icon={<Link2 className="size-5" />} title="Ссылок пока нет" sub="Ссылка может быть с фиксированной суммой (товар, услуга) или со свободной — для донатов и чаевых." action={<Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreate('link')}>Создать ссылку</Button>} /></Card>
       ) : (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {data.items.map((l) => (
             <Card key={l.id} className="flex flex-col !p-4">
               <div className="flex items-start justify-between gap-2">
@@ -193,7 +193,7 @@ function CreateLink({ kind: initial, onClose, onCreated }: { kind: 'link' | 'inv
     <Modal open onClose={onClose} size="lg" title={kind === 'invoice' ? 'Новый счёт' : 'Новая ссылка на оплату'} footer={<><Button onClick={onClose}>Отмена</Button><Button variant="primary" loading={busy} onClick={submit}>{kind === 'invoice' ? `Выставить счёт${total ? ` на ${money(total, currency)}` : ''}` : 'Создать ссылку'}</Button></>}>
       <div className="flex flex-col gap-4">
         <Segmented value={kind} onChange={setKind} className="w-full [&>button]:flex-1" options={[{ value: 'link', label: 'Ссылка' }, { value: 'invoice', label: 'Счёт с позициями' }]} />
-        <div className="grid sm:grid-cols-[1fr_140px] gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-3">
           <Field label={kind === 'invoice' ? 'Номер / название счёта' : 'Что продаёте'}>
             <Input placeholder={kind === 'invoice' ? 'Счёт № 152 от 13 октября' : 'Абонемент на месяц'} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} autoFocus />
           </Field>
@@ -207,7 +207,7 @@ function CreateLink({ kind: initial, onClose, onCreated }: { kind: 'link' | 'inv
           <>
             <Segmented value={fixed ? 'fixed' : 'free'} onChange={(v) => setFixed(v === 'fixed')} options={[{ value: 'fixed', label: 'Фиксированная сумма' }, { value: 'free', label: 'Покупатель вводит сумму' }]} />
             {fixed ? (
-              <div className="grid sm:grid-cols-2 gap-3 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                 <Field label={`Сумма, ${CURRENCY_SYMBOL[currency]}`}><Input inputMode="decimal" placeholder="1500" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
                 <div className="pb-2"><Toggle checked={reusable} onChange={setReusable} label="Многоразовая ссылка" /></div>
               </div>
@@ -220,7 +220,7 @@ function CreateLink({ kind: initial, onClose, onCreated }: { kind: 'link' | 'inv
           </>
         ) : (
           <>
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Плательщик"><Input placeholder="ИП Петров А. В." value={name} onChange={(e) => setName(e.target.value)} /></Field>
               <Field label="Email для чека"><Input type="email" placeholder="client@mail.ru" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             </div>

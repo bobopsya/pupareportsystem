@@ -120,7 +120,7 @@ function GettingStarted({ shopId }: { shopId: number }) {
         <h2 className="text-[15px] font-semibold">Магазин готов принимать платежи</h2>
         <p className="text-[13px] text-muted mt-0.5">Карты Visa, Mastercard, МИР, UnionPay, СБП, оплата частями и криптовалюта уже подключены.</p>
       </div>
-      <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-line border-t border-line">
+      <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-line border-t border-line">
         {steps.map((s) => (
           <div key={s.title} className="p-5 flex flex-col gap-2">
             <s.icon className="size-5" />

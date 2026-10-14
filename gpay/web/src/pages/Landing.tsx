@@ -39,13 +39,13 @@ export default function Landing() {
 
       <main className="max-w-[1200px] mx-auto px-5 sm:px-8">
         {/* Hero */}
-        <section className="rounded-[40px] bg-sunken mt-2 px-6 sm:px-14 pt-12 sm:pt-16 pb-0 grid lg:grid-cols-[1.15fr_1fr] gap-10 overflow-hidden">
+        <section className="rounded-[40px] bg-sunken mt-2 px-6 sm:px-14 pt-12 sm:pt-16 pb-0 grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-10 overflow-hidden">
           <div className="pb-12 sm:pb-16 self-center">
             <h1 className="text-[40px] sm:text-[60px] leading-[1.04] font-bold tracking-[-0.035em]">Приём онлайн-платежей для&nbsp;бизнеса</h1>
             <p className="mt-6 text-lg sm:text-xl text-muted max-w-[520px]">Эквайринг, онлайн-касса и ссылки на оплату в одном договоре. Карты, СБП, оплата частями и криптовалюта.</p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Link to={cta}><Button variant="primary" size="lg">Подключить GPAY</Button></Link>
-              <Link to="/docs"><Button size="lg" className="!bg-surface hover:!bg-hover">Документация API</Button></Link>
+            <div className="mt-9 flex flex-col sm:flex-row gap-3">
+              <Link to={cta}><Button variant="primary" size="lg" className="w-full sm:w-auto">Подключить GPAY</Button></Link>
+              <Link to="/docs"><Button size="lg" className="w-full sm:w-auto !bg-surface hover:!bg-hover">Документация API</Button></Link>
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-2">
               <CardLogos />
@@ -105,7 +105,7 @@ export default function Landing() {
         {/* Steps */}
         <section className="py-16 sm:py-20 border-t border-line">
           <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-tight">Подключение за три шага</h2>
-          <ol className="mt-12 grid md:grid-cols-3 gap-10">
+          <ol className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-10">
             {[
               ['Регистрация', 'Укажите email и пароль — договор-оферта принимается онлайн.'],
               ['Анкета магазина', 'Название, ИНН и система налогообложения. Проверка занимает секунды.'],
@@ -155,7 +155,7 @@ export default function Landing() {
       </main>
 
       <footer className="bg-sunken mt-10">
-        <div className="max-w-[1200px] mx-auto px-5 sm:px-8 py-14 grid sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] gap-10 text-[15px]">
+        <div className="max-w-[1200px] mx-auto px-5 sm:px-8 py-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] gap-10 text-[15px]">
           <div>
             <Logo />
             <p className="mt-4 text-muted max-w-xs">Сервис приёма платежей для интернет-магазинов, приложений и офлайн-бизнеса.</p>
@@ -184,7 +184,7 @@ function FooterCol({ title, links }: { title: string; links: [string, string][] 
 
 function Feature({ title, text, points, art, reverse, link }: { title: string; text: string; points: string[]; art: ReactNode; reverse?: boolean; link?: { to: string; label: string } }) {
   return (
-    <div className="rounded-[40px] bg-sunken grid lg:grid-cols-2 gap-10 px-6 sm:px-14 py-12 sm:py-14 items-center">
+    <div className="rounded-[40px] bg-sunken grid grid-cols-1 lg:grid-cols-2 gap-10 px-6 sm:px-14 py-12 sm:py-14 items-center">
       <div className={cx(reverse && 'lg:order-2')}>
         <h3 className="text-[26px] sm:text-[32px] font-bold tracking-[-0.025em] leading-tight">{title}</h3>
         <p className="mt-4 text-lg text-muted">{text}</p>

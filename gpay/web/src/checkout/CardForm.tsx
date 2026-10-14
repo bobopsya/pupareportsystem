@@ -20,7 +20,13 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shake, setShake] = useState(0);
+  const [shaking, setShaking] = useState(false);
+  // Restart the shake animation without remounting the inputs (that would drop focus and close the phone keyboard).
+  const shake = () => {
+    setShaking(false);
+    requestAnimationFrame(() => setShaking(true));
+    setTimeout(() => setShaking(false), 450);
+  };
   const expRef = useRef<HTMLInputElement>(null);
   const cscRef = useRef<HTMLInputElement>(null);
 
@@ -66,15 +72,15 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
     setTouched({ pan: true, exp: true, csc: true, email: true });
     setError(null);
     if (Object.keys(errors).length || !emailOk) {
-      setShake((s) => s + 1);
+      shake();
       return;
     }
     setBusy(true);
     try {
       const hashes = await loadHashes();
       if (!hashes.has(await sha256(pan))) {
-        setError('Карта не поддерживается. Попробуйте другую карту или выберите иной способ оплаты.');
-        setShake((s) => s + 1);
+        setError('Карта не поддерживается. Выберите другую карту или способ оплаты.');
+        shake();
         return;
       }
       const [mm, yy] = exp.split('/');
@@ -85,14 +91,22 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
       ]);
       onResult(r.result, r.payment);
     } catch (e) {
-      setError(e instanceof ApiError && e.code === 'card_not_supported' ? 'Карта не поддерживается. Попробуйте другую карту или выберите иной способ оплаты.' : errorText(e));
-      setShake((s) => s + 1);
+      setError(e instanceof ApiError && e.code === 'card_not_supported' ? 'Карта не поддерживается. Выберите другую карту или способ оплаты.' : errorText(e));
+      shake();
     } finally {
       setBusy(false);
     }
   };
 
   const show = (k: string) => touched[k] && errors[k];
+  const shownError = error ?? (show('pan') || show('exp') || show('csc') || null);
+  const message = shownError
+    ? { tone: 'bad', text: shownError }
+    : busy
+      ? { tone: 'muted', text: 'Проверяем карту…' }
+      : panComplete && supported && !errors.pan
+        ? { tone: 'muted', text: `${BRAND_NAME[brand]} · карта будет проверена банком-эмитентом` }
+        : { tone: 'muted', text: '' };
 
   return (
     <form
@@ -103,7 +117,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
       }}
       noValidate
     >
-      <div key={shake} className={cx('rounded-[14px] border-[1.5px] bg-sunken transition-colors focus-within:bg-surface', shake ? 'gp-shake' : '', show('pan') || show('exp') || show('csc') || error ? 'border-bad' : 'border-transparent focus-within:border-fg')}>
+      <div className={cx('rounded-[14px] border-[1.5px] bg-sunken transition-colors focus-within:bg-surface', shaking && 'gp-shake', show('pan') || show('exp') || show('csc') || error ? 'border-bad' : 'border-transparent focus-within:border-fg')}>
         <div className="relative">
           <label htmlFor="cc-number" className="sr-only">Номер карты</label>
           <input
@@ -114,9 +128,9 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
             value={formatPan(pan)}
             onChange={(e) => onPan(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, pan: true }))}
-            className="w-full h-14 bg-transparent pl-11 pr-[52px] text-[17px] tabular-nums tracking-[0.02em] placeholder:tracking-normal placeholder:text-faint focus:outline-none"
+            className="w-full h-14 bg-transparent pl-4 min-[360px]:pl-11 pr-[60px] text-base min-[360px]:text-[17px] tabular-nums placeholder:text-faint focus:outline-none"
           />
-          <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 size-[18px] text-faint" />
+          <CreditCard className="hidden min-[360px]:block absolute left-3.5 top-1/2 -translate-y-1/2 size-[18px] text-faint pointer-events-none" />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity" style={{ opacity: supported ? 1 : 0 }}>
             {supported && <PayLogo name={brand} />}
           </span>
@@ -160,13 +174,13 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
           </div>
         </div>
       </div>
-      {(error || show('pan') || show('exp') || show('csc')) && (
-        <p className="-mt-2 text-[13px] text-bad gp-fade-up">{error ?? errors.pan ?? errors.exp ?? errors.csc}</p>
-      )}
-      {panComplete && supported && !errors.pan && <p className="-mt-2 text-[13px] text-muted">{BRAND_NAME[brand]} · карта будет проверена банком-эмитентом</p>}
+      {/* One reserved line for errors and hints, so the pay button never moves. */}
+      <p className={cx('-mt-2 min-h-10 text-[13px] leading-5', message.tone === 'bad' ? 'text-bad' : 'text-muted')} aria-live="polite">
+        {message.text}
+      </p>
 
-      <Button type="submit" variant="primary" size="lg" loading={busy} className="w-full mt-1" icon={!busy && <Lock className="size-4" />}>
-        {busy ? 'Проверяем карту…' : `Оплатить ${money(data.payment.amount, data.payment.currency)}`}
+      <Button type="submit" variant="primary" size="lg" loading={busy} className="w-full -mt-1" icon={!busy && <Lock className="size-4" />}>
+        Оплатить {money(data.payment.amount, data.payment.currency)}
       </Button>
     </form>
   );
