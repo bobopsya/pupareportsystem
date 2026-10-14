@@ -10,6 +10,9 @@ import { parseAmount } from './domain/money.js';
 import { tick } from './domain/payments.js';
 import { vatOf } from './domain/receipts.js';
 import { deliverDue, signature } from './domain/webhooks.js';
+import { resetBankCache } from './domain/bank.js';
+import { tickBank } from './domain/bankpay.js';
+import { sign as bankSign } from './domain/signing.js';
 import { hmacHex, sha256 } from './util.js';
 
 let now = Date.UTC(2026, 9, 13, 9, 0, 0);
@@ -292,5 +295,94 @@ describe('llms.txt', () => {
     expect(full.body).toContain('`4111 1111 1111 1111`');
     expect(full.body).toContain('`payment.succeeded`');
     expect(full.body).toContain('(`sbp`) | 0,7%');
+  });
+});
+
+describe('Bobobank integration', () => {
+  const BANK_PAN = '2204551234567891';
+  let calls: { method: string; url: string; body: unknown; key?: string }[];
+  let authStatus: string;
+
+  beforeEach(async () => {
+    resetBankCache();
+    const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://pay.test', WEBHOOK_ALLOW_PRIVATE: '1', BANK_INTERNAL_URL: 'http://bank.internal', BANK_PUBLIC_URL: 'https://bank.test', BANK_GPAY_SECRET: 'shared' });
+    ctx = createCtx(openDb(null), cfg, () => now);
+    ctx.http = async () => new Response('ok');
+    calls = [];
+    authStatus = 'pending';
+    ctx.bankHttp = async (url, init) => {
+      const path = url.replace('http://bank.internal', '');
+      const body = init.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ method: String(init.method), url: path, body, key: (init.headers as Record<string, string>)['idempotence-key'] });
+      if (path === '/internal/v1/cards') return Response.json({ hashes: [sha256(BANK_PAN)], bins: ['220455'] });
+      if (path === '/internal/v1/authorize') return Response.json({ status: 'pending', authorization_id: 'auth_1', expires_at: now + 300_000 });
+      if (path === '/internal/v1/authorizations/auth_1') return Response.json({ id: 'auth_1', status: authStatus, reason: authStatus === 'declined' ? 'declined_by_customer' : null });
+      if (path === '/internal/v1/links/claim') return Response.json({ account: { number: '40802810000001234567', name: 'ИП Петров', holder: 'ИП Петров', currency: 'RUB' } });
+      return Response.json({ status: 'succeeded' });
+    };
+    app = await buildApp(ctx);
+  });
+
+  it('pays with a Bobobank card after confirmation in the bank app, refunds and pays out bank money', async () => {
+    const { secret, headers, shopId } = await merchant();
+    const cards = (await app.inject({ url: '/api/checkout/cards' })).json();
+    expect(cards.hashes).toContain(sha256(BANK_PAN));
+    expect(cards.bankBins).toEqual(['220455']);
+
+    const p = (await newPayment(secret)).json();
+    const r = (await pay(p.id, card(BANK_PAN))).json();
+    expect(r.result.result).toBe('processing');
+    expect(r.payment.action).toMatchObject({ type: 'bank_confirm', bank: 'Bobobank' });
+    expect(calls.find((c) => c.url === '/internal/v1/authorize')!.body).toMatchObject({ pan: BANK_PAN, amount: 150000, currency: 'RUB', capture: true, merchant: { name: 'Кофейня', mcc: 5999 } });
+
+    authStatus = 'captured';
+    await tickBank(ctx);
+    const paid = (await api(secret, 'GET', `/payments/${p.id}`)).json();
+    expect(paid).toMatchObject({ status: 'succeeded', test: false, payment_method: { card: { issuer_name: 'Bobobank' } } });
+
+    let bal = (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json().balances.find((b: { currency: string }) => b.currency === 'RUB');
+    expect(bal).toMatchObject({ live: 145800, test: 0 });
+    // Bank money cannot leave to a fictional card, only to the linked Bobobank account.
+    const toCard = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '100.00', currency: 'RUB', destination: 'card', cardLast4: '1234' } });
+    expect(toCard.statusCode).toBe(400);
+    const noAcc = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '100.00', currency: 'RUB', destination: 'bobobank' } });
+    expect(noAcc.statusCode).toBe(400);
+    const link = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/bank-link`, headers, payload: { code: '1234-5678' } });
+    expect(link.json().payoutAccount.number).toBe('40802810000001234567');
+
+    const rf = await api(secret, 'POST', '/refunds', { payment_id: p.id, amount: { value: '500.00', currency: 'RUB' } }, 'rf-bank');
+    expect(rf.statusCode).toBe(200);
+    expect(calls.find((c) => c.url === '/internal/v1/authorizations/auth_1/refund')!.body).toMatchObject({ amount: 50000 });
+
+    const po = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '958.00', currency: 'RUB', destination: 'bobobank' } });
+    expect(po.json().payout.status).toBe('succeeded');
+    expect(calls.find((c) => c.url === '/internal/v1/credits')!.body).toMatchObject({ amount: 95800, destination: { type: 'account', number: '40802810000001234567' } });
+    bal = (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json().balances.find((b: { currency: string }) => b.currency === 'RUB');
+    expect(bal.live).toBe(0);
+  });
+
+  it('shows a decline when the owner rejects the purchase in the app', async () => {
+    const { secret } = await merchant();
+    const p = (await newPayment(secret)).json();
+    await pay(p.id, card(BANK_PAN));
+    authStatus = 'declined';
+    await tickBank(ctx);
+    const pub = (await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment;
+    expect(pub).toMatchObject({ status: 'pending', action: null, lastDecline: { message: 'Покупка отклонена в приложении банка.' } });
+  });
+
+  it('accepts SBP payments made in the bank app over the signed internal API', async () => {
+    const { secret } = await merchant();
+    const p = (await newPayment(secret, { capture: false })).json();
+    const path = `/internal/bank/payments/${p.id}/sbp`;
+    const raw = JSON.stringify({ operation_id: 'B123', payer: { name: 'Иван П.' } });
+    const unsigned = await app.inject({ method: 'POST', url: path, headers: { 'content-type': 'application/json' }, payload: raw });
+    expect(unsigned.statusCode).toBe(401);
+    const info = await app.inject({ url: `/internal/bank/payments/${p.id}`, headers: { 'x-bank-signature': bankSign('shared', 'GET', `/internal/bank/payments/${p.id}`, '', Math.floor(now / 1000)) } });
+    expect(info.json()).toMatchObject({ amount: 150000, sbp: true, merchant: { name: 'Кофейня' } });
+    const ok = await app.inject({ method: 'POST', url: path, headers: { 'content-type': 'application/json', 'x-bank-signature': bankSign('shared', 'POST', path, raw, Math.floor(now / 1000)) }, payload: raw });
+    expect(ok.json().status).toBe('succeeded');
+    const paid = (await api(secret, 'GET', `/payments/${p.id}`)).json();
+    expect(paid).toMatchObject({ status: 'succeeded', test: false, payment_method: { type: 'sbp', title: 'СБП · Bobobank' } });
   });
 });

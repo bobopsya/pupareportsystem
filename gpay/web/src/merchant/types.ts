@@ -13,6 +13,9 @@ export interface Shop {
   fees: Record<MethodType, number>;
   returnUrl: string;
   defaultVat: string;
+  mcc: number;
+  payoutAccount: PayoutAccount | null;
+  bankEnabled: boolean;
   kkt: { rn: string; fn: string; fd: number; shift: number };
   createdAt: number;
 }
@@ -39,6 +42,10 @@ export interface PaymentRowT {
 export interface Balance {
   currency: string;
   available: number;
+  /** Bobobank money: can be paid out to the linked Bobobank account. */
+  live: number;
+  /** Game cards and simulated methods. */
+  test: number;
   inTransit: number;
   held: number;
   paidOut: number;
@@ -62,3 +69,11 @@ export const TAX_SYSTEMS: Record<string, string> = { osn: 'ОСН', usn_income: 
 export const VAT_LABEL: Record<string, string> = {
   none: 'Без НДС', vat0: 'НДС 0%', vat5: 'НДС 5%', vat7: 'НДС 7%', vat10: 'НДС 10%', vat22: 'НДС 22%', vat105: 'НДС 5/105', vat107: 'НДС 7/107', vat110: 'НДС 10/110', vat122: 'НДС 22/122',
 };
+
+export interface PayoutAccount {
+  number: string;
+  name: string;
+  holder: string;
+  currency: string;
+  linkedAt: number;
+}

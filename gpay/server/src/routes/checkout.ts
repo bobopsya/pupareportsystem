@@ -12,6 +12,9 @@ import {
 import type { FiscalReceipt, ReceiptRequest } from '../domain/receipts.js';
 import { quittancePdf, receiptPdf } from '../pdf.js';
 import { safeJson, sha256 } from '../util.js';
+import { bankCards } from '../domain/bank.js';
+import { isBankCard, payWithBankCard } from '../domain/bankpay.js';
+import { findGameCard } from '../domain/cards.js';
 
 function publicShop(ctx: Ctx, shopId: number) {
   const s = getShop(ctx, shopId)!;
@@ -25,7 +28,7 @@ function lastDecline(ctx: Ctx, id: string) {
 
 export function publicPayment(ctx: Ctx, p: PaymentRow) {
   const receipt = safeJson<ReceiptRequest | null>(p.receipt, null);
-  const action = safeJson<{ type: string } | null>(p.pending_action, null);
+  const action = safeJson<{ type: string; until?: number; bank?: string } | null>(p.pending_action, null);
   const method = safeJson<Record<string, unknown> | null>(p.method, null);
   const receipts = ctx.db.prepare('SELECT id, type, refund_id, created_at FROM receipts WHERE payment_id = ? ORDER BY created_at').all(p.id) as { id: string; type: string; refund_id: string | null; created_at: number }[];
   return {
@@ -42,7 +45,9 @@ export function publicPayment(ctx: Ctx, p: PaymentRow) {
     capturedAt: p.captured_at,
     returnUrl: p.return_url,
     attemptsLeft: MAX_ATTEMPTS - p.attempts,
-    action: action?.type === 'processing' ? { type: 'processing', until: p.processing_until } : null,
+    action: action?.type === 'processing' ? { type: 'processing', until: p.processing_until } : action?.type === 'bank_confirm' ? { type: 'bank_confirm', until: action.until, bank: action.bank } : null,
+    funding: p.funding,
+    sbpBankUrl: ctx.cfg.bankPublicUrl ? `${ctx.cfg.bankPublicUrl}/sbp/pay?payment=${p.id}` : null,
     method: method ? { type: method.type, title: method.title, crypto: method.crypto, plan: method.plan, sbp: method.type === 'sbp' ? { operationId: method.sbp_operation_id } : undefined } : null,
     methodType: p.method_type,
     cancellation: safeJson(p.cancellation, null),
@@ -59,7 +64,13 @@ function payable(ctx: Ctx, id: string): PaymentRow {
 
 export function registerCheckoutRoutes(app: FastifyInstance, ctx: Ctx) {
   /** SHA-256 of game card numbers: the page rejects anything else before it leaves the browser. */
-  app.get('/api/checkout/cards', async () => ({ hashes: (ctx.db.prepare('SELECT pan FROM game_cards').all() as { pan: string }[]).map((c) => sha256(c.pan)) }));
+  app.get('/api/checkout/cards', async (req) => {
+    const fresh = (req.query as { fresh?: string }).fresh === '1';
+    const bank = await bankCards(ctx, fresh);
+    const game = (ctx.db.prepare('SELECT pan FROM game_cards').all() as { pan: string }[]).map((c) => sha256(c.pan));
+    // Bobobank cards are listed by hash too: numbers outside both lists never leave the browser.
+    return { hashes: [...game, ...bank.hashes], bankBins: bank.bins };
+  });
 
   /** Card numbers and their scripted outcomes, listed in the API docs. */
   app.get('/api/public/cards', async () => ({
@@ -82,7 +93,8 @@ export function registerCheckoutRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post<{ Params: { id: string } }>('/api/checkout/payments/:id/card', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
     const body = cardBody.parse(req.body);
     const p = payable(ctx, req.params.id);
-    const result = payWithCard(ctx, p, body);
+    const pan = body.pan.replace(/\D/g, '');
+    const result = !findGameCard(ctx.db, pan) && (await isBankCard(ctx, pan)) ? await payWithBankCard(ctx, p, body) : payWithCard(ctx, p, body);
     return { result, payment: publicPayment(ctx, loadPayment(ctx, p.id)!) };
   });
 

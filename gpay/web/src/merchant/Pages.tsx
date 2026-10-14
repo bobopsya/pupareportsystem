@@ -8,7 +8,7 @@ import { api, errorText } from '../lib/api';
 import { compact, dateTime, METHOD_TITLE, money, plural, REASONS, shortDate, toAmount } from '../lib/format';
 import { useShop } from './Layout';
 import { Kpi, useAnalytics } from './Overview';
-import type { Balance } from './types';
+import type { Balance, PayoutAccount } from './types';
 
 // ---------- Refunds ----------
 interface RefundItem {
@@ -134,7 +134,7 @@ interface Payout {
   status: 'pending' | 'succeeded' | 'canceled';
   amountMinor: number;
   currency: string;
-  payout_destination: { card_last4?: string };
+  payout_destination: { type?: string; card_last4?: string; account_number?: string; holder?: string };
   createdAt: number;
   succeeded_at?: string;
 }
@@ -144,7 +144,7 @@ export function Payouts() {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ['payouts', shop.id],
-    queryFn: () => api<{ balances: Balance[]; fees: { currency: string; fee: number; gross: number }[]; items: Payout[] }>(`/m/shops/${shop.id}/payouts`),
+    queryFn: () => api<{ balances: Balance[]; payoutAccount: PayoutAccount | null; bankEnabled: boolean; fees: { currency: string; fee: number; gross: number }[]; items: Payout[] }>(`/m/shops/${shop.id}/payouts`),
     refetchInterval: (q) => (q.state.data?.items.some((i) => i.status === 'pending') ? 2000 : 15000),
   });
   const [open, setOpen] = useState<string | null>(null);
@@ -168,6 +168,12 @@ export function Payouts() {
                 <div className="flex justify-between"><dt className="text-muted inline-flex items-center gap-1.5"><CheckCircle2 className="size-3.5" />Выплачено</dt><dd className="tabular-nums">{money(b.paidOut, b.currency)}</dd></div>
                 {fee && <div className="flex justify-between"><dt className="text-muted inline-flex items-center gap-1.5"><Landmark className="size-3.5" />Комиссия GPAY</dt><dd className="tabular-nums">{money(fee.fee, b.currency)}</dd></div>}
               </dl>
+              {data.bankEnabled && (
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[13px]">
+                  <div className="rounded-xl bg-[#e2f6eb] px-3 py-2 text-[#0a6b3e] dark:bg-[#12261b] dark:text-[#45d98a]"><div className="opacity-80">Bobobank</div><div className="font-semibold tabular-nums">{money(b.live, b.currency)}</div></div>
+                  <div className="rounded-xl bg-sunken px-3 py-2"><div className="text-muted">Тестовые</div><div className="font-semibold tabular-nums">{money(b.test, b.currency)}</div></div>
+                </div>
+              )}
               <Button className="mt-4" variant={b.currency === 'RUB' ? 'primary' : 'secondary'} disabled={b.available <= 0} icon={<ArrowDownToLine className="size-4" />} onClick={() => setOpen(b.currency)}>
                 Вывести
               </Button>
@@ -196,7 +202,7 @@ export function Payouts() {
               <li key={po.id} className="flex items-center gap-3 px-5 py-3 text-sm">
                 <CreditCard className="size-4 text-muted shrink-0" />
                 <span className="flex-1 min-w-0">
-                  <span className="block">На карту •• {po.payout_destination.card_last4}</span>
+                  <span className="block">{po.payout_destination.type === 'bobobank' ? `На счёт Bobobank ${po.payout_destination.account_number ?? ''}` : `На карту •• ${po.payout_destination.card_last4}`}</span>
                   <span className="block text-xs text-faint font-mono truncate">{po.id} · {dateTime(po.createdAt)}</span>
                 </span>
                 <Badge tone={po.status === 'succeeded' ? 'ok' : po.status === 'pending' ? 'warn' : 'bad'}>{po.status === 'succeeded' ? 'Зачислено' : po.status === 'pending' ? 'В обработке' : 'Отменено'}</Badge>
@@ -206,19 +212,21 @@ export function Payouts() {
           </ul>
         )}
       </Card>
-      <PayoutModal currency={open} balance={data.balances.find((b) => b.currency === open)} onClose={() => setOpen(null)} onDone={() => void qc.invalidateQueries({ queryKey: ['payouts', shop.id] })} />
+      {open && <PayoutModal key={open} currency={open} balance={data.balances.find((b) => b.currency === open)} account={data.bankEnabled ? data.payoutAccount : null} bankEnabled={data.bankEnabled} onClose={() => setOpen(null)} onDone={() => void qc.invalidateQueries({ queryKey: ['payouts', shop.id] })} />}
     </div>
   );
 }
 
-function PayoutModal({ currency, balance, onClose, onDone }: { currency: string | null; balance?: Balance; onClose: () => void; onDone: () => void }) {
+function PayoutModal({ currency, balance, account, bankEnabled, onClose, onDone }: { currency: string | null; balance?: Balance; account: PayoutAccount | null; bankEnabled: boolean; onClose: () => void; onDone: () => void }) {
   const shop = useShop();
   const toast = useToast();
+  const [dest, setDest] = useState<'bobobank' | 'card'>(() => (balance && balance.live > 0 ? 'bobobank' : 'card'));
   const [amount, setAmount] = useState('');
   const [card, setCard] = useState(() => localStorage.getItem('gpay.payoutCard') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!currency || !balance) return null;
+  const max = bankEnabled ? (dest === 'bobobank' ? balance.live : balance.test) : balance.available;
   return (
     <Modal
       open
@@ -231,14 +239,15 @@ function PayoutModal({ currency, balance, onClose, onDone }: { currency: string 
             variant="primary"
             loading={busy}
             onClick={async () => {
-              const a = amount ? toAmount(amount) : (balance.available / 100).toFixed(2);
+              const a = amount ? toAmount(amount) : (max / 100).toFixed(2);
               if (!a) return setError('Некорректная сумма');
-              if (!/^\d{4}$/.test(card)) return setError('Укажите последние 4 цифры карты');
+              if (dest === 'card' && !/^\d{4}$/.test(card)) return setError('Укажите последние 4 цифры карты');
+              if (dest === 'bobobank' && !account) return setError('Подключите счёт Bobobank в настройках магазина');
               setBusy(true);
               setError(null);
               try {
-                await api(`/m/shops/${shop.id}/payouts`, { body: { amount: a, currency, cardLast4: card } });
-                localStorage.setItem('gpay.payoutCard', card);
+                await api(`/m/shops/${shop.id}/payouts`, { body: { amount: a, currency, destination: dest, cardLast4: dest === 'card' ? card : undefined } });
+                if (dest === 'card') localStorage.setItem('gpay.payoutCard', card);
                 toast('Выплата отправлена');
                 onDone();
                 onClose();
@@ -255,12 +264,26 @@ function PayoutModal({ currency, balance, onClose, onDone }: { currency: string 
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label="Сумма" hint={`Доступно ${money(balance.available, currency, { exact: true })}. Пусто — вывести всё.`}>
-          <Input inputMode="decimal" placeholder={(balance.available / 100).toFixed(2)} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        {bankEnabled && (
+          <Segmented value={dest} onChange={setDest} options={[{ value: 'bobobank', label: 'На счёт Bobobank' }, { value: 'card', label: 'Тестовые — на карту' }]} />
+        )}
+        <Field label="Сумма" hint={`Доступно ${money(max, currency, { exact: true })}. Пусто — вывести всё.`}>
+          <Input inputMode="decimal" placeholder={(max / 100).toFixed(2)} value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
-        <Field label="Карта получателя" hint="Последние 4 цифры карты, привязанной к расчётному счёту">
-          <Input inputMode="numeric" placeholder="1234" maxLength={4} value={card} onChange={(e) => setCard(e.target.value.replace(/\D/g, ''))} mono />
-        </Field>
+        {dest === 'bobobank' ? (
+          account ? (
+            <div className="rounded-xl bg-sunken px-4 py-3 text-sm">
+              <div className="font-semibold">{account.holder}</div>
+              <div className="text-muted tabular-nums">Счёт {account.number.slice(0, 5)}…{account.number.slice(-4)} · Bobobank · деньги придут сразу</div>
+            </div>
+          ) : (
+            <div className="rounded-xl bg-sunken px-4 py-3 text-sm text-muted">Счёт не подключён. Откройте <Link to={`/app/${shop.id}/settings`} className="font-medium text-fg underline">настройки магазина</Link> → «Выплаты в Bobobank».</div>
+          )
+        ) : (
+          <Field label="Карта получателя" hint="Последние 4 цифры карты, привязанной к расчётному счёту">
+            <Input inputMode="numeric" placeholder="1234" maxLength={4} value={card} onChange={(e) => setCard(e.target.value.replace(/\D/g, ''))} mono />
+          </Field>
+        )}
         {error && <ErrorNote>{error}</ErrorNote>}
       </div>
     </Modal>

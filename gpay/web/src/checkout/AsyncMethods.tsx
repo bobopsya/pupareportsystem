@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Landmark, Loader2, Smartphone } from 'lucide-react';
+import { ArrowLeft, BellRing, Check, ExternalLink, Landmark, Loader2, Smartphone } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { PayLogo, SbpMark } from '../components/PaymentLogos';
 import { QR } from '../components/QR';
@@ -66,6 +66,36 @@ function BackLink({ id, onBack }: { id: string; onBack: (p: PublicPayment) => vo
 }
 
 // ---------- SBP ----------
+
+/** QR code that opens the order in Bobobank; the page polls until the bank pays it. */
+function BobobankSbp({ payment, url, onUpdate }: { payment: PublicPayment; url: string; onUpdate: (p: PublicPayment) => void }) {
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try {
+        const r = await api<{ payment: PublicPayment }>(`/checkout/payments/${payment.id}`);
+        if (r.payment.status !== 'pending') onUpdate(r.payment);
+      } catch {
+        /* keep polling */
+      }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [payment.id, onUpdate]);
+  return (
+    <div className="flex flex-col items-center gap-4 rounded-2xl border border-line p-5 text-center sm:flex-row sm:text-left">
+      <div className="relative shrink-0 rounded-2xl bg-white p-3 ring-1 ring-line">
+        <QR text={url} className="size-36" dark="#0b3d26" />
+        <span className="absolute left-1/2 top-1/2 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg bg-white shadow-card"><SbpMark className="size-6" /></span>
+      </div>
+      <div className="flex min-w-0 flex-col gap-2">
+        <div className="font-semibold">Оплатить в Bobobank</div>
+        <p className="text-sm text-muted">Наведите камеру телефона на код — откроется приложение Bobobank. Подтвердите оплату {money(payment.amount, payment.currency)}, и страница обновится сама.</p>
+        <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 self-center rounded-xl bg-[#0fa760] px-4 text-[15px] font-medium text-white hover:bg-[#0c9455] sm:self-start">
+          Открыть Bobobank <ExternalLink className="size-4" />
+        </a>
+      </div>
+    </div>
+  );
+}
 export function SbpPanel({ data, email, emailOk, onResult, onBack }: { data: CheckoutData; email: string; emailOk: boolean; onResult: Done; onBack: (p: PublicPayment) => void }) {
   const p = data.payment;
   const processing = p.action?.type === 'processing' && p.methodType === 'sbp' ? p.action.until : null;
@@ -100,6 +130,8 @@ export function SbpPanel({ data, email, emailOk, onResult, onBack }: { data: Che
 
   return (
     <div className="flex flex-col gap-4">
+      {p.sbpBankUrl && p.currency === 'RUB' && <BobobankSbp payment={p} url={p.sbpBankUrl} onUpdate={onBack} />}
+      {p.sbpBankUrl && p.currency === 'RUB' && <div className="flex items-center gap-3 text-xs text-faint"><span className="h-px flex-1 bg-line" />или в приложении другого банка<span className="h-px flex-1 bg-line" /></div>}
       <div className="flex items-start gap-3 rounded-2xl bg-sunken p-5">
         <Smartphone className="size-5 mt-0.5 shrink-0" />
         <p className="text-[15px] text-muted">
@@ -303,6 +335,34 @@ export function CryptoPanel({ data, email, emailOk, onResult, onBack }: { data: 
 
 // ---------- Card confirmation with the issuing bank ----------
 /** Shown while the issuer confirms a card payment (3-D Secure runs on the bank side, nothing to type). */
+/** Bobobank card: the owner confirms the purchase in the bank app; the page waits and polls. */
+export function BankConfirm({ data, onBack }: { data: CheckoutData; onBack: (p: PublicPayment) => void }) {
+  const p = data.payment;
+  const until = p.action?.type === 'bank_confirm' ? p.action.until : Date.now();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const left = Math.max(0, Math.round((until - now) / 1000));
+  return (
+    <div className="flex flex-col items-center text-center gap-5 py-4 gp-fade-up">
+      <div className="relative flex size-16 items-center justify-center rounded-full bg-[#e2f6eb] text-[#0a8a4e]">
+        <span className="absolute inset-0 rounded-full bg-[#0fa760]/25 animate-ping" />
+        <BellRing className="relative size-7" />
+      </div>
+      <div>
+        <div className="text-xl font-bold">Подтвердите покупку в приложении {p.action?.type === 'bank_confirm' ? p.action.bank : 'банка'}</div>
+        <p className="mt-1 text-[15px] text-muted max-w-sm">Мы отправили запрос на {money(p.amount, p.currency)} по карте {p.method?.title}. Откройте приложение банка и нажмите «Подтвердить».</p>
+      </div>
+      <div className="flex items-center gap-2 text-sm text-muted tabular-nums">
+        <Loader2 className="size-3.5 animate-spin" /> Ждём подтверждения · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
+      </div>
+      <BackLink id={p.id} onBack={onBack} />
+    </div>
+  );
+}
+
 export function BankCheck({ data }: { data: CheckoutData }) {
   const p = data.payment;
   const until = p.action?.type === 'processing' ? p.action.until : null;

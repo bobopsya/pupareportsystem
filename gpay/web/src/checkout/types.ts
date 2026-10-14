@@ -25,7 +25,10 @@ export interface PublicPayment {
   capturedAt: number | null;
   returnUrl: string | null;
   attemptsLeft: number;
-  action: { type: 'processing'; until: number } | null;
+  action: { type: 'processing'; until: number } | { type: 'bank_confirm'; until: number; bank: string } | null;
+  /** Bobobank page that pays this order by SBP (encoded in the QR code), when the bank is connected. */
+  sbpBankUrl: string | null;
+  funding: 'bank' | 'test';
   method: {
     type: MethodType;
     title: string;

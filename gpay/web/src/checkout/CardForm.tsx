@@ -7,9 +7,23 @@ import { brandOf, formatPan, luhn, sha256 } from '../lib/cards';
 import { money } from '../lib/format';
 import type { CheckoutData, PayResult, PublicPayment } from './types';
 
-let hashesPromise: Promise<Set<string>> | null = null;
-/** Game card hashes; a number outside the list never leaves the browser. */
-const loadHashes = () => (hashesPromise ??= api<{ hashes: string[] }>('/checkout/cards').then((r) => new Set(r.hashes)));
+type CardList = { hashes: Set<string>; bins: Set<string> };
+let hashesPromise: Promise<CardList> | null = null;
+const fetchCards = (fresh = false) =>
+  api<{ hashes: string[]; bankBins?: string[] }>(`/checkout/cards${fresh ? '?fresh=1' : ''}`).then((r) => ({ hashes: new Set(r.hashes), bins: new Set(r.bankBins ?? []) }));
+/** Hashes of game cards and Bobobank cards; a number outside the list never leaves the browser. */
+const loadHashes = () => (hashesPromise ??= fetchCards());
+
+/** A just-issued Bobobank card may be missing from the cached list: refresh it once for the bank's BINs. */
+async function knownCard(pan: string) {
+  const h = await sha256(pan);
+  let list = await loadHashes();
+  if (!list.hashes.has(h) && list.bins.has(pan.slice(0, 6))) {
+    hashesPromise = fetchCards(true);
+    list = await hashesPromise;
+  }
+  return list.hashes.has(h);
+}
 
 const BRAND_NAME = { visa: 'Visa', mastercard: 'Mastercard', mir: 'МИР', unionpay: 'UnionPay' } as const;
 
@@ -77,8 +91,7 @@ export function CardForm({ data, email, emailOk, onResult }: { data: CheckoutDat
     }
     setBusy(true);
     try {
-      const hashes = await loadHashes();
-      if (!hashes.has(await sha256(pan))) {
+      if (!(await knownCard(pan))) {
         setError('Карта не поддерживается. Выберите другую карту или способ оплаты.');
         shake();
         return;

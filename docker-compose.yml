@@ -2,6 +2,7 @@
 #   Caddy mode (ports 80/443 free):   COMPOSE_PROFILES=caddy in .env
 #   Behind existing nginx:            leave COMPOSE_PROFILES empty, nginx proxies to 127.0.0.1:${APP_PORT}
 #   GPAY payment system:              add "gpay" to COMPOSE_PROFILES (deploy/install-gpay.sh does it)
+#   Bobobank (game bank):             add "bobobank" to COMPOSE_PROFILES (deploy/install-bobobank.sh does it)
 services:
   app:
     build: .
@@ -31,10 +32,36 @@ services:
       COOKIE_SECURE: "1"
       PUBLIC_URL: https://${GPAY_DOMAIN:-pay.localhost}
       GPAY_DB_KEY: ${GPAY_DB_KEY:-}
+      # Bobobank connection (set by deploy/install-bobobank.sh); empty = GPAY works without the bank.
+      BANK_INTERNAL_URL: ${BANK_INTERNAL_URL:-}
+      BANK_PUBLIC_URL: ${BANK_PUBLIC_URL:-}
+      BANK_GPAY_SECRET: ${BANK_GPAY_SECRET:-}
     volumes:
       - ./gpay-data:/data
     ports:
       - "127.0.0.1:${GPAY_PORT:-8081}:8081"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  bobobank:
+    build: ./bobobank
+    image: bobobank:latest
+    profiles: ["bobobank"]
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: "1"
+      PUBLIC_URL: https://${BANK_DOMAIN:-bank.localhost}
+      BANK_DB_KEY: ${BANK_DB_KEY:-}
+      GPAY_INTERNAL_URL: http://gpay:8081
+      GPAY_PUBLIC_URL: https://${GPAY_DOMAIN:-pay.localhost}
+      BANK_GPAY_SECRET: ${BANK_GPAY_SECRET:-}
+    volumes:
+      - ./bobobank-data:/data
+    ports:
+      - "127.0.0.1:${BANK_PORT:-8082}:8082"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -47,6 +74,7 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       GPAY_DOMAIN: ${GPAY_DOMAIN:-pay.localhost}
+      BANK_DOMAIN: ${BANK_DOMAIN:-bank.localhost}
     ports:
       - "80:80"
       - "443:443"

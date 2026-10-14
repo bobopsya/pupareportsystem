@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createCtx } from './context.js';
 import { openDb } from './db.js';
+import { tickBank } from './domain/bankpay.js';
 import { tick } from './domain/payments.js';
 import { deliverDue } from './domain/webhooks.js';
 
@@ -18,6 +19,7 @@ setInterval(() => {
     app.log.error(err);
   }
   deliverDue(ctx).catch((err) => app.log.error(err));
+  tickBank(ctx).catch((err) => app.log.error(err));
 }, 2000).unref();
 
 const shutdown = async () => {

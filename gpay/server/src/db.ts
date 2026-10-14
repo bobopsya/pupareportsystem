@@ -243,6 +243,16 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX audit_ts ON audit(ts);
   `,
+  `
+  -- Bobobank integration. Money from Bobobank cards and SBP is "bank" money that can be paid out to the bank;
+  -- game cards and simulated methods stay "test" money inside GPAY.
+  ALTER TABLE payments ADD COLUMN funding TEXT NOT NULL DEFAULT 'test';
+  ALTER TABLE payments ADD COLUMN bank_auth_id TEXT;
+  ALTER TABLE payouts ADD COLUMN funding TEXT NOT NULL DEFAULT 'test';
+  ALTER TABLE shops ADD COLUMN mcc INTEGER NOT NULL DEFAULT 5999;
+  ALTER TABLE shops ADD COLUMN payout_account TEXT;
+  CREATE INDEX payments_bank_auth ON payments(bank_auth_id) WHERE bank_auth_id IS NOT NULL;
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

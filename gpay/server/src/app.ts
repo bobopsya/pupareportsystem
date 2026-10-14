@@ -11,6 +11,7 @@ import { ApiError, HttpError, type Ctx } from './context.js';
 import { seedGameCards } from './domain/cards.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { apiErrorBody, registerApiV1 } from './routes/api-v1.js';
+import { registerBankInternalRoutes } from './routes/bank-internal.js';
 import { registerCheckoutRoutes } from './routes/checkout.js';
 import { registerLlmsRoutes } from './routes/llms.js';
 import { registerMerchantRoutes } from './routes/merchant.js';
@@ -24,6 +25,17 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
     logger: opts.logger ? { level: ctx.cfg.logLevel, redact: ['req.headers.cookie', 'req.headers.authorization'] } : false,
     trustProxy: ctx.cfg.trustProxy ? (_addr: string, hop: number) => hop < 1 : false,
     bodyLimit: 512 * 1024,
+  });
+
+  // Keep the raw JSON body: Bobobank's requests are signed over the exact bytes.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    req.rawBody = body as string;
+    if (!body) return done(null, {});
+    try {
+      done(null, JSON.parse(body as string));
+    } catch {
+      done(Object.assign(new Error('Некорректный JSON'), { statusCode: 400 }), undefined);
+    }
   });
 
   await app.register(helmet, {
@@ -58,7 +70,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
     return payload;
   });
   await app.register(cookie);
-  await app.register(rateLimit, { max: 600, timeWindow: '1 minute' });
+  await app.register(rateLimit, { max: 600, timeWindow: '1 minute', allowList: (req) => req.url.startsWith('/internal/') });
 
   app.setErrorHandler((err, req, reply) => {
     const isApi = req.url.startsWith('/api/v1/');
@@ -82,6 +94,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerApiV1(app, ctx);
   registerCheckoutRoutes(app, ctx);
   registerLlmsRoutes(app, ctx);
+  registerBankInternalRoutes(app, ctx);
   registerMerchantRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
 
@@ -91,7 +104,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
     const indexHtml = fs.readFileSync(path.join(webDist, 'index.html'));
     app.get('/*', async (req, reply) => {
       const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '');
-      if (rel.startsWith('api/')) return reply.code(404).send({ error: 'Не найдено' });
+      if (rel.startsWith('api/') || rel.startsWith('internal/')) return reply.code(404).send({ error: 'Не найдено' });
       const file = path.join(webDist, rel);
       if (rel && file.startsWith(webDist + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
         if (rel === 'gpay.js') reply.header('access-control-allow-origin', '*');

@@ -1,5 +1,6 @@
 import { ApiError, type Ctx } from '../context.js';
 import { iso, newId, randomDigits, randomString, safeJson } from '../util.js';
+import { bankEnabled, bankRequest } from './bank.js';
 import { BRAND_TITLE, brandOf, findGameCard, luhn, OUTCOMES, type Outcome } from './cards.js';
 import { feeFor, METHODS, shopFees, type MethodType } from './fees.js';
 import { cryptoAmount, getRates } from './fx.js';
@@ -25,8 +26,12 @@ export interface ShopRow {
   fn_number: string;
   fd_counter: number;
   shift_no: number;
+  mcc: number;
+  payout_account: string | null;
   created_at: number;
 }
+
+export type Funding = 'bank' | 'test';
 
 export interface PaymentRow {
   id: string;
@@ -56,6 +61,9 @@ export interface PaymentRow {
   authorized_at: number | null;
   captured_at: number | null;
   capture_deadline: number | null;
+  /** 'bank' — paid with Bobobank money (can be paid out to the bank); 'test' — game cards and simulated methods. */
+  funding: Funding;
+  bank_auth_id: string | null;
 }
 
 /** How long the buyer has to pay a pending payment. */
@@ -138,7 +146,7 @@ export function serializePayment(ctx: Ctx, p: PaymentRow) {
     created_at: iso(p.created_at),
     expires_at: p.status === 'pending' ? iso(p.expires_at) : p.status === 'waiting_for_capture' ? iso(p.capture_deadline) : undefined,
     confirmation: p.status === 'pending' ? { type: 'redirect', confirmation_url: `${ctx.cfg.publicUrl}/pay/${p.id}`, return_url: p.return_url ?? undefined } : undefined,
-    test: false,
+    test: p.funding !== 'bank',
     refunded_amount: p.refunded ? money(p.refunded, p.currency) : undefined,
     refundable: p.status === 'succeeded' && p.refunded < p.amount,
     receipt_registration: p.status === 'succeeded' ? 'succeeded' : p.receipt ? 'pending' : undefined,
@@ -162,14 +170,15 @@ function onCaptured(ctx: Ctx, shop: ShopRow, p: PaymentRow) {
   }
 }
 
-/** Funds were authorized by the (simulated) payment network. */
-function authorize(ctx: Ctx, p: PaymentRow, method: Record<string, unknown>) {
+/** Funds were authorized by the payment network (simulated, or Bobobank for its own cards and SBP). */
+export function authorize(ctx: Ctx, p: PaymentRow, method: Record<string, unknown>, opts: { funding?: Funding; bankAuthId?: string } = {}) {
   const shop = getShop(ctx, p.shop_id)!;
   const type = method.type as MethodType;
   const fee = feeFor(p.amount, shopFees(ctx.db, shop.fees)[type]);
   const now = ctx.now();
   const authorization = { rrn: randomDigits(12), auth_code: randomDigits(6), three_d_secure: { applied: !!method.three_d_secure } };
   const stored = { ...method, three_d_secure: undefined, authorization };
+  ctx.db.prepare('UPDATE payments SET funding = ?, bank_auth_id = ? WHERE id = ?').run(opts.funding ?? 'test', opts.bankAuthId ?? null, p.id);
   if (p.capture) {
     ctx.db
       .prepare(`UPDATE payments SET status = 'succeeded', paid = 1, fee = ?, method_type = ?, method = ?, pending_action = NULL, processing_until = NULL, authorized_at = ?, captured_at = ? WHERE id = ?`)
@@ -187,6 +196,8 @@ function authorize(ctx: Ctx, p: PaymentRow, method: Record<string, unknown>) {
 }
 
 export function cancelPayment(ctx: Ctx, p: PaymentRow, party: 'merchant' | 'payment_network' | 'issuer' | 'gpay', reason: string) {
+  // A Bobobank hold (or an unanswered confirmation) is released right away.
+  if (p.bank_auth_id && bankEnabled(ctx)) void bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/void`, {}, `void:${p.id}`).catch(() => {});
   ctx.db
     .prepare(`UPDATE payments SET status = 'canceled', paid = 0, fee = 0, pending_action = NULL, processing_until = NULL, cancellation = ? WHERE id = ?`)
     .run(JSON.stringify({ party, reason }), p.id);
@@ -221,6 +232,7 @@ export function loadPayment(ctx: Ctx, id: string): PaymentRow | undefined {
 function assertPayable(ctx: Ctx, p: PaymentRow, type: MethodType) {
   if (p.status !== 'pending') throw new ApiError(400, 'invalid_state', 'Платёж уже не ожидает оплаты');
   if (p.processing_until) throw new ApiError(400, 'invalid_state', 'Платёж уже обрабатывается');
+  if (safeJson<{ type?: string } | null>(p.pending_action, null)?.type === 'bank_confirm') throw new ApiError(400, 'invalid_state', 'Платёж ждёт подтверждения в приложении банка');
   const shop = getShop(ctx, p.shop_id)!;
   if (shop.status !== 'active') throw new ApiError(403, 'forbidden', 'Магазин временно не принимает платежи');
   if (!shopMethods(shop).includes(type)) throw new ApiError(400, 'invalid_request', 'Этот способ оплаты недоступен');
@@ -235,7 +247,7 @@ export type PayResult =
   | { result: 'processing'; until: number }
   | { result: 'declined'; reason: string; message: string; canceled: boolean };
 
-function decline(ctx: Ctx, p: PaymentRow, reason: string, message: string, title?: string): PayResult {
+export function decline(ctx: Ctx, p: PaymentRow, reason: string, message: string, title?: string): PayResult {
   const attempts = p.attempts + 1;
   ctx.db.prepare('UPDATE payments SET attempts = ?, pending_action = NULL WHERE id = ?').run(attempts, p.id);
   addEvent(ctx, p.id, 'attempt_failed', { reason, message, method: title });
@@ -246,7 +258,7 @@ function decline(ctx: Ctx, p: PaymentRow, reason: string, message: string, title
   return { result: 'declined', reason, message, canceled: false };
 }
 
-const resultOf = (ctx: Ctx, id: string): PayResult => ({ result: getPaymentRow(ctx, id)!.status === 'waiting_for_capture' ? 'waiting_for_capture' : 'succeeded' });
+export const resultOf = (ctx: Ctx, id: string): PayResult => ({ result: getPaymentRow(ctx, id)!.status === 'waiting_for_capture' ? 'waiting_for_capture' : 'succeeded' });
 
 export interface CardInput {
   pan: string;
@@ -327,8 +339,10 @@ export function startAsync(ctx: Ctx, p: PaymentRow, input: AsyncInput): PayResul
 
 /** Buyer went back from the SBP/crypto screen to choose another method. */
 export function abortAsync(ctx: Ctx, p: PaymentRow) {
-  if (p.status !== 'pending' || !p.processing_until) return;
-  ctx.db.prepare('UPDATE payments SET method_type = NULL, method = NULL, processing_until = NULL, pending_action = NULL WHERE id = ?').run(p.id);
+  const bankWait = safeJson<{ type?: string } | null>(p.pending_action, null)?.type === 'bank_confirm';
+  if (p.status !== 'pending' || (!p.processing_until && !bankWait)) return;
+  if (bankWait && p.bank_auth_id && bankEnabled(ctx)) void bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/void`, {}, `void:${p.bank_auth_id}`).catch(() => {});
+  ctx.db.prepare('UPDATE payments SET method_type = NULL, method = NULL, processing_until = NULL, pending_action = NULL, bank_auth_id = NULL WHERE id = ?').run(p.id);
   addEvent(ctx, p.id, 'method_reset', {});
 }
 
@@ -368,21 +382,39 @@ export function serializeRefund(r: RefundRow) {
   return { id: r.id, payment_id: r.payment_id, status: r.status, amount: money(r.amount, r.currency), description: r.description || undefined, created_at: iso(r.created_at) };
 }
 
-export function refundPayment(ctx: Ctx, shop: ShopRow, p: PaymentRow, amount: number | undefined, description = ''): RefundRow {
+/** Checks a refund before anything is sent to the bank; returns the refund amount. */
+export function checkRefund(ctx: Ctx, shop: ShopRow, p: PaymentRow, amount: number | undefined, description = ''): number {
   if (p.status !== 'succeeded') throw new ApiError(400, 'invalid_state', 'Вернуть можно только успешный платёж');
   const left = p.amount - p.refunded;
   const sum = amount ?? left;
   if (left <= 0) throw new ApiError(400, 'invalid_state', 'Платёж уже полностью возвращён');
   if (sum <= 0 || sum > left) throw new ApiError(400, 'invalid_request', `Сумма возврата не может превышать ${formatAmount(left)} ${p.currency}`, 'amount.value');
   if (description.length > 250) throw new ApiError(400, 'invalid_request', 'description: до 250 символов', 'description');
-  const id = newId('rf');
+  assertRefundCovered(ctx, shop, p, sum);
+  return sum;
+}
+
+function assertRefundCovered(ctx: Ctx, shop: ShopRow, p: PaymentRow, sum: number) {
+  // Refunds are paid from the shop balance of the same kind of money (bank or test).
+  const b = balances(ctx, shop.id).find((x) => x.currency === p.currency);
+  const available = (p.funding === 'bank' ? b?.live : b?.test) ?? 0;
+  if (available < sum) {
+    throw new ApiError(400, 'insufficient_funds', `Недостаточно средств на балансе магазина для возврата: доступно ${formatAmount(Math.max(available, 0))} ${p.currency}. Дождитесь новых поступлений или уменьшите сумму возврата.`, 'amount.value');
+  }
+}
+
+export function refundPayment(ctx: Ctx, shop: ShopRow, p: PaymentRow, amount: number | undefined, description = '', refundId?: string): RefundRow {
+  if (p.status !== 'succeeded') throw new ApiError(400, 'invalid_state', 'Вернуть можно только успешный платёж');
+  const left = p.amount - p.refunded;
+  const sum = amount ?? left;
+  if (left <= 0) throw new ApiError(400, 'invalid_state', 'Платёж уже полностью возвращён');
+  if (sum <= 0 || sum > left) throw new ApiError(400, 'invalid_request', `Сумма возврата не может превышать ${formatAmount(left)} ${p.currency}`, 'amount.value');
+  if (description.length > 250) throw new ApiError(400, 'invalid_request', 'description: до 250 символов', 'description');
+  const id = refundId ?? newId('rf');
   const now = ctx.now();
   ctx.db.transaction(() => {
-    // Refunds are paid from the shop balance, so it must cover them (checked inside the transaction).
-    const available = balances(ctx, shop.id).find((b) => b.currency === p.currency)?.available ?? 0;
-    if (available < sum) {
-      throw new ApiError(400, 'insufficient_funds', `Недостаточно средств на балансе магазина для возврата: доступно ${formatAmount(Math.max(available, 0))} ${p.currency}. Дождитесь новых поступлений или уменьшите сумму возврата.`, 'amount.value');
-    }
+    // Checked inside the transaction too, so two concurrent refunds cannot both pass.
+    assertRefundCovered(ctx, shop, p, sum);
     ctx.db.prepare(`INSERT INTO refunds(id, payment_id, shop_id, amount, currency, status, description, created_at) VALUES(?,?,?,?,?,'succeeded',?,?)`).run(id, p.id, shop.id, sum, p.currency, description, now);
     ctx.db.prepare('UPDATE payments SET refunded = refunded + ? WHERE id = ?').run(sum, p.id);
     addEvent(ctx, p.id, 'refunded', { refund_id: id, amount: formatAmount(sum), full: sum === left });
@@ -395,19 +427,30 @@ export function refundPayment(ctx: Ctx, shop: ShopRow, p: PaymentRow, amount: nu
 
 // ---------- Balance & payouts ----------
 
+/**
+ * Shop balance per currency. `live` is Bobobank money (can be paid out to the bank), `test` comes from game cards
+ * and simulated methods; `available` is their sum.
+ */
 export function balances(ctx: Ctx, shopId: number) {
   const rows = ctx.db
     .prepare(
-      `SELECT c.currency,
-         COALESCE((SELECT SUM(amount - fee) FROM payments WHERE shop_id = @s AND currency = c.currency AND status = 'succeeded'), 0)
-       - COALESCE((SELECT SUM(amount) FROM refunds WHERE shop_id = @s AND currency = c.currency AND status = 'succeeded'), 0) AS earned,
-         COALESCE((SELECT SUM(amount) FROM payouts WHERE shop_id = @s AND currency = c.currency AND status = 'succeeded'), 0) AS paid_out,
-         COALESCE((SELECT SUM(amount) FROM payouts WHERE shop_id = @s AND currency = c.currency AND status = 'pending'), 0) AS in_transit,
-         COALESCE((SELECT SUM(amount) FROM payments WHERE shop_id = @s AND currency = c.currency AND status = 'waiting_for_capture'), 0) AS held
-       FROM (SELECT 'RUB' currency UNION ALL SELECT 'USD' UNION ALL SELECT 'EUR') c`,
+      `SELECT c.currency, f.funding,
+         COALESCE((SELECT SUM(amount - fee) FROM payments WHERE shop_id = @s AND currency = c.currency AND status = 'succeeded' AND funding = f.funding), 0)
+       - COALESCE((SELECT SUM(r.amount) FROM refunds r JOIN payments p ON p.id = r.payment_id WHERE r.shop_id = @s AND r.currency = c.currency AND r.status = 'succeeded' AND p.funding = f.funding), 0) AS earned,
+         COALESCE((SELECT SUM(amount) FROM payouts WHERE shop_id = @s AND currency = c.currency AND status = 'succeeded' AND funding = f.funding), 0) AS paid_out,
+         COALESCE((SELECT SUM(amount) FROM payouts WHERE shop_id = @s AND currency = c.currency AND status = 'pending' AND funding = f.funding), 0) AS in_transit,
+         COALESCE((SELECT SUM(amount) FROM payments WHERE shop_id = @s AND currency = c.currency AND status = 'waiting_for_capture' AND funding = f.funding), 0) AS held
+       FROM (SELECT 'RUB' currency UNION ALL SELECT 'USD' UNION ALL SELECT 'EUR') c, (SELECT 'bank' funding UNION ALL SELECT 'test') f`,
     )
-    .all({ s: shopId }) as { currency: string; earned: number; paid_out: number; in_transit: number; held: number }[];
-  return rows.map((r) => ({ currency: r.currency, available: r.earned - r.paid_out - r.in_transit, inTransit: r.in_transit, held: r.held, paidOut: r.paid_out }));
+    .all({ s: shopId }) as { currency: string; funding: Funding; earned: number; paid_out: number; in_transit: number; held: number }[];
+  return ['RUB', 'USD', 'EUR'].map((currency) => {
+    const of = (f: Funding) => rows.find((r) => r.currency === currency && r.funding === f)!;
+    const bank = of('bank');
+    const test = of('test');
+    const live = bank.earned - bank.paid_out - bank.in_transit;
+    const testAvail = test.earned - test.paid_out - test.in_transit;
+    return { currency, available: live + testAvail, live, test: testAvail, inTransit: bank.in_transit + test.in_transit, held: bank.held + test.held, paidOut: bank.paid_out + test.paid_out };
+  });
 }
 
 export interface PayoutRow {
@@ -420,18 +463,22 @@ export interface PayoutRow {
   processing_until: number | null;
   created_at: number;
   completed_at: number | null;
+  funding: Funding;
 }
 
 export function serializePayout(r: PayoutRow) {
   return { id: r.id, status: r.status, amount: money(r.amount, r.currency), payout_destination: safeJson(r.destination, {}), created_at: iso(r.created_at), succeeded_at: iso(r.completed_at) };
 }
 
+/** Payout of test money to a (fictional) card; Bobobank payouts go through payoutToBank. */
 export function createPayout(ctx: Ctx, shop: ShopRow, amount: number, currency: string, destination: Record<string, string>): PayoutRow {
   const bal = balances(ctx, shop.id).find((b) => b.currency === currency);
-  if (!bal || amount > bal.available) throw new ApiError(400, 'insufficient_funds', 'Недостаточно средств на балансе магазина');
+  if (!bal || amount > bal.test) {
+    throw new ApiError(400, 'insufficient_funds', bal && bal.live > 0 ? 'Недостаточно тестовых средств. Деньги из Bobobank выводятся на счёт в Bobobank.' : 'Недостаточно средств на балансе магазина');
+  }
   const id = newId('po');
   const now = ctx.now();
-  ctx.db.prepare(`INSERT INTO payouts(id, shop_id, amount, currency, destination, status, processing_until, created_at) VALUES(?,?,?,?,?,'pending',?,?)`).run(id, shop.id, amount, currency, JSON.stringify(destination), now + 8000, now);
+  ctx.db.prepare(`INSERT INTO payouts(id, shop_id, amount, currency, destination, status, processing_until, created_at, funding) VALUES(?,?,?,?,?,'pending',?,?,'test')`).run(id, shop.id, amount, currency, JSON.stringify(destination), now + 8000, now);
   return ctx.db.prepare('SELECT * FROM payouts WHERE id = ?').get(id) as PayoutRow;
 }
 

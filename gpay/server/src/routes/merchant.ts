@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
+import { bankEnabled } from '../domain/bank.js';
+import { cancelWithBank, captureWithBank, linkBankAccount, payoutAccount, payoutToBank, refundWithBank } from '../domain/bankpay.js';
 import { audit, HttpError, type Ctx } from '../context.js';
 import { getGlobalFees, METHODS, shopFees } from '../domain/fees.js';
 import { convert, getRates } from '../domain/fx.js';
@@ -27,6 +29,7 @@ const shopBody = z.object({
 });
 
 const settingsBody = shopBody.partial().extend({
+  mcc: z.number().int().min(742).max(9999).optional(),
   methods: z.array(z.enum(METHODS)).min(1, 'Включите хотя бы один способ оплаты').optional(),
   returnUrl: z.union([z.literal(''), z.string().url().max(500)]).optional(),
   defaultVat: z.enum(VAT_CODES).optional(),
@@ -46,6 +49,9 @@ export function shopSummary(ctx: Ctx, s: ShopRow) {
     fees: shopFees(ctx.db, s.fees),
     returnUrl: s.return_url,
     defaultVat: s.default_vat,
+    mcc: s.mcc,
+    payoutAccount: payoutAccount(s),
+    bankEnabled: bankEnabled(ctx),
     kkt: { rn: s.kkt_rn, fn: s.fn_number, fd: s.fd_counter, shift: s.shift_no },
     createdAt: s.created_at,
   };
@@ -120,7 +126,7 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
     const b = settingsBody.parse(req.body);
     const cols: Record<string, unknown> = {
       name: b.name, legal_name: b.legalName, inn: b.inn, tax_system: b.taxSystem, site: b.site, color: b.color,
-      methods: b.methods ? JSON.stringify(b.methods) : undefined, return_url: b.returnUrl, default_vat: b.defaultVat,
+      methods: b.methods ? JSON.stringify(b.methods) : undefined, return_url: b.returnUrl, default_vat: b.defaultVat, mcc: b.mcc,
     };
     for (const [k, v] of Object.entries(cols)) if (v !== undefined) db.prepare(`UPDATE shops SET ${k} = ? WHERE id = ?`).run(v, shop.id);
     audit(ctx, req, 'shop_update', 'shop', String(shop.id));
@@ -255,14 +261,14 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post<PI>('/api/m/shops/:shopId/payments/:id/capture', async (req) => {
     const shop = ownShop(req);
     const b = amountOpt.parse(req.body ?? {});
-    const p = capturePayment(ctx, shop, ownPayment(shop, req.params.id), b.amount ? parseAmount(b.amount) : undefined);
+    const p = await captureWithBank(ctx, shop, ownPayment(shop, req.params.id), b.amount ? parseAmount(b.amount) : undefined);
     audit(ctx, req, 'capture', 'payment', p.id);
     return { row: paymentRow(p) };
   });
 
   app.post<PI>('/api/m/shops/:shopId/payments/:id/cancel', async (req) => {
     const shop = ownShop(req);
-    const p = cancelByMerchant(ctx, ownPayment(shop, req.params.id));
+    const p = await cancelWithBank(ctx, ownPayment(shop, req.params.id));
     audit(ctx, req, 'cancel', 'payment', p.id);
     return { row: paymentRow(p) };
   });
@@ -270,7 +276,7 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post<PI>('/api/m/shops/:shopId/payments/:id/refund', async (req) => {
     const shop = ownShop(req);
     const b = amountOpt.parse(req.body ?? {});
-    const r = refundPayment(ctx, shop, ownPayment(shop, req.params.id), b.amount ? parseAmount(b.amount) : undefined, b.description ?? '');
+    const r = await refundWithBank(ctx, shop, ownPayment(shop, req.params.id), b.amount ? parseAmount(b.amount) : undefined, b.description ?? '');
     audit(ctx, req, 'refund', 'payment', r.payment_id, `${r.amount / 100} ${r.currency}`);
     return { refund: serializeRefund(r) };
   });
@@ -334,15 +340,38 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
     const shop = ownShop(req);
     const rows = db.prepare('SELECT * FROM payouts WHERE shop_id = ? ORDER BY created_at DESC LIMIT 200').all(shop.id) as PayoutRow[];
     const fees = db.prepare(`SELECT currency, SUM(fee) fee, SUM(amount) gross FROM payments WHERE shop_id = ? AND status = 'succeeded' GROUP BY currency`).all(shop.id);
-    return { balances: balances(ctx, shop.id), fees, items: rows.map((r) => ({ ...serializePayout(r), amountMinor: r.amount, currency: r.currency, createdAt: r.created_at })) };
+    return { balances: balances(ctx, shop.id), payoutAccount: payoutAccount(shop), bankEnabled: bankEnabled(ctx), fees, items: rows.map((r) => ({ ...serializePayout(r), amountMinor: r.amount, currency: r.currency, createdAt: r.created_at })) };
   });
 
   app.post<P>('/api/m/shops/:shopId/payouts', async (req) => {
     const shop = ownShop(req);
-    const b = z.object({ amount: z.string().max(20), currency: z.enum(CURRENCIES), cardLast4: z.string().regex(/^\d{4}$/, 'Последние 4 цифры карты') }).parse(req.body);
-    const po = createPayout(ctx, shop, parseAmount(b.amount), b.currency, { type: 'bank_card', card_last4: b.cardLast4 });
+    const b = z
+      .object({ amount: z.string().max(20), currency: z.enum(CURRENCIES), destination: z.enum(['bobobank', 'card']).default('card'), cardLast4: z.string().regex(/^\d{4}$/, 'Последние 4 цифры карты').optional() })
+      .parse(req.body);
+    let po;
+    if (b.destination === 'bobobank') po = await payoutToBank(ctx, shop, parseAmount(b.amount), b.currency);
+    else {
+      if (!b.cardLast4) throw new HttpError(400, 'Укажите последние 4 цифры карты');
+      po = createPayout(ctx, shop, parseAmount(b.amount), b.currency, { type: 'bank_card', card_last4: b.cardLast4 });
+    }
     audit(ctx, req, 'payout', 'payout', po.id, `${b.amount} ${b.currency}`);
     return { payout: serializePayout(po) };
+  });
+
+  // ---------- Bobobank payout account ----------
+  app.post<P>('/api/m/shops/:shopId/bank-link', async (req) => {
+    const shop = ownShop(req);
+    const { code } = z.object({ code: z.string().trim().regex(/^\d{4}-?\d{4}$/, 'Код — 8 цифр из приложения Bobobank') }).parse(req.body);
+    const acc = await linkBankAccount(ctx, shop, code);
+    audit(ctx, req, 'bank_link', 'shop', String(shop.id), acc.number.slice(-4));
+    return { payoutAccount: acc };
+  });
+
+  app.delete<P>('/api/m/shops/:shopId/bank-link', async (req) => {
+    const shop = ownShop(req);
+    db.prepare('UPDATE shops SET payout_account = NULL WHERE id = ?').run(shop.id);
+    audit(ctx, req, 'bank_unlink', 'shop', String(shop.id));
+    return { ok: true };
   });
 
   // ---------- API keys ----------

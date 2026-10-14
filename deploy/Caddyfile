@@ -10,5 +10,14 @@
 # GPAY payment system (profile "gpay"). Without it this site just answers 502.
 {$GPAY_DOMAIN:pay.localhost} {
 	encode zstd gzip
+	# Bank ↔ GPAY calls go over the docker network only.
+	respond /internal/* 404
 	reverse_proxy gpay:8081
+}
+
+# Bobobank game bank (profile "bobobank").
+{$BANK_DOMAIN:bank.localhost} {
+	encode zstd gzip
+	respond /internal/* 404
+	reverse_proxy bobobank:8082
 }

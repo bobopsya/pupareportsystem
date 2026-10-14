@@ -7,6 +7,7 @@ import {
   balances, cancelByMerchant, capturePayment, createPayment, createPayout, getShop, loadPayment, refundPayment,
   serializePayment, serializePayout, serializeRefund, shopMethods, type PaymentRow, type PayoutRow, type RefundRow, type ShopRow,
 } from '../domain/payments.js';
+import { cancelWithBank, captureWithBank, payoutToBank, refundWithBank } from '../domain/bankpay.js';
 import { serializeReceipt } from '../domain/receipts.js';
 import { sha256 } from '../util.js';
 
@@ -92,7 +93,7 @@ export function registerApiV1(app: FastifyInstance, ctx: Ctx) {
     });
 
     /** Replays the stored response for a repeated Idempotence-Key. */
-    async function idempotent(req: FastifyRequest, reply: FastifyReply, endpoint: string, fn: () => unknown) {
+    async function idempotent(req: FastifyRequest, reply: FastifyReply, endpoint: string, fn: () => unknown | Promise<unknown>) {
       const key = String(req.headers['idempotence-key'] ?? '');
       if (!key) throw new ApiError(400, 'invalid_request', 'Не передан заголовок Idempotence-Key', 'Idempotence-Key');
       if (key.length > 64) throw new ApiError(400, 'invalid_request', 'Idempotence-Key: не длиннее 64 символов', 'Idempotence-Key');
@@ -106,7 +107,7 @@ export function registerApiV1(app: FastifyInstance, ctx: Ctx) {
       let status = 200;
       let body: unknown;
       try {
-        body = fn();
+        body = await fn();
       } catch (e) {
         if (!(e instanceof ApiError)) throw e;
         status = e.statusCode;
@@ -168,7 +169,7 @@ export function registerApiV1(app: FastifyInstance, ctx: Ctx) {
     api.get<{ Params: { id: string } }>('/payments/:id', async (req) => serializePayment(ctx, ownPayment(ctx, req, req.params.id)));
 
     api.post<{ Params: { id: string } }>('/payments/:id/capture', async (req, reply) =>
-      idempotent(req, reply, `POST /payments/${req.params.id}/capture`, () => {
+      idempotent(req, reply, `POST /payments/${req.params.id}/capture`, async () => {
         const p = ownPayment(ctx, req, req.params.id);
         const b = obj(req.body);
         let amount: number | undefined;
@@ -177,17 +178,17 @@ export function registerApiV1(app: FastifyInstance, ctx: Ctx) {
           if (a.currency !== p.currency) throw new ApiError(400, 'invalid_request', 'Валюта не совпадает с валютой платежа', 'amount.currency');
           amount = a.amount;
         }
-        return serializePayment(ctx, capturePayment(ctx, shopOf(req), p, amount));
+        return serializePayment(ctx, await captureWithBank(ctx, shopOf(req), p, amount));
       }),
     );
 
     api.post<{ Params: { id: string } }>('/payments/:id/cancel', async (req, reply) =>
-      idempotent(req, reply, `POST /payments/${req.params.id}/cancel`, () => serializePayment(ctx, cancelByMerchant(ctx, ownPayment(ctx, req, req.params.id)))),
+      idempotent(req, reply, `POST /payments/${req.params.id}/cancel`, async () => serializePayment(ctx, await cancelWithBank(ctx, ownPayment(ctx, req, req.params.id)))),
     );
 
     // ---------- Refunds ----------
     api.post('/refunds', async (req, reply) =>
-      idempotent(req, reply, 'POST /refunds', () => {
+      idempotent(req, reply, 'POST /refunds', async () => {
         const b = obj(req.body);
         const pid = str(b.payment_id);
         if (!pid) throw new ApiError(400, 'invalid_request', 'Не указан payment_id', 'payment_id');
@@ -198,7 +199,7 @@ export function registerApiV1(app: FastifyInstance, ctx: Ctx) {
           if (a.currency !== p.currency) throw new ApiError(400, 'invalid_request', 'Валюта не совпадает с валютой платежа', 'amount.currency');
           amount = a.amount;
         }
-        return serializeRefund(refundPayment(ctx, shopOf(req), p, amount, str(b.description) ?? ''));
+        return serializeRefund(await refundWithBank(ctx, shopOf(req), p, amount, str(b.description) ?? ''));
       }),
     );
 
@@ -275,10 +276,12 @@ export function registerApiV1(app: FastifyInstance, ctx: Ctx) {
 
     // ---------- Payouts ----------
     api.post('/payouts', async (req, reply) =>
-      idempotent(req, reply, 'POST /payouts', () => {
+      idempotent(req, reply, 'POST /payouts', async () => {
         const b = obj(req.body);
         const { amount, currency } = amountArg(b.amount);
         const dest = obj(b.payout_destination);
+        // Bobobank money goes to the account linked in the shop settings.
+        if (dest.type === 'bobobank') return serializePayout(await payoutToBank(ctx, shopOf(req), amount, currency));
         const card = String(dest.card_last4 ?? '').replace(/\D/g, '').slice(-4);
         if (card.length !== 4) throw new ApiError(400, 'invalid_request', 'payout_destination.card_last4: последние 4 цифры карты', 'payout_destination');
         return serializePayout(createPayout(ctx, shopOf(req), amount, currency, { type: 'bank_card', card_last4: card }));

@@ -85,6 +85,53 @@ jobs:
         if: failure()
         run: cat "$RUNNER_TEMP/gpay.log" || true
 
+  bobobank:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix bobobank/server
+          npm ci --prefix bobobank/web
+          npm ci --prefix gpay/server
+          npm ci --prefix gpay/web
+
+      - name: Typecheck
+        run: npm --prefix bobobank/server run typecheck && npm --prefix bobobank/web run typecheck
+
+      - name: Unit & API tests
+        run: npm --prefix bobobank/server test && npm --prefix bobobank/web test
+
+      - name: Build
+        run: |
+          npm --prefix bobobank/web run build && npm --prefix bobobank/server run build
+          npm --prefix gpay/web run build && npm --prefix gpay/server run build
+
+      - name: End-to-end with GPAY (Playwright)
+        run: |
+          npx playwright install --with-deps chromium
+          SECRET=$(openssl rand -hex 32)
+          DATA_DIR="$RUNNER_TEMP/gpay" COOKIE_SECURE=0 WEB_DIST="$PWD/gpay/web/dist" HOST=127.0.0.1 PORT=8081 PUBLIC_URL=http://localhost:8081 \
+            BANK_INTERNAL_URL=http://127.0.0.1:8082 BANK_PUBLIC_URL=http://localhost:8082 BANK_GPAY_SECRET=$SECRET \
+            node gpay/server/dist/index.js > "$RUNNER_TEMP/gpay.log" 2>&1 &
+          DATA_DIR="$RUNNER_TEMP/bank" COOKIE_SECURE=0 WEB_DIST="$PWD/bobobank/web/dist" HOST=127.0.0.1 PORT=8082 PUBLIC_URL=http://localhost:8082 \
+            GPAY_INTERNAL_URL=http://127.0.0.1:8081 GPAY_PUBLIC_URL=http://localhost:8081 BANK_GPAY_SECRET=$SECRET \
+            node bobobank/server/dist/index.js > "$RUNNER_TEMP/bank.log" 2>&1 &
+          for _ in $(seq 30); do curl -fs http://127.0.0.1:8082/api/health && curl -fs http://127.0.0.1:8081/api/health && break; sleep 1; done
+          PW=$(DATA_DIR="$RUNNER_TEMP/bank" node bobobank/server/dist/cli.js create-admin 79990000001 "Админ" | awk '/Пароль/ {print $2}')
+          BANK_ADMIN_PHONE=79990000001 BANK_ADMIN_PASSWORD=$PW npx playwright test -c bobobank/playwright.config.ts
+
+      - name: Server logs
+        if: failure()
+        run: cat "$RUNNER_TEMP/bank.log" "$RUNNER_TEMP/gpay.log" || true
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -93,3 +140,5 @@ jobs:
         run: docker build -t zhukonet-portal:ci .
       - name: Build GPAY image
         run: docker build -t gpay:ci gpay
+      - name: Build Bobobank image
+        run: docker build -t bobobank:ci bobobank

@@ -10,7 +10,7 @@ import { Button, Card, CardHeader, cx, ErrorNote, Field, Input, PageHeader, Sele
 import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useShop } from './Layout';
-import { TAX_SYSTEMS, VAT_LABEL, type Shop } from './types';
+import { TAX_SYSTEMS, VAT_LABEL, type PayoutAccount, type Shop } from './types';
 
 const COLORS = ['#5b3df5', '#0f766e', '#c2410c', '#be123c', '#1d4ed8', '#7c3aed', '#15803d', '#0b0b14'];
 
@@ -126,6 +126,7 @@ export default function Settings() {
   const [methods, setMethods] = useState(shop.methods);
   const [returnUrl, setReturnUrl] = useState(shop.returnUrl);
   const [defaultVat, setDefaultVat] = useState(shop.defaultVat);
+  const [mcc, setMcc] = useState(shop.mcc ?? 5999);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -175,6 +176,11 @@ export default function Settings() {
           <Field label="URL возврата по умолчанию" hint="Куда вернуть покупателя после оплаты, если не передан return_url">
             <Input value={returnUrl} onChange={(e) => setReturnUrl(e.target.value)} placeholder="https://example.com/thanks" />
           </Field>
+          <Field label="Категория магазина (MCC)" hint="Видна в выписке покупателя и влияет на его кешбэк">
+            <Select value={mcc} onChange={(e) => setMcc(Number(e.target.value))}>
+              {MCC.map(([code, t]) => <option key={code} value={code}>{code} · {t}</option>)}
+            </Select>
+          </Field>
           <Field label="НДС по умолчанию" hint="Для платежей без переданного чека">
             <Select value={defaultVat} onChange={(e) => setDefaultVat(e.target.value)}>
               {Object.entries(VAT_LABEL).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
@@ -186,10 +192,67 @@ export default function Settings() {
           <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">Фискальный накопитель</dt><dd className="font-mono">{shop.kkt.fn}</dd></div>
           <div className="rounded-xl bg-sunken px-3.5 py-2.5"><dt className="text-xs text-muted">Чеков пробито</dt><dd className="font-mono">{shop.kkt.fd}</dd></div>
         </dl>
-        <div className="mt-5 flex justify-end"><Button variant="primary" loading={busy === 'pay'} onClick={() => save('pay', { returnUrl, defaultVat })}>Сохранить</Button></div>
+        <div className="mt-5 flex justify-end"><Button variant="primary" loading={busy === 'pay'} onClick={() => save('pay', { returnUrl, defaultVat, mcc })}>Сохранить</Button></div>
       </Card>
+      {shop.bankEnabled && <BankPayouts shopId={shop.id} account={shop.payoutAccount} />}
       <Profile />
     </div>
+  );
+}
+
+const MCC: [number, string][] = [
+  [5999, 'Прочие розничные магазины'], [5411, 'Супермаркеты'], [5814, 'Фастфуд и кофейни'], [5812, 'Рестораны'], [5651, 'Одежда'], [5732, 'Электроника'],
+  [5816, 'Цифровые игры'], [5815, 'Цифровые товары, подписки'], [7832, 'Кинотеатры'], [7999, 'Развлечения'], [4121, 'Такси'], [4111, 'Транспорт'], [5541, 'АЗС'],
+  [5912, 'Аптеки'], [7230, 'Салоны красоты'], [5200, 'Товары для дома'], [7011, 'Отели'], [4511, 'Авиабилеты'], [8299, 'Образование'], [4814, 'Связь'], [7399, 'Услуги для бизнеса'],
+];
+
+/** Payouts of Bobobank money: the shop owner enters a one-time code from the bank app. */
+function BankPayouts({ shopId, account }: { shopId: number; account: PayoutAccount | null }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await qc.invalidateQueries({ queryKey: ['shops'] });
+      toast(ok);
+      setCode('');
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card>
+      <CardHeader title="Выплаты в Bobobank" sub="Деньги, которые покупатели заплатили картами Bobobank и через СБП, выводятся на счёт в Bobobank" />
+      {account ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex-1 rounded-xl bg-sunken px-4 py-3 text-sm">
+            <div className="font-medium">{account.holder}</div>
+            <div className="text-muted tabular-nums">Счёт {account.number} · {account.currency}</div>
+          </div>
+          <Button loading={busy} onClick={() => void run(() => api(`/m/shops/${shopId}/bank-link`, { method: 'DELETE' }), 'Счёт отключён')}>Отключить</Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <ol className="list-decimal pl-5 text-sm text-muted space-y-1">
+            <li>Откройте приложение Bobobank → нужный счёт (бизнес или платёжный).</li>
+            <li>Нажмите «Подключить магазин GPAY» — появится код из 8 цифр.</li>
+            <li>Введите код здесь.</li>
+          </ol>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d-]/g, '').slice(0, 9))} placeholder="1234-5678" className="sm:max-w-[200px] tabular-nums" />
+            <Button variant="primary" loading={busy} disabled={code.replace(/\D/g, '').length !== 8} onClick={() => void run(() => api(`/m/shops/${shopId}/bank-link`, { body: { code } }), 'Счёт Bobobank подключён')}>Подключить</Button>
+          </div>
+        </div>
+      )}
+      {error && <div className="mt-3"><ErrorNote>{error}</ErrorNote></div>}
+    </Card>
   );
 }
 

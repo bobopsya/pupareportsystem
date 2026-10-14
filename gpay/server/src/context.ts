@@ -22,6 +22,8 @@ export interface Ctx {
   now: () => number;
   /** Outbound HTTP for webhooks. Replaced in tests. */
   http: (url: string, init: RequestInit) => Promise<Response>;
+  /** Outbound HTTP to Bobobank's internal API. Replaced in tests. */
+  bankHttp: (url: string, init: RequestInit) => Promise<Response>;
   /** Server secret for fiscal signatures (ФПД) and similar derived values. */
   secret: string;
 }
@@ -32,7 +34,7 @@ export function createCtx(db: DB, cfg: Config, now: () => number = Date.now): Ct
     secret = crypto.randomBytes(32).toString('hex');
     setSetting(db, 'server_secret', secret);
   }
-  return { db, cfg, now, http: (url, init) => fetch(url, init), secret };
+  return { db, cfg, now, http: (url, init) => fetch(url, init), bankHttp: (url, init) => fetch(url, init), secret };
 }
 
 export function audit(ctx: Ctx, req: FastifyRequest | null, action: string, entity: string | null = null, entityId: string | null = null, summary: string | null = null) {

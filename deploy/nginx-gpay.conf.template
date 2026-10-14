@@ -6,6 +6,11 @@ server {
 
     client_max_body_size 1m;
 
+    # Bank ↔ GPAY calls go over the docker network only.
+    location /internal/ {
+        return 404;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:__APP_PORT__;
         proxy_http_version 1.1;

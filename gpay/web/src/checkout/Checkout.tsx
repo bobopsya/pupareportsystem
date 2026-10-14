@@ -6,7 +6,7 @@ import { CardLogos, PayLogo, SbpMark } from '../components/PaymentLogos';
 import { Button, cx, Field, Input, Loading } from '../components/ui';
 import { api, ApiError, errorText } from '../lib/api';
 import { dateTime, money, REASONS } from '../lib/format';
-import { BankCheck, CryptoPanel, InstallmentsPanel, SbpPanel } from './AsyncMethods';
+import { BankCheck, BankConfirm, CryptoPanel, InstallmentsPanel, SbpPanel } from './AsyncMethods';
 import { CardForm } from './CardForm';
 import { notifyParent, type CheckoutData, type MethodType, type PayResult, type PublicPayment, type PublicShop } from './types';
 
@@ -101,7 +101,7 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
   };
 
   // Poll while an asynchronous method is being processed.
-  const processing = p.status === 'pending' && p.action?.type === 'processing';
+  const processing = p.status === 'pending' && (p.action?.type === 'processing' || p.action?.type === 'bank_confirm');
   useEffect(() => {
     if (!processing) return;
     const t = setInterval(() => void reload(), 1000);
@@ -155,7 +155,7 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
           </div>
         )}
         <div key={lockMethod ?? method} className="gp-fade-up">
-          {lockMethod === 'bank_card' && <BankCheck data={data} />}
+          {lockMethod === 'bank_card' && (p.action?.type === 'bank_confirm' ? <BankConfirm data={data} onBack={setPayment} /> : <BankCheck data={data} />)}
           {!lockMethod && method === 'bank_card' && <CardForm data={data} email={email} emailOk={emailOk} onResult={(r, pay) => { setEmailTouched(true); onResult(r, pay); }} />}
           {(lockMethod ?? method) === 'sbp' && <SbpPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
           {(lockMethod ?? method) === 'installments' && <InstallmentsPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}

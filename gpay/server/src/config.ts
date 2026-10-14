@@ -14,6 +14,10 @@ export interface Config {
   /** Lets webhooks reach localhost/private networks (local development only). */
   webhookAllowPrivate: boolean;
   logLevel: string;
+  /** Bobobank integration: internal URL (docker network), public URL (SBP links for buyers), shared HMAC secret. */
+  bankInternalUrl: string;
+  bankPublicUrl: string;
+  bankSecret: string;
 }
 
 const HEX = /^[0-9a-f]{32,128}$/i;
@@ -33,5 +37,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: env.TRUST_PROXY === '1',
     webhookAllowPrivate: env.WEBHOOK_ALLOW_PRIVATE === '1',
     logLevel: env.LOG_LEVEL ?? 'info',
+    bankInternalUrl: (env.BANK_INTERNAL_URL ?? '').replace(/\/$/, ''),
+    bankPublicUrl: (env.BANK_PUBLIC_URL ?? env.BANK_INTERNAL_URL ?? '').replace(/\/$/, ''),
+    bankSecret: env.BANK_GPAY_SECRET ?? '',
   };
 }
