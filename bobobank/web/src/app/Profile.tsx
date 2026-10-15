@@ -1,6 +1,7 @@
 import { Check, Crown, KeyRound, LogOut, Moon, Phone, Shield } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { InstallIcon, useInstall } from '../components/InstallApp';
 import { Row, Screen } from '../components/Screen';
 import { Badge, Button, Card, ErrorNote, Field, Input, Loading, Modal, Segmented, useToast } from '../components/ui';
 import { getTheme, setTheme, type Theme } from '../lib/theme';
@@ -20,6 +21,7 @@ export default function Profile() {
   const [pw, setPw] = useState(false);
   const [theme, setThemeState] = useState<Theme>(getTheme);
   const [busy, setBusy] = useState(false);
+  const install = useInstall();
   if (!data) return <Loading />;
   const p = data.profile;
   const prime = p.tariff === 'prime';
@@ -69,6 +71,12 @@ export default function Profile() {
         <span className="inline-flex items-center gap-2 font-medium"><Moon className="size-5 text-brand" />Тема</span>
         <Segmented value={theme} onChange={(t) => (setThemeState(t), setTheme(t))} options={[{ value: 'system', label: 'Как в системе' }, { value: 'light', label: 'Светлая' }, { value: 'dark', label: 'Тёмная' }]} />
       </Card>
+      {install.kind && (
+        <Card pad={false} className="mt-3 overflow-hidden">
+          <Row icon={<InstallIcon className="size-5 text-brand" />} title="Приложение на экране «Домой»" sub={install.kind === 'ios' ? 'Добавить иконку Bobobank на iPhone' : 'Установить Bobobank на телефон'} onClick={install.start} />
+        </Card>
+      )}
+      {install.sheet}
 
       <SectionTitle>Безопасность</SectionTitle>
       <Card pad={false} className="divide-y divide-line overflow-hidden">

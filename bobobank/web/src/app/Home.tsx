@@ -6,6 +6,7 @@ import { MiniCard } from '../components/BankCard';
 import { CATEGORY_STYLE, CategoryIcon } from '../components/CategoryIcon';
 import { EntryRow } from '../components/EntryRow';
 import { Favorites } from '../components/Favorites';
+import { InstallBanner } from '../components/InstallApp';
 import { RestrictionBanner } from '../components/RestrictionBanner';
 import { ActionTile } from '../components/Screen';
 import { ErrorNote, Loading, cx } from '../components/ui';
@@ -66,6 +67,7 @@ export default function HomePage() {
       </div>
 
       <RestrictionBanner items={data.restrictions} />
+      <InstallBanner />
 
       {data.applications.map((a) => (
         <button key={a.id} type="button" onClick={() => nav('/app/credits')} className={cx('flex w-full items-center gap-3 rounded-2xl p-4 text-left', a.status === 'approved' ? 'bg-brand text-on-brand' : 'bg-surface')}>

@@ -103,7 +103,7 @@ export default function Shell() {
 
       <div className="min-w-0">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 bg-bg px-4 pt-[env(safe-area-inset-top)] sm:px-6 lg:px-10">
+        <header className="sticky top-0 z-30 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between gap-3 bg-bg px-4 pt-[env(safe-area-inset-top)] sm:px-6 lg:px-10">
           <button type="button" onClick={() => nav('/app/profile')} className="flex min-w-0 items-center gap-2.5 lg:hidden">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand text-lg font-semibold">{user?.name[0]}</span>
             <span className="truncate text-[15px] font-semibold">{user?.name.split(' ')[0]}</span>
