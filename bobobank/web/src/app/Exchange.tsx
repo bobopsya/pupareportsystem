@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownUp, DollarSign, Euro } from 'lucide-react';
+import { ArrowDownUp, ChevronRight, Coins, DollarSign, Euro } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AccountPicker } from '../components/AccountPicker';
@@ -8,7 +8,7 @@ import { Success } from '../components/Success';
 import { Button, Card, ErrorNote, Field, Input, Loading } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { money, toAmount } from '../lib/format';
-import { useHome, useRefresh } from '../lib/hooks';
+import { useHome, useMeta, useRefresh } from '../lib/hooks';
 import { SectionTitle } from './Shell';
 
 interface Board {
@@ -21,6 +21,7 @@ export default function Exchange() {
   const refresh = useRefresh();
   const { data: home } = useHome();
   const { data: fx } = useQuery({ queryKey: ['fx'], queryFn: () => api<Board>('/fx') });
+  const { data: meta } = useMeta();
   const accounts = useMemo(() => home?.accounts.filter((a) => a.kind === 'current' || a.kind === 'business') ?? [], [home]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -68,6 +69,13 @@ export default function Exchange() {
           </Card>
         ))}
       </div>
+      {meta?.gosUrl && (
+        <button type="button" onClick={() => nav('/app/exchange/psy')} className="mt-3 flex w-full items-center gap-3 rounded-2xl bg-surface p-4 text-left">
+          <span className="flex size-10 items-center justify-center rounded-full bg-brand-soft text-brand"><Coins className="size-5" /></span>
+          <span className="min-w-0 flex-1"><span className="block font-medium">Псякоины Бобуслуг</span><span className="block text-sm text-muted">Продать или купить по курсу</span></span>
+          <ChevronRight className="size-5 text-faint" />
+        </button>
+      )}
       <SectionTitle>Обменять</SectionTitle>
       {!hasForeign ? (
         <Card>

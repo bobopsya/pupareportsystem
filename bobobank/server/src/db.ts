@@ -339,6 +339,59 @@ const MIGRATIONS: string[] = [
     WHEN 'night' THEN 'black' WHEN 'graphite' THEN 'black' WHEN 'sunset' THEN 'black'
     WHEN 'emerald' THEN 'green' WHEN 'aurora' THEN 'green' WHEN 'gold' THEN 'prime' ELSE design END;
   `,
+  `
+  -- Бобуслуги: identity (passport), sign-in, fines paid from the bank, coin exchange, orders from the state.
+  ALTER TABLE users ADD COLUMN gos_uid TEXT;
+  ALTER TABLE users ADD COLUMN gos_login TEXT;
+  ALTER TABLE users ADD COLUMN passport TEXT;
+  ALTER TABLE users ADD COLUMN gos_role TEXT;
+  ALTER TABLE users ADD COLUMN gos_country TEXT;
+  ALTER TABLE users ADD COLUMN gos_checked_at INTEGER;
+  CREATE UNIQUE INDEX users_gos_uid ON users(gos_uid) WHERE gos_uid IS NOT NULL;
+
+  CREATE TABLE gos_states (
+    state_hash TEXT PRIMARY KEY,
+    next TEXT NOT NULL DEFAULT '/app',
+    link_user_id TEXT,
+    expires_at INTEGER NOT NULL
+  );
+  CREATE TABLE gos_tickets (
+    token_hash TEXT PRIMARY KEY,
+    person TEXT NOT NULL,
+    next TEXT NOT NULL DEFAULT '/app',
+    expires_at INTEGER NOT NULL
+  );
+  CREATE TABLE gos_fine_payments (
+    id TEXT PRIMARY KEY,
+    fine_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    account_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    tx_id TEXT,
+    status TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE psy_exchanges (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    account_id TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    coins INTEGER NOT NULL,
+    rub INTEGER NOT NULL,
+    tx_id TEXT,
+    status TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE gos_orders (
+    id INTEGER PRIMARY KEY,
+    type TEXT NOT NULL,
+    fine_id INTEGER,
+    ok INTEGER NOT NULL,
+    result TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX gos_orders_fine ON gos_orders(fine_id, type);
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

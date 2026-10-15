@@ -16,6 +16,7 @@ import {
   activeRestrictions, available, getAccount, mainAccount, notify, openAccount, ownedAccount, serializeAccount, userAccounts, type AccountRow,
 } from '../domain/ledger.js';
 import { CURRENCIES, humanMoney, parseAmount } from '../domain/money.js';
+import { gosEnabled, kycStatus, refreshPerson, requireKyc } from '../domain/gos.js';
 import { formatPhone, getUser, normalizePhone, resolveRecipient, transfer, transferFee, type Recipient, type RecipientRef } from '../domain/transfers.js';
 import { operationPdf, requisitesPdf, statementPdf } from '../pdf.js';
 import { decrypt, newId, randomDigits, safeJson, sha256 } from '../util.js';
@@ -37,7 +38,7 @@ export function restrictionView(ctx: Ctx, userId: string) {
   }));
 }
 
-interface EntryRow {
+export interface EntryRow {
   id: number;
   tx_id: string;
   account_id: string;
@@ -58,13 +59,13 @@ interface EntryRow {
 }
 
 /** In combined feeds a move between the customer's own accounts shows once: the debit side (the arrival for a closed deposit). */
-const FEED_FILTER = `NOT (t.kind IN ('own_transfer', 'deposit_open', 'fx') AND e.amount > 0) AND NOT (t.kind = 'deposit_close' AND e.amount < 0)`;
+export const FEED_FILTER = `NOT (t.kind IN ('own_transfer', 'deposit_open', 'fx') AND e.amount > 0) AND NOT (t.kind = 'deposit_close' AND e.amount < 0)`;
 
-const ENTRY_SELECT = `
+export const ENTRY_SELECT = `
   SELECT e.*, t.kind, t.meta, a.name account_name, a.kind account_kind, c.last4 card_last4, c.network card_network
   FROM entries e JOIN transactions t ON t.id = e.tx_id JOIN accounts a ON a.id = e.account_id LEFT JOIN cards c ON c.id = e.card_id`;
 
-function serializeEntry(e: EntryRow) {
+export function serializeEntry(e: EntryRow) {
   return {
     id: e.id,
     txId: e.tx_id,
@@ -140,6 +141,7 @@ function profile(ctx: Ctx, userId: string) {
     tariffPaidUntil: u.tariff_paid_until,
     bonus: u.bonus,
     createdAt: u.created_at,
+    gos: kycStatus(ctx, u.id),
   };
 }
 
@@ -194,12 +196,24 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
     businessType: z.enum(['ip', 'ooo']).optional(),
     legalName: z.string().trim().min(3).max(120).optional(),
     inn: z.string().regex(/^\d{10}$|^\d{12}$/, 'ИНН — 10 или 12 цифр').optional(),
+    businessId: z.number().int().optional(),
   });
   app.post('/api/accounts', async (req) => {
     const u = me(req);
     const b = openBody.parse(req.body);
+    requireKyc(ctx, u.id);
     if (userAccounts(ctx, u.id).length >= 20) throw new HttpError(400, 'Слишком много открытых счетов');
     let acc: AccountRow;
+    if (b.kind === 'business' && gosEnabled(ctx)) {
+      // The business comes from the state registry on Бобуслуги: name and INN cannot be typed in.
+      if (!b.businessId) throw new HttpError(400, 'Выберите бизнес из реестра Бобуслуг');
+      const person = await refreshPerson(ctx, u.id);
+      const biz = person?.businesses.find((x) => x.id === b.businessId);
+      if (!biz) throw new HttpError(404, 'Бизнес не найден в реестре Бобуслуг');
+      b.businessType = biz.org_type === 'ИП' ? 'ip' : 'ooo';
+      b.legalName = biz.name;
+      b.inn = biz.inn;
+    }
     if (b.kind === 'savings') acc = openSavings(ctx, u.id, b.currency);
     else if (b.kind === 'business') {
       if (!b.legalName || !b.inn || !b.businessType) throw new HttpError(400, 'Укажите название и ИНН организации');
@@ -207,7 +221,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
       if (ip !== (b.inn.length === 12)) throw new HttpError(400, ip ? 'ИНН ИП — 12 цифр' : 'ИНН ООО — 10 цифр');
       acc = openAccount(ctx, u.id, 'business', b.currency, ip ? `ИП ${b.legalName}` : `ООО «${b.legalName}»`, {
         prefix: ip ? PREFIX.business_ip : PREFIX.business_ooo,
-        params: { type: b.businessType, legalName: b.legalName, inn: b.inn },
+        params: { type: b.businessType, legalName: b.legalName, inn: b.inn, gosBusinessId: b.businessId },
       });
     } else acc = openAccount(ctx, u.id, 'current', b.currency, b.currency === 'RUB' ? 'Платёжный счёт' : `Счёт в ${b.currency === 'USD' ? 'долларах' : 'евро'}`);
     audit(ctx, req, 'account_open', 'account', acc.id, `${b.kind} ${b.currency}`);
@@ -277,6 +291,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/cards', async (req) => {
     const u = me(req);
     const b = issueBody.parse(req.body);
+    requireKyc(ctx, u.id);
     const user = getUser(ctx, u.id)!;
     if ((db.prepare(`SELECT COUNT(*) c FROM cards WHERE user_id = ? AND status != 'closed'`).get(u.id) as { c: number }).c >= 10) throw new HttpError(400, 'Можно держать до 10 карт');
     if (b.tariff === 'prime' && user.tariff !== 'prime') throw new HttpError(400, 'Карта Prime доступна с подпиской Bobo Prime');
@@ -665,6 +680,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/deposits', async (req) => {
     const u = me(req);
     const b = z.object({ fromAccountId: z.string(), amount: amountSchema, months: z.number().int() }).parse(req.body);
+    requireKyc(ctx, u.id);
     const dep = openDeposit(ctx, u.id, ownedAccount(ctx, u.id, b.fromAccountId), b.amount, b.months);
     audit(ctx, req, 'deposit_open', 'account', dep.id);
     return { account: serializeAccount(ctx, dep) };
@@ -681,6 +697,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
   app.post('/api/applications', async (req) => {
     const u = me(req);
     const b = z.object({ product: z.enum(['loan', 'credit_card']), amount: amountSchema, term: z.number().int().default(0), network: z.enum(NETWORKS).optional(), design: z.enum(Object.keys(DESIGNS) as [keyof typeof DESIGNS]).optional() }).parse(req.body);
+    requireKyc(ctx, u.id);
     const a = apply(ctx, u.id, b.product, b.amount, b.term, { network: b.network, design: b.design });
     audit(ctx, req, 'credit_apply', 'application', a.id, `${b.product} ${humanMoney(b.amount, 'RUB')}`);
     return { application: applicationView(a) };
@@ -769,5 +786,6 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
     designs: DESIGNS,
     tariffs: TARIFFS,
     gpayUrl: ctx.cfg.gpayPublicUrl || null,
+    gosUrl: gosEnabled(ctx) ? ctx.cfg.gosPublicUrl : null,
   }));
 }

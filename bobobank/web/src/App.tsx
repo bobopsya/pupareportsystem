@@ -28,6 +28,9 @@ const Notifications = lazy(() => import('./app/Notifications'));
 const Profile = lazy(() => import('./app/Profile'));
 const More = lazy(() => import('./app/More'));
 const SbpPay = lazy(() => import('./app/SbpPay'));
+const PsyExchange = lazy(() => import('./app/GosPages').then((m) => ({ default: m.PsyExchange })));
+const Treasury = lazy(() => import('./app/GosPages').then((m) => ({ default: m.Treasury })));
+const GosPay = lazy(() => import('./app/GosPages').then((m) => ({ default: m.GosPay })));
 const Admin = lazy(() => import('./admin/Admin'));
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -47,6 +50,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/admin/*" element={<RequireAuth><Admin /></RequireAuth>} />
         <Route path="/sbp/pay" element={<RequireAuth><SbpPay /></RequireAuth>} />
+        <Route path="/gos/pay" element={<RequireAuth><GosPay /></RequireAuth>} />
         <Route path="/app" element={<RequireAuth><Shell /></RequireAuth>}>
           <Route index element={<HomePage />} />
           <Route path="cards/new" element={<IssueCard />} />
@@ -56,6 +60,8 @@ export default function App() {
           <Route path="payments" element={<Payments />} />
           <Route path="transfer/:type" element={<Transfer />} />
           <Route path="exchange" element={<Exchange />} />
+          <Route path="exchange/psy" element={<PsyExchange />} />
+          <Route path="treasury" element={<Treasury />} />
           <Route path="history" element={<History />} />
           <Route path="history/:id" element={<Operation />} />
           <Route path="analytics" element={<Analytics />} />

@@ -11,6 +11,7 @@ import { HttpError, type Ctx } from './context.js';
 import { SYSTEM, systemAccount, type SystemCode } from './domain/ledger.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerClientRoutes } from './routes/client.js';
+import { registerGosApi, registerGosRoutes } from './routes/gos.js';
 import { registerInternalRoutes } from './routes/internal.js';
 import { registerSbpRoutes } from './routes/sbp.js';
 import { registerSupportRoutes } from './routes/support.js';
@@ -77,6 +78,8 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerAuth(app, ctx);
   registerClientRoutes(app, ctx);
   registerSbpRoutes(app, ctx);
+  registerGosRoutes(app, ctx);
+  registerGosApi(app, ctx);
   registerSupportRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
   registerInternalRoutes(app, ctx);

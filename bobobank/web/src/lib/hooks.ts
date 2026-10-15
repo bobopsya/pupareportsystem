@@ -20,6 +20,7 @@ export interface Meta {
   categories: { id: string; title: string }[];
   designs: Record<string, string>;
   gpayUrl: string | null;
+  gosUrl: string | null;
 }
 
 export function useMeta() {

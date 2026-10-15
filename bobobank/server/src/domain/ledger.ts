@@ -31,6 +31,8 @@ export const SYSTEM = {
   fx: 'Валютная позиция',
   bonus: 'Бонусная программа «Бобобонусы»',
   external: 'Переводы в другие банки',
+  psy: 'Обмен псякоинов Бобуслуг',
+  market: 'Брокерские операции',
 } as const;
 export type SystemCode = keyof typeof SYSTEM;
 

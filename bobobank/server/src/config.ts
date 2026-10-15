@@ -16,6 +16,11 @@ export interface Config {
   gpayInternalUrl: string;
   gpayPublicUrl: string;
   gpaySecret: string;
+  /** Бобуслуги (Supabase): the server key stays on the server; the public URL is where people sign in. */
+  supabaseUrl: string;
+  supabaseServiceKey: string;
+  supabaseAnonKey: string;
+  gosPublicUrl: string;
 }
 
 const HEX = /^[0-9a-f]{32,128}$/i;
@@ -37,5 +42,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     gpayInternalUrl: (env.GPAY_INTERNAL_URL ?? '').replace(/\/$/, ''),
     gpayPublicUrl: (env.GPAY_PUBLIC_URL ?? env.GPAY_INTERNAL_URL ?? '').replace(/\/$/, ''),
     gpaySecret: env.BANK_GPAY_SECRET ?? '',
+    supabaseUrl: (env.SUPABASE_URL ?? '').replace(/\/$/, ''),
+    supabaseServiceKey: env.SUPABASE_SERVICE_KEY ?? '',
+    supabaseAnonKey: env.SUPABASE_ANON_KEY ?? '',
+    gosPublicUrl: (env.GOS_PUBLIC_URL ?? '').replace(/\/$/, ''),
   };
 }

@@ -9,6 +9,7 @@ import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { longDate, money } from '../lib/format';
 import { useHome, useMeta, useRefresh } from '../lib/hooks';
+import { GosProfileCard } from './GosPages';
 import { SectionTitle } from './Shell';
 
 export default function Profile() {
@@ -65,6 +66,8 @@ export default function Profile() {
         </ul>
         <Button className="mt-4 w-full" variant={prime ? 'secondary' : 'primary'} loading={busy} onClick={() => void setTariff(prime ? 'standard' : 'prime')}>{prime ? 'Отключить подписку' : 'Подключить за 399 ₽'}</Button>
       </Card>
+
+      <GosProfileCard gos={p.gos} />
 
       <SectionTitle>Оформление</SectionTitle>
       <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

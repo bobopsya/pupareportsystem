@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createCtx } from './context.js';
 import { openDb } from './db.js';
+import { processOrders, recheckPeople } from './domain/gos.js';
 import { tick } from './domain/tick.js';
 
 const cfg = loadConfig();
@@ -17,6 +18,21 @@ setInterval(() => {
     app.log.error(err);
   }
 }, 2000).unref();
+
+// Бобуслуги: orders from the state (arrests, salaries) and a daily passport re-check.
+let gosBusy = false;
+setInterval(async () => {
+  if (gosBusy) return;
+  gosBusy = true;
+  try {
+    await processOrders(ctx);
+    await recheckPeople(ctx);
+  } catch (err) {
+    app.log.warn({ err }, 'Бобуслуги: обмен не удался');
+  } finally {
+    gosBusy = false;
+  }
+}, 15_000).unref();
 
 const shutdown = async () => {
   await app.close();

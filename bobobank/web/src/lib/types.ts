@@ -95,6 +95,18 @@ export interface Profile {
   tariffPaidUntil: number | null;
   bonus: number;
   createdAt: number;
+  gos: GosStatus;
+}
+
+/** Identity from Бобуслуги: required when the bank is connected to them. */
+export interface GosStatus {
+  required: boolean;
+  ok: boolean;
+  linked?: boolean;
+  passport?: { number: string; country_code: string } | null;
+  login?: string | null;
+  role?: string | null;
+  country?: string | null;
 }
 
 export interface Loan {

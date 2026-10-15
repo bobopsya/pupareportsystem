@@ -22,7 +22,7 @@ export interface Ctx {
   db: DB;
   cfg: Config;
   now: () => number;
-  /** Outbound HTTP to GPAY. Replaced in tests. */
+  /** Outbound HTTP to GPAY and Бобуслуги. Replaced in tests. */
   http: (url: string, init: RequestInit) => Promise<Response>;
   /** Server secret: card data encryption and derived values. */
   secret: string;

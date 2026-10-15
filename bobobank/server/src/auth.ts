@@ -3,9 +3,10 @@ import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { audit, HttpError, type Ctx, type Role, type SessionUser } from './context.js';
+import { fullName, gosEnabled, gosRpc, GosError, refreshPerson, saveGos, userByGosUid, type GosPerson } from './domain/gos.js';
 import { normalizePhone } from './domain/transfers.js';
 import { createUser, hashPassword } from './domain/users.js';
-import { randomDigits, sha256 } from './util.js';
+import { randomDigits, safeJson, sha256 } from './util.js';
 
 export const SESSION_COOKIE = 'bb_sid';
 export const SESSION_TTL_MS = 14 * 24 * 3600 * 1000;
@@ -52,6 +53,8 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
   app.addHook('onRequest', async (req, reply) => {
     const url = req.url.split('?')[0];
     if (!url.startsWith('/api/')) return;
+    // Бобуслуги pages call /api/gos/v1 with their own token (CORS, no cookies): see routes/gos-api.ts.
+    if (url.startsWith('/api/gos/v1/')) return;
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers[CSRF_HEADER] !== CSRF_VALUE) {
       return reply.code(403).send({ error: 'Запрос отклонён (CSRF)' });
     }
@@ -96,9 +99,21 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
     name: z.string().trim().min(3, 'Укажите имя и фамилию').max(80).regex(/^[A-Za-zА-Яа-яЁё\- ]+$/, 'Имя — только буквы'),
     birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Укажите дату рождения'),
     password: passwordSchema,
+    gosTicket: z.string().max(100).optional(),
   });
   app.post('/api/auth/register', { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req, reply) => {
     const body = registerBody.parse(req.body);
+    // With Бобуслуги connected an account is opened only with a Бобопаспорт: name and birth date come from it.
+    let person: GosPerson | null = null;
+    if (gosEnabled(ctx)) {
+      const t = body.gosTicket && (db.prepare('SELECT * FROM gos_tickets WHERE token_hash = ?').get(sha256(body.gosTicket)) as { person: string; expires_at: number } | undefined);
+      if (!t || t.expires_at < ctx.now()) throw new HttpError(400, 'Откройте счёт через «Войти через Бобуслуги»: нужен Бобопаспорт', 'gos_required');
+      person = safeJson<GosPerson | null>(t.person, null);
+      if (!person?.passport) throw new HttpError(400, 'Нужен действующий Бобопаспорт: оформите его на Бобуслугах', 'gos_required');
+      if (userByGosUid(ctx, person.id)) throw new HttpError(409, 'Этот аккаунт Бобуслуг уже привязан к клиенту банка — войдите');
+      body.name = cleanName(fullName(person)) || body.name;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(person.passport.birth_date)) body.birthDate = person.passport.birth_date;
+    }
     const row = db.prepare('SELECT * FROM phone_codes WHERE phone = ?').get(body.phone) as { code_hash: string; expires_at: number; attempts: number } | undefined;
     if (!row || row.expires_at < ctx.now()) throw new HttpError(400, 'Код устарел — запросите новый');
     if (row.attempts >= 5) throw new HttpError(400, 'Слишком много попыток — запросите новый код');
@@ -110,6 +125,10 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
     if (!(age >= 14 && age < 120)) throw new HttpError(400, 'Открыть счёт можно с 14 лет');
     const id = await createUser(ctx, body.phone, body.name.replace(/\s+/g, ' '), body.password, { birthDate: body.birthDate });
     db.prepare('DELETE FROM phone_codes WHERE phone = ?').run(body.phone);
+    if (person) {
+      saveGos(ctx, id, person);
+      db.prepare('DELETE FROM gos_tickets WHERE token_hash = ?').run(sha256(body.gosTicket!));
+    }
     startSession(req, reply, id);
     req.user = toUser(db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow);
     audit(ctx, req, 'register', 'user', id, body.phone);
@@ -139,6 +158,86 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
     return { user: req.user };
   });
 
+  // ---------- «Войти через Бобуслуги» ----------
+  app.get('/api/public/config', async () => ({ gos: gosEnabled(ctx) ? { url: ctx.cfg.gosPublicUrl } : null }));
+
+  const safeNext = (n: unknown) => (typeof n === 'string' && /^\/[a-zA-Z0-9/_?=&%.-]*$/.test(n) && !n.startsWith('//') ? n : '/app');
+  const GOS_COOKIE = 'bb_gos';
+
+  app.get('/api/auth/gos/start', async (req, reply) => {
+    if (!gosEnabled(ctx)) return reply.redirect('/login');
+    const q = req.query as { next?: string; link?: string };
+    const state = crypto.randomBytes(24).toString('base64url');
+    const linkUser = q.link === '1' && req.user ? req.user.id : null;
+    db.prepare('DELETE FROM gos_states WHERE expires_at < ?').run(ctx.now());
+    db.prepare('INSERT INTO gos_states(state_hash, next, link_user_id, expires_at) VALUES(?,?,?,?)').run(sha256(state), safeNext(q.next), linkUser, ctx.now() + 15 * 60_000);
+    reply.setCookie(GOS_COOKIE, state, { path: '/api/auth/gos', httpOnly: true, secure: ctx.cfg.cookieSecure, sameSite: 'lax', maxAge: 15 * 60 });
+    return reply.redirect(`${ctx.cfg.gosPublicUrl}/#/connect?client=bank&state=${encodeURIComponent(state)}`);
+  });
+
+  app.get('/api/auth/gos/callback', async (req, reply) => {
+    const q = req.query as { code?: string; state?: string };
+    const fail = (msg: string) => reply.redirect(`/login?gosError=${encodeURIComponent(msg)}`);
+    if (!gosEnabled(ctx)) return fail('Бобуслуги не подключены');
+    const cookieState = req.cookies[GOS_COOKIE];
+    reply.clearCookie(GOS_COOKIE, { path: '/api/auth/gos' });
+    if (!q.state || !q.code || cookieState !== q.state) return fail('Вход прерван — попробуйте ещё раз');
+    const st = db.prepare('SELECT * FROM gos_states WHERE state_hash = ?').get(sha256(q.state)) as { next: string; link_user_id: string | null; expires_at: number } | undefined;
+    db.prepare('DELETE FROM gos_states WHERE state_hash = ?').run(sha256(q.state));
+    if (!st || st.expires_at < ctx.now()) return fail('Вход устарел — попробуйте ещё раз');
+    let person: GosPerson;
+    try {
+      person = await gosRpc<GosPerson>(ctx, 'svc_redeem_code', { p_code: q.code, p_client: 'bank' });
+    } catch (e) {
+      return fail(e instanceof GosError || e instanceof HttpError ? e.message : 'Бобуслуги не ответили');
+    }
+    if (person.banned) return fail('Аккаунт на Бобуслугах заблокирован');
+    const existing = userByGosUid(ctx, person.id);
+    if (st.link_user_id) {
+      // Linking from the profile: the same browser must still be signed in as that customer.
+      if (req.user?.id !== st.link_user_id) return fail('Войдите в банк и подключите Бобуслуги ещё раз');
+      if (existing && existing.id !== st.link_user_id) return reply.redirect(`/app/profile?gosError=${encodeURIComponent('Этот аккаунт Бобуслуг уже привязан к другому клиенту')}`);
+      saveGos(ctx, st.link_user_id, person);
+      audit(ctx, req, 'gos_link', 'user', st.link_user_id, person.login);
+      return reply.redirect('/app/profile?gos=linked');
+    }
+    if (existing) {
+      const row = db.prepare('SELECT * FROM users WHERE id = ?').get(existing.id) as UserRow;
+      if (row.blocked) return fail('Доступ в приложение заблокирован. Позвоните в банк по номеру 900.');
+      saveGos(ctx, row.id, person);
+      startSession(req, reply, row.id);
+      req.user = toUser(row);
+      audit(ctx, req, 'login_gos', 'user', row.id, person.login);
+      return reply.redirect(st.next);
+    }
+    // New customer: registration continues with the name and birth date from the passport.
+    const ticket = crypto.randomBytes(24).toString('base64url');
+    db.prepare('DELETE FROM gos_tickets WHERE expires_at < ?').run(ctx.now());
+    db.prepare('INSERT INTO gos_tickets(token_hash, person, next, expires_at) VALUES(?,?,?,?)').run(sha256(ticket), JSON.stringify(person), st.next, ctx.now() + 30 * 60_000);
+    return reply.redirect(`/register?gos=${encodeURIComponent(ticket)}`);
+  });
+
+  app.get('/api/auth/gos/ticket', async (req) => {
+    const t = String((req.query as { t?: string }).t ?? '');
+    const row = db.prepare('SELECT * FROM gos_tickets WHERE token_hash = ?').get(sha256(t)) as { person: string; next: string; expires_at: number } | undefined;
+    if (!row || row.expires_at < ctx.now()) throw new HttpError(404, 'Ссылка устарела — войдите через Бобуслуги ещё раз');
+    const p = safeJson<GosPerson>(row.person, {} as GosPerson);
+    return {
+      login: p.login,
+      name: cleanName(fullName(p)),
+      birthDate: p.passport?.birth_date ?? null,
+      passport: p.passport ? { number: p.passport.number, country: p.passport.country_code } : null,
+      next: row.next,
+    };
+  });
+
+  app.post('/api/profile/gos/refresh', async (req) => {
+    const u = requireUser(req);
+    const p = await refreshPerson(ctx, u.id);
+    if (!p) throw new HttpError(400, 'Бобуслуги не подключены');
+    return { ok: true };
+  });
+
   app.post('/api/auth/logout', async (req, reply) => {
     const token = req.cookies[SESSION_COOKIE];
     if (token) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha256(token));
@@ -165,3 +264,6 @@ export function requireUser(req: FastifyRequest): SessionUser {
   if (!req.user) throw new HttpError(401, 'Требуется вход');
   return req.user;
 }
+
+/** Names from Бобуслуги may contain anything; the bank keeps letters, spaces and hyphens. */
+const cleanName = (n: string) => n.replace(/[^A-Za-zА-Яа-яЁё\- ]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);

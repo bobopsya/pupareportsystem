@@ -7,6 +7,7 @@ import { CATEGORY_STYLE, CategoryIcon } from '../components/CategoryIcon';
 import { EntryRow } from '../components/EntryRow';
 import { Favorites } from '../components/Favorites';
 import { InstallBanner } from '../components/InstallApp';
+import { KycBanner } from './GosPages';
 import { RestrictionBanner } from '../components/RestrictionBanner';
 import { ActionTile } from '../components/Screen';
 import { ErrorNote, Loading, cx } from '../components/ui';
@@ -67,6 +68,7 @@ export default function HomePage() {
       </div>
 
       <RestrictionBanner items={data.restrictions} />
+      <KycBanner gos={data.profile.gos} />
       <InstallBanner />
 
       {data.applications.map((a) => (

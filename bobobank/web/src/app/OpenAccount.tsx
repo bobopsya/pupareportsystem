@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Screen } from '../components/Screen';
 import { Button, Card, ErrorNote, Field, Input, Segmented } from '../components/ui';
 import { api, errorText } from '../lib/api';
-import { useRefresh } from '../lib/hooks';
+import { useMeta, useRefresh } from '../lib/hooks';
+import { BusinessPicker } from './GosPages';
 import type { Account } from '../lib/types';
 
 export default function OpenAccount() {
@@ -16,6 +17,7 @@ export default function OpenAccount() {
   const [inn, setInn] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { data: meta } = useMeta();
   const open = async (body: object) => {
     setBusy(true);
     setError(null);
@@ -29,6 +31,15 @@ export default function OpenAccount() {
       setBusy(false);
     }
   };
+  if (biz && meta?.gosUrl) {
+    return (
+      <Screen title="Счёт для бизнеса" back={null} actions={<Button size="sm" variant="ghost" onClick={() => setBiz(false)}>Назад</Button>}>
+        <p className="mb-3 text-sm text-muted">Бизнес берётся из реестра Бобуслуг: название и ИНН подставятся сами.</p>
+        {error && <div className="mb-3"><ErrorNote>{error}</ErrorNote></div>}
+        <BusinessPicker gosUrl={meta.gosUrl} busy={busy} onOpen={(businessId) => void open({ kind: 'business', businessId })} />
+      </Screen>
+    );
+  }
   if (biz) {
     return (
       <Screen title="Счёт для бизнеса" back={null} actions={<Button size="sm" variant="ghost" onClick={() => setBiz(false)}>Назад</Button>}>

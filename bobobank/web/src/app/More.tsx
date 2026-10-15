@@ -1,4 +1,5 @@
-import { BarChart3, Gift, Landmark, PiggyBank, Plus, Repeat, Shield, UserRound, Wallet } from 'lucide-react';
+import { BarChart3, Coins, Gift, Landmark, PiggyBank, Plus, Repeat, Shield, UserRound, Wallet } from 'lucide-react';
+import { useHome, useMeta } from '../lib/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Row, Screen } from '../components/Screen';
 import { Card } from '../components/ui';
@@ -7,12 +8,17 @@ import { useAuth } from '../lib/auth';
 export default function More() {
   const nav = useNavigate();
   const { user } = useAuth();
+  const { data: meta } = useMeta();
+  const { data: home } = useHome();
+  const gos = home?.profile.gos;
   const items = [
     { icon: BarChart3, title: 'Расходы и аналитика', to: '/app/analytics' },
     { icon: Landmark, title: 'Кредиты', to: '/app/credits' },
     { icon: PiggyBank, title: 'Вклады и накопления', to: '/app/savings' },
     { icon: Gift, title: 'Бобобонусы и кешбэк', to: '/app/bonus' },
     { icon: Repeat, title: 'Обмен валют', to: '/app/exchange' },
+    ...(meta?.gosUrl ? [{ icon: Coins, title: 'Псякоины Бобуслуг', to: '/app/exchange/psy' }] : []),
+    ...(gos?.role === 'president' ? [{ icon: Landmark, title: 'Казна страны', to: '/app/treasury' }] : []),
     { icon: Plus, title: 'Новая карта', to: '/app/cards/new' },
     { icon: Wallet, title: 'Открыть счёт', to: '/app/accounts/new' },
     { icon: UserRound, title: 'Профиль и тариф', to: '/app/profile' },

@@ -1,4 +1,6 @@
-import { MessageSquareText } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Lock, MessageSquareText } from 'lucide-react';
+import { GosButton, GosMark, GosNote, useGosConfig } from '../components/Gos';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../components/Logo';
@@ -34,6 +36,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const gos = useGosConfig();
   useEffect(() => {
     if (user) nav(nextPath(params), { replace: true });
   }, [user, nav, params]);
@@ -55,9 +58,15 @@ export function Login() {
       <form onSubmit={submit} className="flex flex-col gap-4">
         <Field label="Телефон"><Input inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} placeholder="+7 900 000-00-00" /></Field>
         <Field label="Пароль"><Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
-        {error && <ErrorNote>{error}</ErrorNote>}
+        {(error ?? params.get('gosError')) && <ErrorNote>{error ?? params.get('gosError')}</ErrorNote>}
         <Button type="submit" size="lg" variant="primary" loading={busy} disabled={phoneDigits(phone).length !== 11 || !password}>Войти</Button>
       </form>
+      {gos && (
+        <>
+          <div className="my-5 flex items-center gap-3 text-xs text-faint"><span className="h-px flex-1 bg-line" />или<span className="h-px flex-1 bg-line" /></div>
+          <GosButton next={nextPath(params)} />
+        </>
+      )}
     </Frame>
   );
 }
@@ -76,9 +85,23 @@ export function Register() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const smsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const gos = useGosConfig();
+  const ticket = params.get('gos');
+  const { data: pre, error: ticketError } = useQuery({
+    queryKey: ['gos-ticket', ticket],
+    queryFn: () => api<{ login: string; name: string; birthDate: string | null; passport: { number: string; country: string } | null; next: string }>(`/auth/gos/ticket?t=${encodeURIComponent(ticket!)}`),
+    enabled: !!ticket,
+    retry: false,
+  });
   useEffect(() => {
-    if (user) nav(nextPath(params), { replace: true });
-  }, [user, nav, params]);
+    if (pre) {
+      setName(pre.name);
+      setBirth(pre.birthDate ?? '');
+    }
+  }, [pre]);
+  useEffect(() => {
+    if (user) nav(pre?.next ?? nextPath(params), { replace: true });
+  }, [user, nav, params, pre]);
   useEffect(() => () => clearTimeout(smsTimer.current), []);
 
   const requestCode = async () => {
@@ -101,7 +124,7 @@ export function Register() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ user: User }>('/auth/register', { body: { phone, code, name, birthDate: birth, password } });
+      const r = await api<{ user: User }>('/auth/register', { body: { phone, code, name, birthDate: birth, password, gosTicket: ticket ?? undefined } });
       setUser(r.user);
     } catch (e) {
       setError(errorText(e));
@@ -127,7 +150,24 @@ export function Register() {
         sub={step === 'phone' ? 'Карта и счёт — за минуту, без визита в офис' : step === 'code' ? `Код отправлен на ${phone}` : 'Эти данные будут на карте и в договоре'}
         foot={<>Уже клиент? <Link to="/login" className="font-semibold text-brand">Войти</Link></>}
       >
-        {step === 'phone' && (
+        {gos && !ticket && (
+          // Accounts are opened only with a Бобопаспорт: the bank takes the name and birth date from Бобуслуги.
+          <div className="flex flex-col gap-4">
+            <GosButton label="Продолжить через Бобуслуги" next={nextPath(params)} />
+            <GosNote>Счёт открывается по Бобопаспорту. Имя и дату рождения мы получим с Бобуслуг — вводить их не нужно. Нет паспорта? Оформите его на <a href={gos.url} className="font-medium text-brand">Бобуслугах</a>.</GosNote>
+          </div>
+        )}
+        {ticket && ticketError && <ErrorNote>{errorText(ticketError)}</ErrorNote>}
+        {ticket && pre && (
+          <div className="mb-5 flex items-center gap-3 rounded-2xl bg-surface p-4">
+            <GosMark className="size-10" />
+            <div className="min-w-0 flex-1 text-sm">
+              <div className="font-semibold">{pre.name}</div>
+              <div className="text-muted">{pre.passport ? `Бобопаспорт ${pre.passport.number}` : 'Бобопаспорта нет — оформите его на Бобуслугах'}</div>
+            </div>
+          </div>
+        )}
+        {(!gos || (ticket && pre?.passport)) && step === 'phone' && (
           <form onSubmit={(e) => (e.preventDefault(), void requestCode())} className="flex flex-col gap-4">
             <Field label="Номер телефона"><Input inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} placeholder="+7 900 000-00-00" /></Field>
             {error && <ErrorNote>{error}</ErrorNote>}
@@ -146,8 +186,17 @@ export function Register() {
         )}
         {step === 'profile' && (
           <form onSubmit={register} className="flex flex-col gap-4">
-            <Field label="Имя и фамилия"><Input autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Иван Петров" /></Field>
-            <Field label="Дата рождения"><Input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} max={new Date().toISOString().slice(0, 10)} /></Field>
+            {pre ? (
+              <GosNote>
+                <Lock className="mr-1 inline size-3.5 -translate-y-px" />
+                {pre.name}, {pre.birthDate?.split('-').reverse().join('.')} — из Бобопаспорта
+              </GosNote>
+            ) : (
+              <>
+                <Field label="Имя и фамилия"><Input autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Иван Петров" /></Field>
+                <Field label="Дата рождения"><Input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} max={new Date().toISOString().slice(0, 10)} /></Field>
+              </>
+            )}
             <Field label="Придумайте пароль" hint="Не короче 8 символов"><Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
             {error && <ErrorNote>{error}</ErrorNote>}
             <Button type="submit" size="lg" variant="primary" loading={busy} disabled={name.trim().length < 3 || !birth || password.length < 8}>Открыть счёт</Button>
