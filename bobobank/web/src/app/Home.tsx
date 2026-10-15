@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight, ChevronRight, Crown, Eye, EyeOff, Gift, Landmark, PiggyBank, Plus, QrCode, Repeat, Search, Store, Wallet } from 'lucide-react';
+import { ArrowLeftRight, ChevronRight, Crown, Eye, EyeOff, Gift, Landmark, PiggyBank, Plus, QrCode, Repeat, Search, Store, TrendingUp, Wallet } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MiniCard } from '../components/BankCard';
@@ -35,6 +35,7 @@ interface Spend {
 export default function HomePage() {
   const { data, error } = useHome();
   const nav = useNavigate();
+  const { data: pf } = useQuery({ queryKey: ['portfolio'], queryFn: () => api<{ value: number; dayChange: number; items: unknown[] }>('/portfolio'), refetchInterval: 15000 });
   const [hidden, setHidden] = useState(readHidden);
   const { data: spend } = useQuery({ queryKey: ['analytics', 'home'], queryFn: () => api<Spend>('/analytics') });
   if (error) return <ErrorNote>{errorText(error)}</ErrorNote>;
@@ -64,6 +65,7 @@ export default function HomePage() {
         <Story color="#21A038" icon={<PiggyBank className="size-6" />} label="Вклад 18%" onClick={() => nav('/app/savings')} />
         <Story color="#1E6FD9" icon={<Landmark className="size-6" />} label="Кредитка" onClick={() => nav('/app/credits/apply/credit_card')} />
         <Story color="#2B2A28" icon={<Crown className="size-6 text-[#E7C987]" />} label="Prime" onClick={() => nav('/app/profile#prime')} />
+        <Story color="#0F766E" icon={<TrendingUp className="size-6" />} label="Биржа" onClick={() => nav('/app/invest')} />
         <Story color="#111111" icon={<Store className="size-6" />} label="GPAY" onClick={() => nav('/app/accounts/new')} />
       </div>
 
@@ -117,6 +119,11 @@ export default function HomePage() {
         {savings.length > 0 && (
           <Group title="Вклады и накопления">
             {savings.map((a) => <AccountLine key={a.id} a={a} show={show} />)}
+          </Group>
+        )}
+        {(pf?.value ?? 0) > 0 && (
+          <Group title="Инвестиции">
+            <WalletRow icon={<span className="flex size-[30px] items-center justify-center rounded-full bg-[#0F766E] text-white"><TrendingUp className="size-4" /></span>} title="Брокерский портфель" sub={`${pf!.items.length} ${pf!.items.length === 1 ? 'бумага' : pf!.items.length < 5 ? 'бумаги' : 'бумаг'} · ${pf!.dayChange >= 0 ? '+' : '−'}${money(Math.abs(pf!.dayChange))} за день`} value={hidden ? '•••' : money(pf!.value)} onClick={() => nav('/app/invest')} />
           </Group>
         )}
         {(data.loans.length > 0 || data.accounts.some((a) => a.kind === 'credit_card')) && (

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardList, FileClock, Gauge, Headset, Landmark, Menu, Settings, ShieldAlert, Users, X } from 'lucide-react';
+import { ArrowLeft, ClipboardList, FileClock, Gauge, Headset, Landmark, Menu, Settings, ShieldAlert, Users, X, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
@@ -11,6 +11,7 @@ import { Applications } from './Applications';
 import { ClientDetail, Clients } from './Clients';
 import { Dashboard } from './Dashboard';
 import { Restrictions } from './Restrictions';
+import { MarketPage } from './MarketPage';
 import { SettingsPage } from './SettingsPage';
 import { SupportDesk } from './Support';
 
@@ -36,6 +37,7 @@ export default function Admin() {
       ? [
           { to: '/admin/transactions', label: 'Проводки', icon: ClipboardList },
           { to: '/admin/settings', label: 'Ставки и курсы', icon: Settings },
+          { to: '/admin/market', label: 'Биржа', icon: TrendingUp },
           { to: '/admin/audit', label: 'Журнал действий', icon: FileClock },
         ]
       : []),
@@ -81,6 +83,7 @@ export default function Admin() {
             <Route path="support/:id" element={<SupportDesk />} />
             {admin && <Route path="transactions" element={<TransactionsPage />} />}
             {admin && <Route path="settings" element={<SettingsPage />} />}
+            {admin && <Route path="market" element={<MarketPage />} />}
             {admin && <Route path="audit" element={<AuditPage />} />}
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>

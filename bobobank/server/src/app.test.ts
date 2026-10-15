@@ -344,3 +344,62 @@ describe('credit', () => {
     assertLedger();
   });
 });
+
+describe('stock market', () => {
+  it('moves prices on its own and with clients trades, charges the fee and keeps the ledger balanced', async () => {
+    const { marketTick, getStock } = await import('./domain/market.js');
+    const adminH = await admin();
+    const a = await client();
+    await credit(adminH, a.main.id, '100000.00');
+    const list = (await app.inject({ url: '/api/market', headers: a.headers })).json();
+    expect(list.stocks.map((s: { ticker: string }) => s.ticker)).toEqual(['BOBO', 'GPAY', 'ZHUK', 'SAMN', 'PSYE', 'GRMD', 'BAGR']);
+
+    // The price wanders by itself, within the limits.
+    const start = getStock(ctx, 'ZHUK')!.price;
+    for (let i = 0; i < 120; i++) {
+      now += 5_000;
+      marketTick(ctx);
+    }
+    const after = getStock(ctx, 'ZHUK')!.price;
+    expect(after).not.toBe(start);
+    expect(Math.abs(after / start - 1)).toBeLessThan(0.3);
+
+    // A big purchase pushes the price up; selling pushes it down.
+    const before = getStock(ctx, 'SAMN')!.price;
+    const q = (await app.inject({ method: 'POST', url: '/api/market/SAMN/quote', headers: a.headers, payload: { side: 'buy', qty: 5000 } })).json();
+    expect(q.price).toBeGreaterThan(before);
+    expect(q.fee).toBe(Math.ceil((q.amount * 0.3) / 100));
+    const buy = await app.inject({ method: 'POST', url: '/api/market/SAMN/trade', headers: a.headers, payload: { side: 'buy', qty: 5000, accountId: a.main.id } });
+    expect(buy.statusCode).toBe(200);
+    expect(getStock(ctx, 'SAMN')!.price).toBeGreaterThan(before);
+    const bal = (await app.inject({ url: '/api/home', headers: a.headers })).json().accounts[0].balance;
+    expect(bal).toBe(10_000_000 - q.total);
+
+    expect((await app.inject({ method: 'POST', url: '/api/market/SAMN/trade', headers: a.headers, payload: { side: 'sell', qty: 5001, accountId: a.main.id } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/api/market/ZHUK/trade', headers: a.headers, payload: { side: 'sell', qty: 1, accountId: a.main.id } })).statusCode).toBe(400);
+    const mid = getStock(ctx, 'SAMN')!.price;
+    const sell = await app.inject({ method: 'POST', url: '/api/market/SAMN/trade', headers: a.headers, payload: { side: 'sell', qty: 2000, accountId: a.main.id } });
+    expect(sell.statusCode).toBe(200);
+    expect(getStock(ctx, 'SAMN')!.price).toBeLessThan(mid);
+
+    // A round trip does not make money: impact on the way in is paid back on the way out, plus the fee.
+    const b2 = await credit(adminH, a.main.id, '50000.00');
+    void b2;
+    const cash0 = (await app.inject({ url: '/api/home', headers: a.headers })).json().accounts[0].balance;
+    await app.inject({ method: 'POST', url: '/api/market/BAGR/trade', headers: a.headers, payload: { side: 'buy', qty: 2000, accountId: a.main.id } });
+    await app.inject({ method: 'POST', url: '/api/market/BAGR/trade', headers: a.headers, payload: { side: 'sell', qty: 2000, accountId: a.main.id } });
+    const cash1 = (await app.inject({ url: '/api/home', headers: a.headers })).json().accounts[0].balance;
+    expect(cash1).toBeLessThan(cash0);
+
+    const pf = (await app.inject({ url: '/api/portfolio', headers: a.headers })).json();
+    expect(pf.items).toEqual([expect.objectContaining({ ticker: 'SAMN', qty: 3000 })]);
+    const detail = (await app.inject({ url: '/api/market/SAMN?range=1h', headers: a.headers })).json();
+    expect(detail.tape.length).toBe(2);
+    expect(detail.series.length).toBeGreaterThan(0);
+
+    // The momentum of the purchase fades on the following ticks; halted stocks do not trade.
+    await app.inject({ method: 'POST', url: '/api/admin/market/SAMN', headers: adminH, payload: { halted: true } });
+    expect((await app.inject({ method: 'POST', url: '/api/market/SAMN/trade', headers: a.headers, payload: { side: 'sell', qty: 1, accountId: a.main.id } })).statusCode).toBe(400);
+    assertLedger();
+  });
+});

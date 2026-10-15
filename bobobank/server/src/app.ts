@@ -12,12 +12,15 @@ import { SYSTEM, systemAccount, type SystemCode } from './domain/ledger.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerClientRoutes } from './routes/client.js';
 import { registerGosApi, registerGosRoutes } from './routes/gos.js';
+import { registerMarketRoutes } from './routes/market.js';
+import { ensureStocks } from './domain/market.js';
 import { registerInternalRoutes } from './routes/internal.js';
 import { registerSbpRoutes } from './routes/sbp.js';
 import { registerSupportRoutes } from './routes/support.js';
 
 export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
   for (const code of Object.keys(SYSTEM) as SystemCode[]) for (const cur of ['RUB', 'USD', 'EUR']) systemAccount(ctx, code, cur);
+  ensureStocks(ctx);
 
   const app = Fastify({
     logger: opts.logger ? { level: ctx.cfg.logLevel, redact: ['req.headers.cookie', 'req.headers["x-bank-signature"]'] } : false,
@@ -80,6 +83,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerSbpRoutes(app, ctx);
   registerGosRoutes(app, ctx);
   registerGosApi(app, ctx);
+  registerMarketRoutes(app, ctx);
   registerSupportRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
   registerInternalRoutes(app, ctx);

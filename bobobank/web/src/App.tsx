@@ -30,6 +30,8 @@ const More = lazy(() => import('./app/More'));
 const SbpPay = lazy(() => import('./app/SbpPay'));
 const PsyExchange = lazy(() => import('./app/GosPages').then((m) => ({ default: m.PsyExchange })));
 const Treasury = lazy(() => import('./app/GosPages').then((m) => ({ default: m.Treasury })));
+const Invest = lazy(() => import('./app/Invest'));
+const StockPage = lazy(() => import('./app/Invest').then((m) => ({ default: m.StockPage })));
 const GosPay = lazy(() => import('./app/GosPages').then((m) => ({ default: m.GosPay })));
 const Admin = lazy(() => import('./admin/Admin'));
 
@@ -62,6 +64,8 @@ export default function App() {
           <Route path="exchange" element={<Exchange />} />
           <Route path="exchange/psy" element={<PsyExchange />} />
           <Route path="treasury" element={<Treasury />} />
+          <Route path="invest" element={<Invest />} />
+          <Route path="invest/:ticker" element={<StockPage />} />
           <Route path="history" element={<History />} />
           <Route path="history/:id" element={<Operation />} />
           <Route path="analytics" element={<Analytics />} />

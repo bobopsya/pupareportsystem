@@ -4,6 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [[ -f .env ]] || { echo "Нет .env — сначала запустите deploy/install.sh" >&2; exit 1; }
 git pull --ff-only
+# Бобуслуги live in their own repository, cloned by deploy/install-bobuslugi.sh.
+if [[ -d bobuslugi/.git ]]; then git -C bobuslugi pull --ff-only; fi
 docker compose up -d --build
 docker image prune -f >/dev/null
 echo "Портал обновлён."

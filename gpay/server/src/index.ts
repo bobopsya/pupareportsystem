@@ -3,7 +3,7 @@ import { loadConfig } from './config.js';
 import { createCtx } from './context.js';
 import { openDb } from './db.js';
 import { tickBank } from './domain/bankpay.js';
-import { syncTurnover } from './domain/gos.js';
+import { pushMarketTurnover, syncTurnover } from './domain/gos.js';
 import { tick } from './domain/payments.js';
 import { deliverDue } from './domain/webhooks.js';
 
@@ -27,6 +27,11 @@ setInterval(() => {
 setInterval(() => {
   syncTurnover(ctx).catch((err) => app.log.warn({ err }, 'Бобуслуги: оборот не отправлен'));
 }, 60_000).unref();
+
+// Turnover for the Bobobank stock market, every 10 minutes.
+const pushMarket = () => pushMarketTurnover(ctx).catch((err) => app.log.warn({ err }, 'Bobobank: оборот для биржи не отправлен'));
+setTimeout(pushMarket, 10_000).unref();
+setInterval(pushMarket, 600_000).unref();
 
 const shutdown = async () => {
   await app.close();

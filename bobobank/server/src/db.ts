@@ -392,6 +392,61 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX gos_orders_fine ON gos_orders(fine_id, type);
   `,
+  `
+  -- Stock market: prices move on their own (random walk around a fair value) and with clients' trades.
+  CREATE TABLE stocks (
+    ticker TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    sector TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    color TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    fair INTEGER NOT NULL,
+    vol REAL NOT NULL,
+    drift REAL NOT NULL DEFAULT 0,
+    float_shares INTEGER NOT NULL,
+    flow REAL NOT NULL DEFAULT 0,
+    open_price INTEGER NOT NULL,
+    day_key TEXT NOT NULL DEFAULT '',
+    shop_id INTEGER,
+    driver TEXT NOT NULL DEFAULT 'none',
+    halted INTEGER NOT NULL DEFAULT 0,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE stock_ticks (ticker TEXT NOT NULL, ts INTEGER NOT NULL, price INTEGER NOT NULL);
+  CREATE INDEX stock_ticks_t ON stock_ticks(ticker, ts);
+  CREATE TABLE stock_candles (
+    ticker TEXT NOT NULL,
+    res TEXT NOT NULL,
+    ts INTEGER NOT NULL,
+    o INTEGER NOT NULL, h INTEGER NOT NULL, l INTEGER NOT NULL, c INTEGER NOT NULL,
+    volume INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (ticker, res, ts)
+  );
+  CREATE TABLE positions (
+    user_id TEXT NOT NULL REFERENCES users(id),
+    ticker TEXT NOT NULL REFERENCES stocks(ticker),
+    qty INTEGER NOT NULL,
+    cost INTEGER NOT NULL,
+    PRIMARY KEY (user_id, ticker)
+  );
+  CREATE TABLE trades (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL,
+    qty INTEGER NOT NULL,
+    price INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    fee INTEGER NOT NULL,
+    account_id TEXT NOT NULL,
+    tx_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX trades_user ON trades(user_id, created_at);
+  CREATE INDEX trades_ticker ON trades(ticker, created_at);
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

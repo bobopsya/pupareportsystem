@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { setTurnover } from '../domain/market.js';
 import { HttpError, type Ctx } from '../context.js';
 import { authorize, capture, cardHashes, getAuthorization, refund, serializeAuthorization, voidAuthorization } from '../domain/acquiring.js';
 import { categoryOfMcc } from '../domain/bank.js';
@@ -191,6 +192,15 @@ export function registerInternalRoutes(app: FastifyInstance, ctx: Ctx) {
   }));
 
   // A shop owner enters the code from the bank app in GPAY; we tell GPAY which account it is.
+  // GPAY turnover for the stock market: GPAY's own share price and the prices of shops that went public.
+  app.post('/internal/v1/market/turnover', async (req) => {
+    const b = z
+      .object({ total30: z.number().int().min(0), shops: z.array(z.object({ id: z.number().int(), name: z.string().max(120), t30: z.number().int().min(0) })).max(10_000) })
+      .parse(req.body);
+    setTurnover(ctx, { total30: b.total30, shops: Object.fromEntries(b.shops.map((s) => [String(s.id), { name: s.name, t30: s.t30 }])) });
+    return { ok: true };
+  });
+
   app.post('/internal/v1/links/claim', idempotent((req) => {
     const b = z.object({ code: z.string().regex(/^\d{4}-?\d{4}$/), shop_id: z.number().int(), shop_name: z.string().max(120) }).parse(req.body);
     const code = b.code.includes('-') ? b.code : `${b.code.slice(0, 4)}-${b.code.slice(4)}`;

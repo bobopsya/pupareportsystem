@@ -3,6 +3,7 @@ import { loadConfig } from './config.js';
 import { createCtx } from './context.js';
 import { openDb } from './db.js';
 import { processOrders, recheckPeople } from './domain/gos.js';
+import { marketTick, TICK_MS } from './domain/market.js';
 import { tick } from './domain/tick.js';
 
 const cfg = loadConfig();
@@ -18,6 +19,15 @@ setInterval(() => {
     app.log.error(err);
   }
 }, 2000).unref();
+
+// Stock prices: a step every 5 seconds.
+setInterval(() => {
+  try {
+    marketTick(ctx);
+  } catch (err) {
+    app.log.error(err);
+  }
+}, TICK_MS).unref();
 
 // Бобуслуги: orders from the state (arrests, salaries) and a daily passport re-check.
 let gosBusy = false;

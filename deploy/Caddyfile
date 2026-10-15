@@ -21,3 +21,9 @@
 	respond /internal/* 404
 	reverse_proxy bobobank:8082
 }
+
+# Бобуслуги (profile "bobuslugi").
+{$GOS_DOMAIN:gos.localhost} {
+	encode zstd gzip
+	reverse_proxy bobuslugi:80
+}

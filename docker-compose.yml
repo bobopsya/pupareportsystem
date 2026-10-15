@@ -3,6 +3,7 @@
 #   Behind existing nginx:            leave COMPOSE_PROFILES empty, nginx proxies to 127.0.0.1:${APP_PORT}
 #   GPAY payment system:              add "gpay" to COMPOSE_PROFILES (deploy/install-gpay.sh does it)
 #   Bobobank (game bank):             add "bobobank" to COMPOSE_PROFILES (deploy/install-bobobank.sh does it)
+#   Бобуслуги (state services site):  add "bobuslugi" to COMPOSE_PROFILES (deploy/install-bobuslugi.sh clones it and does it)
 services:
   app:
     build: .
@@ -36,6 +37,10 @@ services:
       BANK_INTERNAL_URL: ${BANK_INTERNAL_URL:-}
       BANK_PUBLIC_URL: ${BANK_PUBLIC_URL:-}
       BANK_GPAY_SECRET: ${BANK_GPAY_SECRET:-}
+      # Бобуслуги (set by deploy/install-bobuslugi.sh); empty = no «Войти через Бобуслуги».
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      GOS_PUBLIC_URL: ${GOS_PUBLIC_URL:-}
     volumes:
       - ./gpay-data:/data
     ports:
@@ -58,10 +63,33 @@ services:
       GPAY_INTERNAL_URL: http://gpay:8081
       GPAY_PUBLIC_URL: https://${GPAY_DOMAIN:-pay.localhost}
       BANK_GPAY_SECRET: ${BANK_GPAY_SECRET:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      GOS_PUBLIC_URL: ${GOS_PUBLIC_URL:-}
     volumes:
       - ./bobobank-data:/data
     ports:
       - "127.0.0.1:${BANK_PORT:-8082}:8082"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Бобуслуги: static site (the repository is cloned into ./bobuslugi), the database stays in Supabase.
+  bobuslugi:
+    build:
+      context: ./bobuslugi
+      args:
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+        VITE_EMAIL_DOMAIN: ${GOS_EMAIL_DOMAIN:-bobuslugi.local}
+        VITE_BANK_URL: https://${BANK_DOMAIN:-bank.localhost}
+        VITE_GPAY_URL: https://${GPAY_DOMAIN:-pay.localhost}
+    image: bobuslugi:latest
+    profiles: ["bobuslugi"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GOS_PORT:-8083}:80"
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -75,6 +103,7 @@ services:
       DOMAIN: ${DOMAIN}
       GPAY_DOMAIN: ${GPAY_DOMAIN:-pay.localhost}
       BANK_DOMAIN: ${BANK_DOMAIN:-bank.localhost}
+      GOS_DOMAIN: ${GOS_DOMAIN:-gos.localhost}
     ports:
       - "80:80"
       - "443:443"

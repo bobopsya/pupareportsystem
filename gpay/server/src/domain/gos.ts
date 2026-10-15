@@ -1,4 +1,5 @@
 import { ApiError, HttpError, type Ctx } from '../context.js';
+import { bankEnabled, bankRequest } from './bank.js';
 import { convert, getRates } from './fx.js';
 import { getShop, type ShopRow } from './payments.js';
 import { safeJson } from '../util.js';
@@ -101,4 +102,12 @@ export async function syncTurnover(ctx: Ctx) {
     ctx.db.prepare('UPDATE shops SET gos_synced_at = ? WHERE id = ?').run(now, s.id);
   }
   return rows.length;
+}
+
+/** For the Bobobank stock market: GPAY's 30-day turnover and each shop's (GPAY's share price follows it). */
+export async function pushMarketTurnover(ctx: Ctx) {
+  if (!bankEnabled(ctx)) return;
+  const now = ctx.now();
+  const shops = (ctx.db.prepare('SELECT id, name FROM shops').all() as { id: number; name: string }[]).map((s) => ({ id: s.id, name: s.name, t30: shopTurnover(ctx, s.id, now - 30 * 86400_000, now) }));
+  await bankRequest(ctx, 'POST', '/internal/v1/market/turnover', { total30: shops.reduce((sum, s) => sum + s.t30, 0), shops: shops.filter((s) => s.t30 > 0) });
 }

@@ -1,4 +1,4 @@
-import { BarChart3, Coins, Gift, Landmark, PiggyBank, Plus, Repeat, Shield, UserRound, Wallet } from 'lucide-react';
+import { BarChart3, Coins, TrendingUp, Gift, Landmark, PiggyBank, Plus, Repeat, Shield, UserRound, Wallet } from 'lucide-react';
 import { useHome, useMeta } from '../lib/hooks';
 import { useNavigate } from 'react-router-dom';
 import { Row, Screen } from '../components/Screen';
@@ -13,6 +13,7 @@ export default function More() {
   const gos = home?.profile.gos;
   const items = [
     { icon: BarChart3, title: 'Расходы и аналитика', to: '/app/analytics' },
+    { icon: TrendingUp, title: 'Инвестиции', to: '/app/invest' },
     { icon: Landmark, title: 'Кредиты', to: '/app/credits' },
     { icon: PiggyBank, title: 'Вклады и накопления', to: '/app/savings' },
     { icon: Gift, title: 'Бобобонусы и кешбэк', to: '/app/bonus' },
