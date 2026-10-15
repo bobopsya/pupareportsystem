@@ -157,3 +157,56 @@ describe('холды и списания по привязке', () => {
     expect((await partner('GET', `/internal/partner/v1/mandates/${second.id}`)).json().status).toBe('active');
   });
 });
+
+describe('крупные суммы — подтверждение в приложении', () => {
+  it('сумма выше лимита ждёт подтверждения; одобрение замораживает деньги на счёте привязки', async () => {
+    const c = await client();
+    fund(c.main.id, 2_000_000);
+    const { mandate } = (await partner('POST', '/internal/partner/v1/auth/redeem', { code: await link(c, 5000_00) })).json();
+    // Without allow_confirmation the old answer stays.
+    expect((await partner('POST', `/internal/partner/v1/mandates/${mandate.id}/holds`, { amount: 1_240_000_00, external_id: 'jet0', title: 'Джет' })).json().code).toBe('limit_exceeded');
+    const r = await partner('POST', `/internal/partner/v1/mandates/${mandate.id}/holds`, { amount: 1_240_000_00, external_id: 'jet1', title: 'Частный джет Внуково-3 → Сочи', allow_confirmation: true }, { key: 'j1' });
+    expect(r.statusCode).toBe(200);
+    const conf = r.json().confirmation;
+    expect(r.json()).toMatchObject({ status: 'confirmation_required', confirmation: { status: 'pending', amount: 1_240_000_00, url: `https://bank.test/connect/confirm?id=${conf.id}` } });
+    // A retry returns the same request.
+    expect((await partner('POST', `/internal/partner/v1/mandates/${mandate.id}/holds`, { amount: 1_240_000_00, external_id: 'jet1', title: 'x', allow_confirmation: true })).json().confirmation.id).toBe(conf.id);
+    expect(await available(c)).toBe(2_000_000_00);
+
+    const pulse = (await app.inject({ url: '/api/pulse', headers: c.headers })).json();
+    expect(pulse.partnerRequests).toEqual([expect.objectContaining({ id: conf.id, name: 'Бобо.Транспорт', amount: 1_240_000_00, title: 'Частный джет Внуково-3 → Сочи' })]);
+    // Someone else cannot approve it.
+    const other = await client('+7 900 333-44-55', 'Чужой Человек');
+    expect((await app.inject({ method: 'POST', url: `/api/partner-requests/${conf.id}`, headers: other.headers, payload: { approve: true } })).statusCode).toBe(404);
+
+    const ok = await app.inject({ method: 'POST', url: `/api/partner-requests/${conf.id}`, headers: c.headers, payload: { approve: true } });
+    expect(ok.json()).toMatchObject({ status: 'approved' });
+    expect(await available(c)).toBe(2_000_000_00 - 1_240_000_00);
+    const st = (await partner('GET', `/internal/partner/v1/confirmations/${conf.id}`)).json();
+    expect(st).toMatchObject({ status: 'approved', charge: { status: 'held', amount: 1_240_000_00 } });
+    expect((await app.inject({ method: 'POST', url: `/api/partner-requests/${conf.id}`, headers: c.headers, payload: { approve: true } })).statusCode).toBe(400);
+    // The confirmed hold is captured like any other, here for less.
+    expect((await partner('POST', `/internal/partner/v1/holds/${st.charge.id}/capture`, { amount: 1_100_000_00, title: 'Джет', subtitle: 'VKO → AER' })).json().captured).toBe(1_100_000_00);
+    expect(await available(c)).toBe(2_000_000_00 - 1_100_000_00);
+    assertLedger();
+  });
+
+  it('отказ, истечение срока, нехватка денег и потолок', async () => {
+    const c = await client();
+    fund(c.main.id, 300_000);
+    const { mandate } = (await partner('POST', '/internal/partner/v1/auth/redeem', { code: await link(c, 5000_00) })).json();
+    const ask = async (ext: string, amount: number) => partner('POST', `/internal/partner/v1/mandates/${mandate.id}/holds`, { amount, external_id: ext, title: 'Вертолёт', allow_confirmation: true });
+    const a = (await ask('h1', 150_000_00)).json().confirmation;
+    expect((await app.inject({ method: 'POST', url: `/api/partner-requests/${a.id}`, headers: c.headers, payload: { approve: false } })).json().status).toBe('declined');
+    expect((await partner('GET', `/internal/partner/v1/confirmations/${a.id}`)).json()).toMatchObject({ status: 'declined', charge: null });
+
+    const b = (await ask('h2', 150_000_00)).json().confirmation;
+    now += 11 * 60_000;
+    expect((await partner('GET', `/internal/partner/v1/confirmations/${b.id}`)).json().status).toBe('expired');
+    expect((await app.inject({ method: 'POST', url: `/api/partner-requests/${b.id}`, headers: c.headers, payload: { approve: true } })).json().error).toMatch(/истекло/);
+
+    expect((await ask('h3', 400_000_00)).json().code).toBe('insufficient_funds');
+    expect((await ask('h4', 60_000_000_00)).statusCode).toBe(400);
+    expect(await available(c)).toBe(300_000_00);
+  });
+});

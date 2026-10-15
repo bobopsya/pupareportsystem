@@ -4,6 +4,7 @@ import { requireUser } from '../auth.js';
 import { audit, HttpError, type Ctx } from '../context.js';
 import { decide, pendingConfirmations } from '../domain/acquiring.js';
 import { pendingRequests } from '../domain/orders.js';
+import { pendingPartnerRequests } from '../domain/partners.js';
 import { BANK, CASHBACK_CATEGORIES, CATEGORIES, CORR_ACCOUNT, PREFIX, RESTRICTION_REASONS, RESTRICTION_TYPES, type Category } from '../domain/bank.js';
 import { chooseCategories, chosenCategories, monthAccrued, RAISED_CATEGORIES, redeemBonus } from '../domain/bonus.js';
 import { DESIGNS, issueCard, NETWORKS, ownedCard, revealCard, serializeCard, TARIFFS, type CardLimits, type CardRow } from '../domain/cards.js';
@@ -758,7 +759,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
     const u = me(req);
     const unread = (db.prepare('SELECT COUNT(*) c FROM notifications WHERE user_id = ? AND read_at IS NULL').get(u.id) as { c: number }).c;
     const chatUnread = (db.prepare('SELECT COALESCE(SUM(unread_client), 0) c FROM support_threads WHERE user_id = ?').get(u.id) as { c: number }).c;
-    return { confirmations: pendingConfirmations(ctx, u.id), requests: pendingRequests(ctx, u.id), unread, chatUnread };
+    return { confirmations: pendingConfirmations(ctx, u.id), requests: pendingRequests(ctx, u.id), partnerRequests: pendingPartnerRequests(ctx, u.id), unread, chatUnread };
   });
 
   app.post('/api/confirmations/:id', async (req) => {

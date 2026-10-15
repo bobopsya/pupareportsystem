@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { HttpError, type Ctx } from '../context.js';
 import {
-  captureCharge, chargeNow, grantMandate, holdCharge, mandateInfo, partnerCharge, partnerMandate, partners, redeemCode, refundCharge, revokeMandate, updateMandate, userMandates, voidCharge,
+  captureCharge, chargeNow, decideConfirmation, grantMandate, holdCharge, mandateInfo, partnerCharge, partnerConfirmation, partnerMandate, partners, pendingPartnerRequests, redeemCode, refundCharge,
+  requestConfirmation, revokeMandate, updateMandate, userConfirmation, userMandates, voidCharge,
   type ChargeRow,
 } from '../domain/partners.js';
 import { SIGNATURE_HEADER, verify } from '../domain/signing.js';
@@ -44,6 +45,13 @@ export function registerPartnerRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true };
   });
 
+  app.get('/api/partner-requests', async (req) => ({ requests: pendingPartnerRequests(ctx, requireUser(req).id) }));
+  app.get('/api/partner-requests/:id', async (req) => userConfirmation(ctx, requireUser(req).id, (req.params as { id: string }).id));
+  app.post('/api/partner-requests/:id', async (req) => {
+    const { approve } = z.object({ approve: z.boolean() }).parse(req.body);
+    return decideConfirmation(ctx, requireUser(req).id, (req.params as { id: string }).id, approve);
+  });
+
   app.delete('/api/mandates/:id', async (req) => {
     revokeMandate(ctx, requireUser(req).id, (req.params as { id: string }).id);
     return { ok: true };
@@ -68,14 +76,22 @@ export function registerPartnerRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.get(`${PREFIX}mandates/:id`, async (req) => mandateInfo(ctx, partnerMandate(ctx, client(req), id(req))));
 
-  const holdBody = z.object({ amount: minor, external_id: z.string().min(1).max(64), title: z.string().max(200).default(''), subtitle: z.string().max(200).default('') });
+  const holdBody = z.object({ amount: z.number().int().positive().max(50_000_000_00), external_id: z.string().min(1).max(64), title: z.string().max(200).default(''), subtitle: z.string().max(200).default(''), allow_confirmation: z.boolean().default(false) });
+  // Above the mandate limit the partner may ask for a confirmation in the app instead of a refusal.
   app.post(`${PREFIX}mandates/:id/holds`, idempotent((req) => {
     const b = holdBody.parse(req.body);
+    const m = partnerMandate(ctx, client(req), id(req));
+    const done = ctx.db.prepare('SELECT 1 FROM partner_charges WHERE mandate_id = ? AND external_id = ?').get(m.id, b.external_id);
+    if (b.allow_confirmation && !done && b.amount > m.limit_per_tx) return { status: 'confirmation_required', confirmation: requestConfirmation(ctx, client(req), m.id, b.amount, b.external_id, b.title) };
+    if (b.amount > 10_000_000_00) throw new HttpError(402, 'Сумма слишком большая', 'limit_exceeded');
     return chargeView(holdCharge(ctx, client(req), id(req), b.amount, b.external_id, b.title));
   }));
 
+  app.get(`${PREFIX}confirmations/:id`, async (req) => partnerConfirmation(ctx, client(req), id(req)));
+
   app.post(`${PREFIX}mandates/:id/charges`, idempotent((req) => {
     const b = holdBody.parse(req.body);
+    if (b.amount > 10_000_000_00) throw new HttpError(402, 'Сумма слишком большая', 'limit_exceeded');
     return chargeView(chargeNow(ctx, client(req), id(req), b.amount, b.external_id, b.title, b.subtitle));
   }));
 

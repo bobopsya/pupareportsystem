@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Car, Link2, ShieldCheck, Unlink } from 'lucide-react';
+import { Car, CheckCircle2, Link2, ShieldCheck, Unlink, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AccountPicker } from '../components/AccountPicker';
@@ -178,5 +178,99 @@ export function ConnectedServices() {
         )}
       </Modal>
     </>
+  );
+}
+
+export interface PartnerRequest {
+  id: string;
+  status: 'pending' | 'approved' | 'declined' | 'expired';
+  client: string;
+  name: string;
+  returnUrl: string | null;
+  title: string;
+  amount: number;
+  expiresAt: number;
+  accountLast4: string;
+  accountName: string;
+  available: number;
+}
+
+/** A partner asks to freeze an amount above the mandate limit (a jet, a helicopter): the customer decides. */
+export function PartnerRequestCard({ r, onDecided }: { r: PartnerRequest; onDecided?: (r: PartnerRequest) => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState<'yes' | 'no' | null>(null);
+  const [left, setLeft] = useState(() => Math.max(0, Math.round((r.expiresAt - Date.now()) / 1000)));
+  useEffect(() => {
+    const t = setInterval(() => setLeft(Math.max(0, Math.round((r.expiresAt - Date.now()) / 1000))), 1000);
+    return () => clearInterval(t);
+  }, [r.expiresAt]);
+  const answer = async (approve: boolean) => {
+    setBusy(approve ? 'yes' : 'no');
+    try {
+      const res = await api<PartnerRequest>(`/partner-requests/${r.id}`, { body: { approve } });
+      toast(approve ? `${money(r.amount)} заморожено для «${r.name}»` : 'Запрос отклонён', approve ? 'ok' : 'bad');
+      onDecided?.(res);
+    } catch (e) {
+      toast(errorText(e), 'bad');
+    } finally {
+      setBusy(null);
+      void qc.invalidateQueries({ queryKey: ['pulse'] });
+      void qc.invalidateQueries({ queryKey: ['home'] });
+    }
+  };
+  const short = r.available < r.amount;
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <PartnerIcon client={r.client} />
+        <div className="min-w-0">
+          <div className="text-[13px] text-muted">Подтвердите оплату</div>
+          <div className="truncate text-lg font-semibold">{r.name}</div>
+        </div>
+      </div>
+      <div className="mt-4 text-[32px] font-semibold leading-none num">{money(r.amount)}</div>
+      <div className="mt-1 text-sm text-muted">{r.title}</div>
+      <div className="mt-4 rounded-2xl bg-sunken px-4 py-3 text-sm">
+        <div className="flex justify-between gap-3"><span className="text-muted">Счёт</span><span className="font-medium">{r.accountName} •• {r.accountLast4}</span></div>
+        <div className="mt-1 flex justify-between gap-3"><span className="text-muted">Доступно</span><span className={short ? 'font-medium text-bad' : 'font-medium'}>{money(r.available)}</span></div>
+      </div>
+      <p className="mt-3 text-xs text-muted">Сумма больше лимита привязки, поэтому нужно ваше подтверждение. Деньги заморозятся до конца поездки; спишется точная цена, остаток вернётся. Осталось {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}.</p>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Button size="lg" loading={busy === 'no'} disabled={!!busy} onClick={() => void answer(false)}>Отклонить</Button>
+        <Button size="lg" variant="primary" loading={busy === 'yes'} disabled={!!busy || short || left === 0} onClick={() => void answer(true)}>Подтвердить</Button>
+      </div>
+    </>
+  );
+}
+
+/** Opened from the partner's «Открыть Bobobank» link. */
+export function ConfirmPartnerPage() {
+  const [params] = useSearchParams();
+  const id = params.get('id') ?? '';
+  const nav = useNavigate();
+  const { data, error, refetch } = useQuery({ queryKey: ['partner-request', id], queryFn: () => api<PartnerRequest>(`/partner-requests/${id}`), enabled: !!id, retry: false });
+  const back = data?.returnUrl;
+  let body;
+  if (!id || error) body = <ErrorNote>{error ? errorText(error) : 'В ссылке нет номера запроса.'}</ErrorNote>;
+  else if (!data) body = <Loading />;
+  else if (data.status === 'pending') body = <Card><PartnerRequestCard r={data} onDecided={() => void refetch()} /></Card>;
+  else {
+    const ok = data.status === 'approved';
+    body = (
+      <Card className="text-center">
+        {ok ? <CheckCircle2 className="mx-auto size-14 text-ok" /> : <XCircle className="mx-auto size-14 text-bad" />}
+        <div className="mt-3 text-xl font-semibold">{ok ? 'Оплата подтверждена' : data.status === 'expired' ? 'Время вышло' : 'Запрос отклонён'}</div>
+        <p className="mt-1 text-[15px] text-muted">{ok ? `${money(data.amount)} заморожено — возвращайтесь в «${data.name}».` : `«${data.name}» не получит эти деньги.`}</p>
+        {back && <Button className="mt-5 w-full" size="lg" variant="primary" onClick={() => window.location.assign(back)}>Вернуться в {data.name}</Button>}
+        <Button className="mt-2 w-full" variant="ghost" onClick={() => nav('/app')}>В Bobobank</Button>
+      </Card>
+    );
+  }
+  return (
+    <div className="mx-auto min-h-dvh max-w-md px-4 pb-10 pt-[max(1.25rem,env(safe-area-inset-top))]">
+      <div className="mb-6 flex items-center justify-between"><Logo compact /><span className="text-sm text-muted">Подтверждение оплаты</span></div>
+      {body}
+    </div>
   );
 }

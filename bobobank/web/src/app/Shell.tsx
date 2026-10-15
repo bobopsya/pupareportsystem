@@ -1,3 +1,4 @@
+import { PartnerRequestCard, type PartnerRequest } from './Connect';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Bell, BarChart3, Check, Clock, Gift, Home, Landmark, LayoutGrid, LogOut, MessageCircle, PiggyBank, Shield, ShoppingBag, X,
@@ -27,6 +28,7 @@ interface PayRequest {
 interface Pulse {
   confirmations: Confirmation[];
   requests: PayRequest[];
+  partnerRequests?: PartnerRequest[];
   unread: number;
   chatUnread: number;
 }
@@ -149,6 +151,14 @@ export default function Shell() {
 
       {confirm && <ConfirmPurchase key={confirm.id} c={confirm} />}
       {!confirm && pulse?.requests?.[0] && <ConfirmRequest key={pulse.requests[0].id} r={pulse.requests[0]} />}
+      {!confirm && !pulse?.requests?.length && pulse?.partnerRequests?.[0] && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
+          <div role="dialog" aria-modal="true" aria-label="Подтверждение оплаты" className="bb-sheet w-full max-w-md rounded-t-[20px] bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-pop sm:rounded-2xl">
+            <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-line-strong sm:hidden" />
+            <PartnerRequestCard key={pulse.partnerRequests[0].id} r={pulse.partnerRequests[0]} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

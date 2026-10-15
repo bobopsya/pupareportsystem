@@ -482,6 +482,22 @@ const MIGRATIONS: string[] = [
     UNIQUE (mandate_id, external_id)
   );
   `,
+  `
+  -- Partner holds above the mandate limit: each is confirmed by the customer in the app.
+  CREATE TABLE partner_confirmations (
+    id TEXT PRIMARY KEY,
+    mandate_id TEXT NOT NULL REFERENCES mandates(id),
+    external_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,
+    charge_id TEXT,
+    expires_at INTEGER NOT NULL,
+    decided_at INTEGER,
+    created_at INTEGER NOT NULL,
+    UNIQUE (mandate_id, external_id)
+  );
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

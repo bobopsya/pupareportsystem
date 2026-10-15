@@ -147,12 +147,15 @@ export function partnerCharge(ctx: Ctx, client: string, id: string): { c: Charge
 
 /** Freezes money for an order. The same external_id returns the same hold (retries are safe). */
 export function holdCharge(ctx: Ctx, client: string, mandateId: string, amount: number, externalId: string, title: string): ChargeRow {
-  const p = partnerOf(ctx, client);
   const m = partnerMandate(ctx, client, mandateId);
   const prev = ctx.db.prepare('SELECT * FROM partner_charges WHERE mandate_id = ? AND external_id = ?').get(m.id, externalId) as ChargeRow | undefined;
   if (prev) return prev;
   if (m.status !== 'active') throw new HttpError(403, 'Привязка к Bobobank отключена. Привяжите счёт заново.', 'mandate_revoked');
   if (amount > m.limit_per_tx) throw new HttpError(402, `Сумма больше лимита ${humanMoney(m.limit_per_tx, 'RUB')}. Измените лимит в Bobobank.`, 'limit_exceeded');
+  return placeHold(ctx, partnerOf(ctx, client), m, amount, externalId, title);
+}
+
+function placeHold(ctx: Ctx, p: Partner, m: MandateRow, amount: number, externalId: string, title: string): ChargeRow {
   const acc = getAccount(ctx, m.account_id)!;
   let holdId: string;
   try {
@@ -165,6 +168,107 @@ export function holdCharge(ctx: Ctx, client: string, mandateId: string, amount: 
   const id = newId('pch', 16);
   ctx.db.prepare(`INSERT INTO partner_charges(id, mandate_id, hold_id, external_id, amount, title, status, created_at) VALUES(?,?,?,?,?,?,'held',?)`).run(id, m.id, holdId, externalId, amount, title.slice(0, 200), ctx.now());
   return getCharge(ctx, id)!;
+}
+
+// ---- Large amounts: the customer confirms each one in the bank app ----
+
+/** Upper bound for one confirmed hold (a long jet flight). */
+export const CONFIRM_MAX = 50_000_000_00;
+export const CONFIRM_TTL = 10 * 60_000;
+
+export interface ConfirmationRow {
+  id: string;
+  mandate_id: string;
+  external_id: string;
+  amount: number;
+  title: string;
+  status: 'pending' | 'approved' | 'declined' | 'expired';
+  charge_id: string | null;
+  expires_at: number;
+  decided_at: number | null;
+  created_at: number;
+}
+
+function freshConfirmation(ctx: Ctx, id: string): ConfirmationRow | undefined {
+  ctx.db.prepare(`UPDATE partner_confirmations SET status = 'expired' WHERE id = ? AND status = 'pending' AND expires_at <= ?`).run(id, ctx.now());
+  return ctx.db.prepare('SELECT * FROM partner_confirmations WHERE id = ?').get(id) as ConfirmationRow | undefined;
+}
+
+export function confirmationView(ctx: Ctx, c: ConfirmationRow) {
+  const charge = c.charge_id ? getCharge(ctx, c.charge_id) : undefined;
+  return {
+    id: c.id,
+    status: c.status,
+    amount: c.amount,
+    expires_at: c.expires_at,
+    url: `${ctx.cfg.publicUrl}/connect/confirm?id=${c.id}`,
+    charge: charge ? { id: charge.id, status: charge.status, amount: charge.amount, captured: charge.captured, refunded: charge.refunded, external_id: charge.external_id } : null,
+  };
+}
+
+/** A hold above the mandate limit waits for the customer's approval in the app. */
+export function requestConfirmation(ctx: Ctx, client: string, mandateId: string, amount: number, externalId: string, title: string) {
+  const p = partnerOf(ctx, client);
+  const m = partnerMandate(ctx, client, mandateId);
+  const prev = ctx.db.prepare('SELECT id FROM partner_confirmations WHERE mandate_id = ? AND external_id = ?').get(m.id, externalId) as { id: string } | undefined;
+  if (prev) return confirmationView(ctx, freshConfirmation(ctx, prev.id)!);
+  if (m.status !== 'active') throw new HttpError(403, 'Привязка к Bobobank отключена. Привяжите счёт заново.', 'mandate_revoked');
+  if (amount > CONFIRM_MAX) throw new HttpError(402, `Сумма больше ${humanMoney(CONFIRM_MAX, 'RUB')}`, 'limit_exceeded');
+  const acc = getAccount(ctx, m.account_id)!;
+  assertDebitAllowed(ctx, acc);
+  if (available(ctx, acc) < amount) throw new HttpError(402, 'Недостаточно средств на счёте Bobobank', 'insufficient_funds');
+  const id = newId('pcf', 16);
+  const now = ctx.now();
+  ctx.db
+    .prepare(`INSERT INTO partner_confirmations(id, mandate_id, external_id, amount, title, status, expires_at, created_at) VALUES(?,?,?,?,?,'pending',?,?)`)
+    .run(id, m.id, externalId, amount, title.slice(0, 200), now + CONFIRM_TTL, now);
+  notify(ctx, m.user_id, 'partner', `Подтвердите ${humanMoney(amount, 'RUB')}`, `${p.name}: ${title}`, { confirmationId: id });
+  return confirmationView(ctx, freshConfirmation(ctx, id)!);
+}
+
+export function partnerConfirmation(ctx: Ctx, client: string, id: string) {
+  const c = freshConfirmation(ctx, id);
+  const m = c && getMandate(ctx, c.mandate_id);
+  if (!c || !m || m.client !== client) throw new HttpError(404, 'Запрос не найден');
+  return confirmationView(ctx, c);
+}
+
+const confirmationForUser = (ctx: Ctx, c: ConfirmationRow) => {
+  const m = getMandate(ctx, c.mandate_id)!;
+  const acc = getAccount(ctx, m.account_id)!;
+  const p = partners(ctx)[m.client];
+  return { id: c.id, status: c.status, client: m.client, name: p?.name ?? m.client, returnUrl: p ? new URL(p.redirect).origin : null, title: c.title, amount: c.amount, expiresAt: c.expires_at, accountLast4: acc.number.slice(-4), accountName: acc.name, available: Math.max(0, available(ctx, acc)) };
+};
+
+export function pendingPartnerRequests(ctx: Ctx, userId: string) {
+  const rows = ctx.db
+    .prepare(`SELECT c.* FROM partner_confirmations c JOIN mandates m ON m.id = c.mandate_id WHERE m.user_id = ? AND c.status = 'pending' AND c.expires_at > ? ORDER BY c.created_at`)
+    .all(userId, ctx.now()) as ConfirmationRow[];
+  return rows.map((c) => confirmationForUser(ctx, c));
+}
+
+export function userConfirmation(ctx: Ctx, userId: string, id: string) {
+  const c = freshConfirmation(ctx, id);
+  const m = c && getMandate(ctx, c.mandate_id);
+  if (!c || !m || m.user_id !== userId) throw new HttpError(404, 'Запрос не найден');
+  return confirmationForUser(ctx, c);
+}
+
+/** The customer's answer: approval freezes the money on the mandate's account now. */
+export function decideConfirmation(ctx: Ctx, userId: string, id: string, approve: boolean) {
+  const c = freshConfirmation(ctx, id);
+  const m = c && getMandate(ctx, c.mandate_id);
+  if (!c || !m || m.user_id !== userId) throw new HttpError(404, 'Запрос не найден');
+  if (c.status === 'expired') throw new HttpError(400, 'Время на подтверждение истекло');
+  if (c.status !== 'pending') throw new HttpError(400, 'Запрос уже обработан');
+  if (!approve) {
+    ctx.db.prepare(`UPDATE partner_confirmations SET status = 'declined', decided_at = ? WHERE id = ?`).run(ctx.now(), id);
+    return confirmationForUser(ctx, freshConfirmation(ctx, id)!);
+  }
+  if (m.status !== 'active') throw new HttpError(400, 'Сервис отключён от Bobobank');
+  const charge = placeHold(ctx, partnerOf(ctx, m.client), m, c.amount, c.external_id, c.title);
+  ctx.db.prepare(`UPDATE partner_confirmations SET status = 'approved', charge_id = ?, decided_at = ? WHERE id = ?`).run(charge.id, ctx.now(), id);
+  return confirmationForUser(ctx, freshConfirmation(ctx, id)!);
 }
 
 /** Charges the final price (not more than the hold) and releases the rest. */
