@@ -163,7 +163,7 @@ jobs:
             node bobobank/server/dist/index.js > "$RUNNER_TEMP/bank.log" 2>&1 &
           DATA_DIR="$RUNNER_TEMP/taxi" COOKIE_SECURE=0 WEB_DIST="$PWD/transport/web/dist" HOST=127.0.0.1 PORT=8084 PUBLIC_URL=http://localhost:8084 \
             BANK_INTERNAL_URL=http://127.0.0.1:8082 BANK_PUBLIC_URL=http://localhost:8082 BANK_TRANSPORT_SECRET=$SECRET \
-            OSRM_URL=http://127.0.0.1:8099 NOMINATIM_URL=http://127.0.0.1:8099 \
+            OSRM_URL=http://127.0.0.1:8099 NOMINATIM_URL=http://127.0.0.1:8099 BUS_ROUTES_FILE="$PWD/transport/e2e/bus-fixture.json" \
             node transport/server/dist/index.js > "$RUNNER_TEMP/taxi.log" 2>&1 &
           for _ in $(seq 30); do curl -fs http://127.0.0.1:8082/api/health && curl -fs http://127.0.0.1:8084/api/health && break; sleep 1; done
           PW=$(DATA_DIR="$RUNNER_TEMP/bank" node bobobank/server/dist/cli.js create-admin 79990000001 "Админ" | awk '/Пароль/ {print $2}')

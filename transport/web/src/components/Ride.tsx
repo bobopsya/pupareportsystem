@@ -1,9 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Baby, Check, FileText, MessageCircle, Phone, ShieldCheck, Star, X, Zap } from 'lucide-react';
+import { Baby, Bus, Check, ExternalLink, FileText, MessageCircle, Phone, Plane, ShieldCheck, Star, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../lib/api';
 import { clock, km, minutes, rub } from '../lib/format';
 import type { Car, Driver, Ride, TariffId } from '../lib/types';
+import { AircraftIcon } from './Air';
+import { BusBadge } from './Bus';
 import { Button, cx, Modal, useToast } from './ui';
 
 /** Side view of a car for the tariff cards (own drawing). */
@@ -107,8 +109,136 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
   const paidCancel = ride.status === 'arrived' || (ride.status === 'driver_coming' && ride.freeCancelUntil !== null && now >= ride.freeCancelUntil);
   const callBot = () => toast(`${ride.driver?.name ?? 'Водитель'} — бот и звонки не принимает, но уже знает, куда ехать`);
 
+  const air = ride.air;
+  const bus = ride.bus;
+  const craftCard = air && ride.car && ride.driver && (
+    <div className="mt-4 flex items-center gap-3 rounded-2xl bg-sunken p-3">
+      <AircraftIcon kind={air.kind} className="size-12 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[15px] font-semibold">{air.model}</div>
+        <div className="truncate text-sm text-muted">Командир {ride.driver.name} · {air.className}, до {air.seats} пасс.</div>
+      </div>
+      <span className="shrink-0 rounded-lg border-2 border-ink bg-white px-1.5 py-0.5 text-sm font-bold text-[#141414]">{ride.car.plate}</span>
+    </div>
+  );
+  const what = air ? (air.kind === 'heli' ? 'вертолёт' : 'джет') : 'поездку';
+
   let body;
-  if (ride.status === 'searching') {
+  if (ride.status === 'awaiting_payment') {
+    const left = ride.confirmation?.expiresAt ? Math.max(0, (ride.confirmation.expiresAt - now) / 1000) : 0;
+    body = (
+      <>
+        <h2 className="text-[22px] font-bold">Подтвердите оплату в Bobobank</h2>
+        <p className="mt-1 text-[15px] text-muted">
+          {rub(ride.holdAmount)} — больше лимита привязки, поэтому банк спрашивает вас. Деньги заморозятся, после {air ? 'полёта' : 'поездки'} спишется точная цена. Осталось {mmss(left)}.
+        </p>
+        {craftCard}
+        {ride.confirmation?.url && (
+          <a href={ride.confirmation.url} target="_blank" rel="noopener" className="mt-4 block">
+            <Button className="w-full" size="lg" variant="brand" icon={<ExternalLink className="size-5" />}>
+              Открыть Bobobank
+            </Button>
+          </a>
+        )}
+        <Button className="mt-2 w-full" variant="soft" loading={busy === 'cancel'} onClick={() => void cancel()}>
+          Отменить {what}
+        </Button>
+      </>
+    );
+  } else if (ride.status === 'preparing' || ride.status === 'boarding') {
+    const until = ride.boardingUntil ?? now;
+    const place = ride.from.title;
+    body = (
+      <>
+        <h2 className="text-[22px] font-bold">{ride.status === 'preparing' ? (air?.kind === 'heli' ? 'Готовим вертолёт' : 'Готовим борт к вылету') : 'Посадка'}</h2>
+        <p className="mt-1 text-[15px] text-muted">
+          {ride.status === 'preparing'
+            ? `Экипаж проверяет борт и заправку · посадка через ${mmss((until - now) / 1000)}`
+            : `${place}${air?.kind === 'jet' ? ', терминал бизнес-авиации' : ''} · вылет через ${mmss((until - now) / 1000)}`}
+        </p>
+        {ride.status === 'preparing' && (
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-sunken">
+            <div className="bt-bar h-full w-1/3 rounded-full bg-brand" />
+          </div>
+        )}
+        {craftCard}
+        {ride.status === 'boarding' && (
+          <Button className="mt-3 w-full" size="lg" variant="brand" icon={<Plane className="size-5" />} loading={busy === 'takeoff'} onClick={() => void act('takeoff', `/rides/${ride.id}/takeoff`)}>
+            Я на борту, взлетаем
+          </Button>
+        )}
+        <Button className="mt-2 w-full" variant="soft" loading={busy === 'cancel'} onClick={() => (ride.status === 'boarding' ? setConfirm('cancel') : void cancel())}>
+          Отменить {what}
+        </Button>
+      </>
+    );
+  } else if (ride.status === 'in_flight' && air) {
+    const left = ride.motion ? Math.max(0, ride.motion.endAt - now) : 0;
+    const gameS = (left / 1000) * ride.timeScale;
+    const frac = ride.motion ? Math.min(1, Math.max(0, (now - ride.motion.startAt) / (ride.motion.endAt - ride.motion.startAt))) : 0;
+    body = (
+      <>
+        <h2 className="text-[22px] font-bold">В полёте</h2>
+        <p className="mt-0.5 text-[15px] text-muted">
+          {ride.from.title} → {ride.to.title} · ещё {minutes(gameS)} · {Math.round((ride.distance * (1 - frac)) / 1000).toLocaleString('ru-RU')} км
+        </p>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken">
+          <div className="h-full rounded-full bg-ink transition-[width] duration-1000 ease-linear" style={{ width: `${frac * 100}%` }} />
+        </div>
+        {craftCard}
+        <p className="mt-3 text-center text-xs text-muted">Высота {air.kind === 'heli' ? '450 м' : '12 500 м'} · время в игре ускорено ×{ride.timeScale}</p>
+      </>
+    );
+  } else if ((ride.status === 'waiting_bus' || ride.status === 'on_bus') && bus) {
+    const waitS = ride.etaS ?? 0;
+    const frac = ride.motion ? Math.min(1, Math.max(0, (now - ride.motion.startAt) / (ride.motion.endAt - ride.motion.startAt))) : 0;
+    const left = ride.motion ? Math.max(0, ((ride.motion.endAt - now) / 1000) * ride.timeScale) : 0;
+    body = (
+      <>
+        <div className="flex items-center gap-2">
+          <BusBadge num={bus.ref} colour={bus.colour} />
+          <span className="min-w-0 truncate text-sm text-muted">→ {bus.to}</span>
+        </div>
+        {ride.status === 'waiting_bus' ? (
+          <>
+            <h2 className="mt-2 text-[22px] font-bold">{waitS < 60 ? 'Автобус подходит' : `Автобус через ${minutes(waitS)}`}</h2>
+            <p className="mt-0.5 text-[15px] text-muted">
+              Идите к остановке «{bus.board.name}» — {Math.round(bus.board.walkM / 10) * 10} м. Проезд {rub(ride.price)} спишется при посадке, как по «Тройке».
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="mt-2 text-[22px] font-bold">Едем</h2>
+            <p className="mt-0.5 text-[15px] text-muted">
+              До «{bus.alight.name}» {minutes(left)} · {bus.stops} ост. · проезд оплачен
+            </p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken">
+              <div className="h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${frac * 100}%`, background: bus.colour || '#d0021b' }} />
+            </div>
+          </>
+        )}
+        {bus.line && (
+          <ol className="mt-3 max-h-36 overflow-y-auto rounded-2xl bg-sunken px-4 py-2 text-sm">
+            {bus.line.stops.map((st, i) => (
+              <li key={i} className="flex items-center gap-2 py-1">
+                <span className="size-2.5 shrink-0 rounded-full border-2 border-white" style={{ background: bus.colour || '#d0021b' }} />
+                <span className={cx('truncate', (i === 0 || i === bus.line!.stops.length - 1) && 'font-semibold')}>{st.name}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        {ride.status === 'waiting_bus' ? (
+          <Button className="mt-3 w-full" variant="soft" loading={busy === 'cancel'} onClick={() => void cancel()}>
+            Не поеду
+          </Button>
+        ) : (
+          <Button className="mt-3 w-full" variant="soft" icon={<Bus className="size-[18px]" />} loading={busy === 'stop'} onClick={() => void act('stop', `/rides/${ride.id}/stop`)}>
+            Выйти на следующей
+          </Button>
+        )}
+      </>
+    );
+  } else if (ride.status === 'searching') {
     body = (
       <>
         <h2 className="text-[22px] font-bold">Ищем машину</h2>
@@ -266,7 +396,7 @@ function Finished({ ride, onDone }: { ride: Ride; onDone: () => void }) {
     <>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[22px] font-bold">Приехали!</h2>
+          <h2 className="text-[22px] font-bold">{ride.mode === 'heli' || ride.mode === 'jet' ? 'Прилетели!' : 'Приехали!'}</h2>
           <p className="mt-0.5 text-[15px] text-muted">{ride.progress !== null && ride.progress < 0.99 ? 'Остановились по вашей просьбе' : ride.to.title}</p>
         </div>
         <div className="text-right">
@@ -278,7 +408,7 @@ function Finished({ ride, onDone }: { ride: Ride; onDone: () => void }) {
         </div>
       </div>
       {bank.error && <p className="mt-2 text-sm text-bad">{bank.error}</p>}
-      <div className="mt-5 text-center text-[15px] font-semibold">Как вам поездка{ride.driver ? ` с ${ride.driver.name}` : ''}?</div>
+      <div className="mt-5 text-center text-[15px] font-semibold">{ride.mode === 'bus' ? 'Как вам поездка?' : ride.air ? `Как вам полёт с командиром ${ride.driver?.name ?? ''}?` : `Как вам поездка${ride.driver ? ` с ${ride.driver.name}` : ''}?`}</div>
       <div className="mt-2 flex justify-center gap-1.5">
         {[1, 2, 3, 4, 5].map((n) => (
           <button key={n} type="button" aria-label={`${n} из 5`} onClick={() => setStars(n)} className="p-1">
@@ -286,9 +416,9 @@ function Finished({ ride, onDone }: { ride: Ride; onDone: () => void }) {
           </button>
         ))}
       </div>
-      <div className="mt-4 text-sm text-muted">Чаевые водителю</div>
-      <div className="mt-2 grid grid-cols-4 gap-2">
-        {TIPS.map((t) => (
+      {ride.mode !== 'bus' && <div className="mt-4 text-sm text-muted">{ride.air ? 'Чаевые экипажу' : 'Чаевые водителю'}</div>}
+      <div className={cx('mt-2 grid grid-cols-4 gap-2', ride.mode === 'bus' && 'hidden')}>
+        {(ride.air ? [0, 1000_00, 3000_00, 5000_00] : TIPS).map((t) => (
           <button key={t} type="button" onClick={() => setTip(t)} className={cx('h-11 rounded-2xl text-[15px] font-semibold transition-colors', tip === t ? 'bg-ink text-on-ink' : 'bg-sunken hover:bg-hover')}>
             {t ? rub(t) : 'Нет'}
           </button>

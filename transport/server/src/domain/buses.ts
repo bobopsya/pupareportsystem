@@ -29,6 +29,8 @@ export interface BusRoute {
   colour: string | null;
   fare: number;
   night: boolean;
+  /** Runs every 8 minutes around the clock (test fixtures). */
+  allDay?: boolean;
   electric: boolean;
   length: number;
   path: LatLon[];
@@ -103,6 +105,7 @@ const moscow = (ts: number) => {
 
 /** Game minutes between buses now, or null when the line does not run (night lines run only at night). */
 export function headwayMin(r: BusRoute, ts: number): number | null {
+  if (r.allDay) return 8;
   const { h, wd } = moscow(ts);
   const night = h < 5.5 || h >= 24;
   if (r.night) return h < 6 ? 20 : null;

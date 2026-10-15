@@ -203,3 +203,12 @@ body {
 .bt-bar {
   animation: bt-bar 1.3s ease-in-out infinite;
 }
+
+@keyframes bt-rotor {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.bt-rotor {
+  animation: bt-rotor 0.35s linear infinite;
+}

@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Briefcase, ChevronRight, Clock, CreditCard, History as HistoryIcon, Home as HomeIcon, LocateFixed, LogOut, Menu, MessageSquare, Settings, Shield, User } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useAirPlanner } from '../components/Air';
+import { BusOptions, StopBoard } from '../components/Bus';
 import { LogoMark, Logo } from '../components/Logo';
 import { ChildIcon, RideSheet, SurgeBadge, TariffCar } from '../components/Ride';
 import { RouteSearch, savedToPlace } from '../components/Search';
@@ -10,10 +12,29 @@ import { api, ApiError, errorText } from '../lib/api';
 import { minutes, rub, km } from '../lib/format';
 import { inMoscow, MOSCOW_CENTER } from '../lib/geo';
 import { useAccount, useCurrentRide, useMe, usePlaces } from '../lib/hooks';
-import type { Estimate, LatLon, Place, Ride, TariffId } from '../lib/types';
-import { BackgroundCars, FitBounds, MapView, PointMarker, RideCar, RouteLine, SearchPulse, useLeaflet } from '../map/Map';
+import type { BusPlan, Estimate, LatLon, Mode as Transport, Place, Ride, TariffId } from '../lib/types';
+import { BackgroundCars, BusStops, FitBounds, LiveBuses, MapView, PointMarker, RideCar, RouteLine, SearchPulse, StopDots, useLeaflet } from '../map/Map';
 
 type Mode = 'main' | 'pick' | 'estimate';
+
+const TRANSPORTS: { id: Transport; label: string }[] = [
+  { id: 'taxi', label: 'Такси' },
+  { id: 'bus', label: 'Автобус' },
+  { id: 'heli', label: 'Вертолёт' },
+  { id: 'jet', label: 'Джет' },
+];
+
+function TransportSwitch({ value, onChange }: { value: Transport; onChange: (t: Transport) => void }) {
+  return (
+    <div className="mb-3 grid grid-cols-4 gap-1 rounded-2xl bg-sunken p-1" role="tablist">
+      {TRANSPORTS.map((t) => (
+        <button key={t.id} type="button" role="tab" aria-selected={value === t.id} onClick={() => onChange(t.id)} className={cx('h-9 truncate rounded-xl px-0.5 text-[12px] font-semibold transition-colors min-[360px]:text-[13px]', value === t.id ? 'bg-surface shadow-sm' : 'text-muted')}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const login = () => window.location.assign('/api/auth/bank/start');
 
@@ -132,6 +153,9 @@ export default function Home() {
   const [childSeat, setChildSeat] = useState(false);
   const [comment, setComment] = useState('');
   const [commentOpen, setCommentOpen] = useState(false);
+  const [transport, setTransport] = useState<Transport>('taxi');
+  const [busOpt, setBusOpt] = useState(0);
+  const [stop, setStop] = useState<string | null>(null);
   const fly = useRef<(p: LatLon, z?: number) => void>(() => {});
   const onMapReady = useCallback((f: (p: LatLon, z?: number) => void) => (fly.current = f), []);
 
@@ -157,7 +181,7 @@ export default function Home() {
   }, []);
 
   // Address under the pin.
-  const pinActive = !ride && (mode === 'main' || mode === 'pick');
+  const pinActive = !ride && (mode === 'main' || mode === 'pick') && transport !== 'heli' && transport !== 'jet';
   useEffect(() => {
     if (!pinActive || moving) return;
     let stop = false;
@@ -183,16 +207,34 @@ export default function Home() {
       setMode('main');
     },
   });
-  const estimate = est.data && mode === 'estimate' ? est.data : null;
-  const runEstimate = (f: Place, t: Place) => {
+  const estimate = est.data && mode === 'estimate' && transport === 'taxi' ? est.data : null;
+  const busPlan = useMutation({
+    mutationFn: (b: { from: Place; to: Place }) => api<BusPlan>('/bus/plan', { body: b }),
+    onSuccess: () => setBusOpt(0),
+    onError: (e) => {
+      toast(errorText(e), 'bad');
+      setMode('main');
+    },
+  });
+  const plan = busPlan.data && mode === 'estimate' && transport === 'bus' ? busPlan.data : null;
+  const runEstimate = (f: Place, t: Place, kind: Transport = transport) => {
     setFrom(f);
     setTo(t);
     setMode('estimate');
-    est.mutate({ from: f, to: t });
+    if (kind === 'bus') busPlan.mutate({ from: f, to: t });
+    else est.mutate({ from: f, to: t });
   };
+  const busOrder = useMutation({
+    mutationFn: () => api<Ride>('/rides/bus', { body: { estimateId: plan!.id, option: busOpt } }),
+    onSuccess: (r) => qc.setQueryData(['ride'], { ride: r, offset: r.now - Date.now() }),
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === 'estimate_expired' && from && to) busPlan.mutate({ from, to });
+      toast(errorText(e), 'bad');
+    },
+  });
   // Prices are valid for 15 minutes; refresh quietly before that.
   useEffect(() => {
-    if (mode !== 'estimate' || !from || !to) return;
+    if (mode !== 'estimate' || !from || !to || transport !== 'taxi') return;
     const t = setInterval(() => est.mutate({ from, to }), 10 * 60_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,6 +258,24 @@ export default function Home() {
     setTo(null);
     setFromLocked(false);
     est.reset();
+    busPlan.reset();
+  };
+  const isAir = transport === 'heli' || transport === 'jet';
+  const air = useAirPlanner({
+    kind: transport === 'jet' ? 'jet' : 'heli',
+    center,
+    linked: !!user?.linked,
+    account,
+    login,
+    onTaxiTo: (p) => {
+      setTransport('taxi');
+      runEstimate(from ?? pinPlace ?? { lat: center[0], lon: center[1], title: 'Точка на карте', subtitle: '' }, { lat: p.lat, lon: p.lon, title: p.title, subtitle: p.subtitle }, 'taxi');
+    },
+  });
+  const switchTransport = (t: Transport) => {
+    setTransport(t);
+    if (mode === 'estimate' && from && to && (t === 'taxi' || t === 'bus')) runEstimate(from, to, t);
+    else if (t === 'heli' || t === 'jet') setMode('main');
   };
 
   const saved = places?.places ?? [];
@@ -243,17 +303,50 @@ export default function Home() {
   // ---- Map layers per state ----
   const fitPoints = useMemo<LatLon[]>(() => {
     if (ride) {
+      if (ride.mode === 'bus' && ride.status === 'waiting_bus') return [[ride.from.lat, ride.from.lon], ...(ride.position ? [ride.position.pos] : [])];
+      if (ride.mode === 'bus') return ride.fullRoute;
+      if (ride.air) return ride.status === 'in_flight' || ride.status === 'completed' || ride.status === 'awaiting_payment' ? ride.fullRoute : [[ride.from.lat, ride.from.lon]];
       if (ride.status === 'driver_coming' && ride.motion) return [...ride.motion.path, [ride.from.lat, ride.from.lon]];
       if (ride.status === 'arrived') return [[ride.from.lat, ride.from.lon]];
       if (ride.status === 'in_ride' || ride.status === 'completed') return ride.fullRoute;
       return [[ride.from.lat, ride.from.lon], [ride.to.lat, ride.to.lon]];
     }
     if (estimate) return estimate.route;
+    if (plan && from && to) {
+      const o = plan.options.find((x) => x.n === busOpt);
+      return [[from.lat, from.lon], [to.lat, to.lon], ...(o ? o.path : [])];
+    }
     return [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ride?.id, ride?.status, ride?.motion?.startAt, estimate?.id]);
+  }, [ride?.id, ride?.status, ride?.motion?.startAt, estimate?.id, plan?.id, busOpt]);
 
-  const layers = ride ? (
+  const vehicleKind = ride?.mode === 'bus' ? 'bus' : ride?.mode === 'heli' ? 'heli' : ride?.mode === 'jet' ? 'jet' : 'car';
+  const rideLayers = ride && ride.mode !== 'taxi' && (
+    <>
+      {ride.bus && ride.bus.line && <RouteLine path={ride.bus.line.path} color={ride.bus.colour || '#d0021b'} faded />}
+      <RouteLine path={ride.status === 'on_bus' || ride.status === 'in_flight' ? ride.route : ride.fullRoute} color={ride.bus ? ride.bus.colour || '#d0021b' : undefined} />
+      {ride.bus?.line && <StopDots stops={ride.bus.line.stops} color={ride.bus.colour || '#d0021b'} />}
+      {ride.status !== 'in_flight' && ride.status !== 'on_bus' && ride.status !== 'completed' && <PointMarker pos={[ride.from.lat, ride.from.lon]} kind="from" label={ride.bus ? ride.from.title : ride.status === 'boarding' ? 'Посадка' : ride.from.title} />}
+      <PointMarker pos={[ride.to.lat, ride.to.lon]} kind="to" label={ride.to.title} />
+      {ride.position && ride.status !== 'completed' && (
+        <RideCar
+          kind={vehicleKind}
+          color={ride.bus ? ride.bus.colour || '#d0021b' : ride.car?.colorHex ?? '#ffffff'}
+          label={ride.bus?.ref}
+          motion={ride.motion}
+          position={ride.position}
+          clockOffset={rideData?.offset ?? 0}
+          follow={ride.status === 'on_bus' || (ride.status === 'in_flight' && ride.mode === 'heli')}
+        />
+      )}
+      <FitBounds points={fitPoints} padding={[56, 56]} maxZoom={ride.air ? 13 : 17} />
+    </>
+  );
+  const selectedBus = plan?.options.find((o) => o.n === busOpt);
+
+  const layers = rideLayers ? (
+    rideLayers
+  ) : ride ? (
     <>
       {ride.status === 'driver_coming' && ride.motion && <RouteLine path={ride.motion.path} />}
       {(ride.status === 'searching' || ride.status === 'driver_coming' || ride.status === 'arrived') && <RouteLine path={ride.fullRoute} faded />}
@@ -270,6 +363,28 @@ export default function Home() {
       <PointMarker pos={[from.lat, from.lon]} kind="from" label={from.title} />
       <PointMarker pos={[to.lat, to.lon]} kind="to" label={estimate ? minutes(estimate.duration) : to.title} />
       {estimate && <FitBounds points={fitPoints} padding={[60, 60]} />}
+    </>
+  ) : isAir ? (
+    air.layers
+  ) : mode === 'estimate' && transport === 'bus' && from && to ? (
+    <>
+      {selectedBus && (
+        <>
+          <RouteLine path={[[from.lat, from.lon], [selectedBus.board.lat, selectedBus.board.lon]]} dashed color="#6b6b6b" />
+          <RouteLine path={selectedBus.path} color={selectedBus.colour || '#d0021b'} />
+          <RouteLine path={[[selectedBus.alight.lat, selectedBus.alight.lon], [to.lat, to.lon]]} dashed color="#6b6b6b" />
+          <StopDots stops={[selectedBus.board, selectedBus.alight]} color={selectedBus.colour} />
+          <LiveBuses route={selectedBus.route} />
+        </>
+      )}
+      <PointMarker pos={[from.lat, from.lon]} kind="from" label={from.title} />
+      <PointMarker pos={[to.lat, to.lon]} kind="to" label={to.title} />
+      {plan && <FitBounds points={fitPoints} padding={[60, 60]} />}
+    </>
+  ) : transport === 'bus' ? (
+    <>
+      <LiveBuses />
+      <BusStops onPick={setStop} />
     </>
   ) : (
     <BackgroundCars center={center} />
@@ -303,9 +418,54 @@ export default function Home() {
         </Button>
       </>
     );
+  } else if (isAir) {
+    sheet = (
+      <>
+        <TransportSwitch value={transport} onChange={switchTransport} />
+        {air.sheet}
+      </>
+    );
+  } else if (mode === 'estimate' && transport === 'bus') {
+    sheet = (
+      <>
+        <TransportSwitch value={transport} onChange={switchTransport} />
+        <div className="-mt-1 flex items-center gap-2">
+          <button type="button" aria-label="Назад" onClick={resetTrip} className="-ml-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-sunken">
+            <ArrowLeft className="size-5" />
+          </button>
+          <button type="button" onClick={() => setSearch('to')} className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-[15px] font-semibold">{from?.title} → {to?.title}</span>
+            <span className="block text-sm text-muted">{plan ? (plan.options.length ? 'Прямые автобусы, без пересадок' : 'Прямого автобуса нет') : 'Ищем автобусы…'}</span>
+          </button>
+        </div>
+        <div className="mt-3 max-h-[38dvh] overflow-y-auto overscroll-contain">
+          {!plan ? (
+            <div className="h-32 animate-pulse rounded-2xl bg-sunken" />
+          ) : plan.options.length ? (
+            <BusOptions options={plan.options} selected={busOpt} onSelect={setBusOpt} />
+          ) : (
+            <div className="rounded-2xl bg-sunken p-4 text-[15px] text-muted">Поблизости нет остановок одного маршрута, который довезёт без пересадок.</div>
+          )}
+        </div>
+        {plan && !plan.options.length ? (
+          <Button className="mt-3 w-full" size="lg" variant="brand" onClick={() => switchTransport('taxi')}>
+            Поехать на такси
+          </Button>
+        ) : user?.linked ? (
+          <Button className="mt-3 w-full" size="lg" variant="brand" loading={busOrder.isPending} disabled={!selectedBus} onClick={() => busOrder.mutate()}>
+            {selectedBus ? `Поехали · ${rub(selectedBus.fare)}` : 'Ищем…'}
+          </Button>
+        ) : (
+          <Button className="mt-3 w-full" size="lg" variant="ink" onClick={login}>
+            Войти через Bobobank
+          </Button>
+        )}
+      </>
+    );
   } else if (mode === 'estimate') {
     sheet = (
       <>
+        <TransportSwitch value={transport} onChange={switchTransport} />
         <div className="-mt-1 flex items-center gap-2">
           <button type="button" aria-label="Назад" onClick={resetTrip} className="-ml-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-sunken">
             <ArrowLeft className="size-5" />
@@ -375,13 +535,14 @@ export default function Home() {
     const go = (p: Place) => runEstimate(from ?? pinPlace ?? { lat: center[0], lon: center[1], title: 'Точка на карте', subtitle: '' }, p);
     sheet = (
       <>
+        <TransportSwitch value={transport} onChange={switchTransport} />
         <button type="button" onClick={() => setSearch('from')} className="flex w-full items-center gap-3 py-1 text-left">
           <span className="size-3 shrink-0 rounded-full border-[3px] border-ink bg-brand" />
           <span className="min-w-0 flex-1 truncate text-[15px] text-muted">{from ? from.title : 'Определяем адрес…'}</span>
         </button>
         <button type="button" onClick={() => setSearch('to')} className="mt-2 flex h-14 w-full items-center gap-3 rounded-2xl bg-sunken px-4 text-left hover:bg-hover">
           <span className="size-3 shrink-0 rounded-[3px] border-[3px] border-ink bg-surface" />
-          <span className="text-[18px] font-bold">Куда едем?</span>
+          <span className="text-[18px] font-bold">{transport === 'bus' ? 'Куда едем на автобусе?' : 'Куда едем?'}</span>
         </button>
         {user && (home || work || recent.length > 0) ? (
           <div className="no-scrollbar -mx-5 mt-3 flex gap-2 overflow-x-auto px-5">
@@ -451,7 +612,7 @@ export default function Home() {
             <span className="size-12" />
           )}
         </div>
-        {(pinActive || ride?.status === 'in_ride') && (
+        {(pinActive || ride?.status === 'in_ride' || ride?.status === 'on_bus') && (
           <div className="pointer-events-none absolute bottom-6 right-4 z-[600]">
             <FloatButton label="Где я" onClick={locate}>
               <LocateFixed className="size-5" />
@@ -461,7 +622,7 @@ export default function Home() {
       </div>
       <section className="relative z-[700] -mt-5 rounded-t-[26px] bg-surface px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shadow-[var(--shadow-sheet)]">
         <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
-        <div key={ride ? `ride-${ride.status}` : mode} className="bt-sheet">
+        <div key={ride ? `ride-${ride.status}` : `${transport}-${mode}`} className="bt-sheet">
           {sheet}
         </div>
       </section>
@@ -494,6 +655,7 @@ export default function Home() {
         />
       )}
       <Drawer open={drawer} onClose={() => setDrawer(false)} />
+      <StopBoard id={stop} onClose={() => setStop(null)} />
       <Modal open={commentOpen} onClose={() => setCommentOpen(false)} title="Пожелания водителю" footer={<Button variant="ink" size="lg" onClick={() => setCommentOpen(false)}>Готово</Button>}>
         <textarea value={comment} onChange={(e) => setComment(e.target.value.slice(0, 200))} placeholder="Например: подъезд 2, не звонить" className="min-h-24 w-full rounded-2xl bg-sunken p-4 text-[16px] outline-none focus:ring-2 focus:ring-ink" />
         <div className="mt-2 flex flex-wrap gap-2">

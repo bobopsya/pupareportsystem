@@ -30,6 +30,8 @@ WORKDIR /app
 COPY --from=server /server/package.json ./
 COPY --from=server /server/node_modules ./node_modules
 COPY --from=server /server/dist ./dist
+# Real Moscow bus lines from OpenStreetMap (refreshed with scripts/import-bus-routes.mjs).
+COPY --from=server /server/data ./data
 COPY --from=web /web/dist ./web
 RUN mkdir -p /data && chown node:node /data
 USER node

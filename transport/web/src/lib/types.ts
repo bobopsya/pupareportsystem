@@ -58,10 +58,83 @@ export interface Car {
   plate: string;
 }
 
-export type RideStatus = 'searching' | 'driver_coming' | 'arrived' | 'in_ride' | 'completed' | 'cancelled';
+export type Mode = 'taxi' | 'bus' | 'heli' | 'jet';
+export type RideStatus =
+  | 'awaiting_payment'
+  | 'searching' | 'driver_coming' | 'arrived' | 'in_ride'
+  | 'waiting_bus' | 'on_bus'
+  | 'preparing' | 'boarding' | 'in_flight'
+  | 'completed' | 'cancelled';
+
+export interface BusStop {
+  name: string;
+  lat: number;
+  lon: number;
+  at: number;
+}
+
+export interface BusOption {
+  n: number;
+  route: number;
+  ref: string;
+  kind: string;
+  colour: string | null;
+  to: string;
+  fare: number;
+  board: { idx: number; name: string; lat: number; lon: number; walkM: number };
+  alight: { idx: number; name: string; lat: number; lon: number; walkM: number };
+  stops: number;
+  walkS: number;
+  waitS: number;
+  rideS: number;
+  totalS: number;
+  distance: number;
+  path: LatLon[];
+}
+
+export interface BusPlan {
+  id: string;
+  options: BusOption[];
+  timeScale: number;
+}
+
+export interface AirPlace {
+  code: string;
+  title: string;
+  subtitle: string;
+  lat: number;
+  lon: number;
+}
+
+export interface AirOption {
+  id: string;
+  title: string;
+  model: string;
+  seats: number;
+  price: number;
+  durationS: number;
+  available: boolean;
+  reason: string | null;
+}
+
+export interface AirQuote {
+  id: string;
+  kind: 'heli' | 'jet';
+  from: AirPlace;
+  to: AirPlace;
+  distance: number;
+  route: LatLon[];
+  options: AirOption[];
+  timeScale: number;
+}
 
 export interface Ride {
   id: string;
+  mode: Mode;
+  bus: (Omit<BusOption, 'n' | 'path' | 'walkS' | 'waitS' | 'rideS' | 'totalS' | 'distance' | 'fare'> & { dep: number; boardAt: number; alightAt: number; line: { path: LatLon[]; stops: BusStop[] } | null }) | null;
+  air: { kind: 'heli' | 'jet'; classId: string; className: string; model: string; seats: number; from: string; to: string } | null;
+  confirmation: { url: string | null; expiresAt: number | null } | null;
+  boardingUntil: number | null;
   status: RideStatus;
   tariff: { id: TariffId; title: string; waitPerMin: number };
   from: Place;
@@ -100,6 +173,8 @@ export interface Ride {
 
 export interface HistoryItem {
   id: string;
+  mode: Mode;
+  colour: string | null;
   status: RideStatus;
   tariff: string;
   tariffId: TariffId;

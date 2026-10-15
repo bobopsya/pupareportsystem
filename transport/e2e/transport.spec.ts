@@ -31,7 +31,7 @@ test('вход через Bobobank, поездка по Москве, списа
   const r = await request.post(`${BANK}/api/auth/login`, { headers: H, data: { phone: process.env.BANK_ADMIN_PHONE, password: process.env.BANK_ADMIN_PASSWORD } });
   expect(r.ok(), 'BANK_ADMIN_PHONE / BANK_ADMIN_PASSWORD must point to a bank admin').toBeTruthy();
   const main = (await (await page.request.get(`${BANK}/api/home`)).json()).accounts[0];
-  expect((await request.post(`${BANK}/api/admin/accounts/${main.id}/adjust`, { headers: H, data: { direction: 'credit', amount: '3000.00', title: 'Зарплата' } })).ok()).toBeTruthy();
+  expect((await request.post(`${BANK}/api/admin/accounts/${main.id}/adjust`, { headers: H, data: { direction: 'credit', amount: '60000.00', title: 'Зарплата' } })).ok()).toBeTruthy();
 
   // «Войти через Bobobank»: consent in the bank, back to the taxi.
   await page.goto(TAXI);
@@ -75,6 +75,9 @@ test('вход через Bobobank, поездка по Москве, списа
   // A new order cancelled before the car arrives: the hold is released in full.
   // The last destination is offered on the main screen.
   const mid = await available(page);
+  // After the ride the map shows the destination: back to where the passenger is.
+  await page.getByRole('button', { name: 'Где я' }).click();
+  await page.waitForTimeout(2500);
   await page.getByRole('button', { name: 'улица Арбат, 10' }).click();
   await page.getByRole('button', { name: /Вызвать · \d+/ }).click();
   await expect(page.getByText('Ищем машину')).toBeVisible();
@@ -82,6 +85,47 @@ test('вход через Bobobank, поездка по Москве, списа
   await page.getByRole('button', { name: 'Отменить поиск' }).click();
   await expect(page.getByText('деньги разморожены')).toBeVisible();
   expect(await available(page)).toBe(mid);
+
+  // A bus of the line from the fixture: the fare is charged at boarding.
+  await page.getByRole('tab', { name: 'Автобус' }).click();
+  await page.getByRole('button', { name: 'Где я' }).click();
+  await page.waitForTimeout(2500);
+  await expect(page.getByText('Куда едем на автобусе?')).toBeVisible();
+  await page.getByRole('button', { name: 'улица Арбат, 10' }).click();
+  await expect(page.getByRole('button', { name: 'Поехали · 83 ₽' })).toBeVisible({ timeout: 20_000 });
+  const beforeBus = await available(page);
+  await page.getByRole('button', { name: 'Поехали · 83 ₽' }).click();
+  await expect(page.getByText(/Автобус через|Автобус подходит/)).toBeVisible();
+  await expect(page.getByText('Едем')).toBeVisible({ timeout: 180_000 });
+  expect(beforeBus - (await available(page))).toBe(83_00);
+  await expect(page.getByText('Приехали!')).toBeVisible({ timeout: 180_000 });
+  await page.getByRole('button', { name: /Готово/ }).click();
+
+  // A helicopter above the mandate limit: the customer confirms the amount in the bank app.
+  await page.getByRole('tab', { name: 'Вертолёт' }).click();
+  await page.getByText('Выберите вертодром').click();
+  await page.getByRole('button', { name: /Внуково-3/ }).click();
+  const book = page.getByRole('button', { name: /Забронировать · / });
+  await expect(book).toBeVisible({ timeout: 15_000 });
+  const heliPrice = Number((await book.innerText()).replace(/\D/g, '')) * 100;
+  const beforeHeli = await available(page);
+  await book.click();
+  await expect(page.getByText('Подтвердите оплату в Bobobank')).toBeVisible();
+  const href = await page.getByRole('link', { name: /Открыть Bobobank/ }).getAttribute('href');
+  const bank = await page.context().newPage();
+  await bank.goto(href!);
+  await expect(bank.getByText('Бобо.Транспорт')).toBeVisible();
+  await bank.getByRole('button', { name: 'Подтвердить' }).click();
+  await expect(bank.getByText('Оплата подтверждена')).toBeVisible();
+  await bank.close();
+  expect(beforeHeli - (await available(page))).toBe(heliPrice);
+  await page.getByRole('button', { name: 'Я на борту, взлетаем' }).click({ timeout: 60_000 });
+  await expect(page.getByText('В полёте')).toBeVisible();
+  await expect(page.getByText('Прилетели!')).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByText('Оплачено Bobobank')).toBeVisible({ timeout: 10_000 });
+  expect(beforeHeli - (await available(page))).toBe(heliPrice);
+  await page.getByRole('button', { name: /Готово/ }).click();
+  await page.getByRole('tab', { name: 'Такси' }).click();
 
   // History and receipt.
   await page.goto(`${TAXI}/rides`);

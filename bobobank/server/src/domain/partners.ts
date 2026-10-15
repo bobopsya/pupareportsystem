@@ -119,7 +119,7 @@ export function mandateInfo(ctx: Ctx, m: MandateRow) {
   } catch {
     usable = false;
   }
-  return { id: m.id, status: m.status, usable, accountLast4: acc.number.slice(-4), accountName: acc.name, limit: m.limit_per_tx, available: Math.min(avail, m.limit_per_tx) };
+  return { id: m.id, status: m.status, usable, accountLast4: acc.number.slice(-4), accountName: acc.name, limit: m.limit_per_tx, available: avail };
 }
 
 /** The service's server exchanges the code from the redirect for the customer and the mandate. */

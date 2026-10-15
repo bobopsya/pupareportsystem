@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Car as CarIcon, FileText, Star } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { Page } from '../components/Page';
+import { AircraftIcon } from '../components/Air';
+import { BusBadge } from '../components/Bus';
 import { Plate, TariffCar } from '../components/Ride';
 import { Button, cx, ErrorNote, Loading } from '../components/ui';
 import { api, errorText } from '../lib/api';
@@ -46,7 +48,7 @@ export default function History() {
             {items.map((r) => (
               <Link key={r.id} to={`/rides/${r.id}`} className="flex items-center gap-3 rounded-2xl px-1 py-3 hover:bg-sunken">
                 <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-sunken">
-                  <TariffCar tariff={r.tariffId} className="h-6 w-11" />
+                  {r.mode === 'bus' ? <BusBadge num={r.tariff.split(' ').pop() ?? ''} colour={r.colour} className="h-6 min-w-8 text-[13px]" /> : r.mode === 'heli' || r.mode === 'jet' ? <AircraftIcon kind={r.mode} className="size-9" /> : <TariffCar tariff={r.tariffId} className="h-6 w-11" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-semibold">{r.to.title}</span>
@@ -78,9 +80,9 @@ export function RidePage() {
   if (error) return <Page title="Поездка" back="/rides"><ErrorNote>{errorText(error)}</ErrorNote></Page>;
   if (!r) return <Page title="Поездка" back="/rides"><Loading /></Page>;
   const lines: [string, string][] = [
-    ['Тариф', r.tariff.title],
-    ...(r.car ? ([['Машина', `${r.car.color} ${r.car.model}`]] as [string, string][]) : []),
-    ...(r.driver ? ([['Водитель', `${r.driver.name}, ★ ${r.driver.rating.toFixed(2).replace('.', ',')}`]] as [string, string][]) : []),
+    r.bus ? ['Маршрут', `${r.bus.ref} → ${r.bus.to}`] : r.air ? ['Борт', `${r.air.model}${r.car ? `, ${r.car.plate}` : ''}`] : ['Тариф', r.tariff.title],
+    ...(r.car && r.mode === 'taxi' ? ([['Машина', `${r.car.color} ${r.car.model}`]] as [string, string][]) : []),
+    ...(r.driver && r.mode !== 'bus' ? ([[r.air ? 'Командир' : 'Водитель', `${r.driver.name}, ★ ${r.driver.rating.toFixed(2).replace('.', ',')}`]] as [string, string][]) : []),
     ['Расстояние', km(r.distance * (r.progress ?? 1))],
     ...(r.surge > 1 ? ([['Повышенный спрос', `×${r.surge.toFixed(1).replace('.', ',')}`]] as [string, string][]) : []),
     ...(r.cancelFee ? ([['Плата за отмену', rub(r.cancelFee)]] as [string, string][]) : []),
@@ -111,7 +113,7 @@ export function RidePage() {
         </div>
         <div className="shrink-0 text-right text-2xl font-bold num">{rub(r.finalPrice ?? 0)}</div>
       </div>
-      {r.car && <div className="mt-4"><Plate plate={r.car.plate} /></div>}
+      {r.car && r.mode === 'taxi' && <div className="mt-4"><Plate plate={r.car.plate} /></div>}
       <dl className="mt-4 divide-y divide-line rounded-2xl bg-sunken px-4">
         {lines.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-4 py-3 text-[15px]">

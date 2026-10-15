@@ -19,7 +19,7 @@ export function MapView({ center, zoom = 16, onMoveStart, onMoveEnd, children, c
   handlers.current = { onMoveStart, onMoveEnd };
 
   useEffect(() => {
-    const m = L.map(el.current!, { zoomControl: false, attributionControl: true, center, zoom, minZoom: 9, maxZoom: 19, zoomSnap: 0.25, inertia: true, worldCopyJump: false });
+    const m = L.map(el.current!, { zoomControl: false, attributionControl: true, center, zoom, minZoom: 3, maxZoom: 19, zoomSnap: 0.25, inertia: true, worldCopyJump: false });
     m.attributionControl.setPrefix(false);
     L.tileLayer(TILE_URL, { maxZoom: 19, attribution: ATTRIBUTION, crossOrigin: false }).addTo(m);
     let byUser = false;
@@ -53,17 +53,25 @@ export function MapView({ center, zoom = 16, onMoveStart, onMoveEnd, children, c
 const cssVar = (name: string, fallback: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
 /** Route line with a white casing, like on navigation maps. */
-export function RouteLine({ path, faded }: { path: LatLon[]; faded?: boolean }) {
+export function RouteLine({ path, faded, color, dashed, weight = 5 }: { path: LatLon[]; faded?: boolean; color?: string | null; dashed?: boolean; weight?: number }) {
   const map = useLeaflet();
   useEffect(() => {
     if (!map || path.length < 2) return;
-    const casing = L.polyline(path, { color: '#ffffff', weight: 9, opacity: faded ? 0.5 : 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(map);
-    const line = L.polyline(path, { color: cssVar('--color-route', '#141414'), weight: 5, opacity: faded ? 0.35 : 1, lineCap: 'round', lineJoin: 'round', interactive: false, dashArray: faded ? '1 9' : undefined }).addTo(map);
+    const casing = dashed ? null : L.polyline(path, { color: '#ffffff', weight: weight + 4, opacity: faded ? 0.5 : 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(map);
+    const line = L.polyline(path, {
+      color: color || cssVar('--color-route', '#141414'),
+      weight: dashed ? 3 : weight,
+      opacity: faded ? 0.4 : 1,
+      lineCap: 'round',
+      lineJoin: 'round',
+      interactive: false,
+      dashArray: dashed ? '2 8' : faded ? '1 9' : undefined,
+    }).addTo(map);
     return () => {
-      casing.remove();
+      casing?.remove();
       line.remove();
     };
-  }, [map, path, faded]);
+  }, [map, path, faded, color, dashed, weight]);
   return null;
 }
 
@@ -104,6 +112,55 @@ export function carSvg(color: string, sign: boolean, size = 1) {
   </svg>`;
 }
 
+/** City bus seen from above: a long body with a row of windows. */
+export function busSvg(color: string, size = 1) {
+  const w = Math.round(16 * size);
+  const h = Math.round(46 * size);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 16 46" style="display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))">
+    <rect x="1" y="1" width="14" height="44" rx="3.5" fill="${color}" stroke="rgba(0,0,0,.4)" stroke-width="1"/>
+    <rect x="3" y="2.5" width="10" height="4" rx="1.5" fill="#1d2633" opacity=".85"/>
+    <rect x="4" y="9" width="8" height="30" rx="1.5" fill="#fff" opacity=".22"/>
+    <rect x="5" y="40" width="6" height="3" rx="1" fill="#1d2633" opacity=".6"/>
+  </svg>`;
+}
+
+/** Helicopter from above: body, tail boom and a spinning rotor. */
+export function heliSvg(color: string, size = 1) {
+  const s = Math.round(44 * size);
+  return `<svg width="${s}" height="${s}" viewBox="0 0 44 44" style="display:block;filter:drop-shadow(0 3px 3px rgba(0,0,0,.4))">
+    <rect x="20.6" y="22" width="2.8" height="18" rx="1.2" fill="${color}" stroke="rgba(0,0,0,.4)" stroke-width=".6"/>
+    <rect x="15" y="37" width="14" height="2.2" rx="1" fill="${color}"/>
+    <ellipse cx="22" cy="17" rx="7" ry="10" fill="${color}" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+    <ellipse cx="22" cy="11" rx="4.5" ry="4" fill="#8fb4d9" opacity=".9"/>
+    <g class="bt-rotor" style="transform-origin:22px 17px"><rect x="1" y="16" width="42" height="2" rx="1" fill="#2b2b2b" opacity=".75"/><rect x="21" y="-4" width="2" height="42" rx="1" fill="#2b2b2b" opacity=".75"/></g>
+  </svg>`;
+}
+
+/** Business jet from above: swept wings and tail. */
+export function jetSvg(color: string, size = 1) {
+  const s = Math.round(48 * size);
+  return `<svg width="${s}" height="${s}" viewBox="0 0 48 48" style="display:block;filter:drop-shadow(0 4px 4px rgba(0,0,0,.4))">
+    <path d="M24 2 C26 2 27 6 27 10 L27 18 L45 28 L45 31 L27 26 L26.5 38 L32 42 L32 44 L24 42.5 L16 44 L16 42 L21.5 38 L21 26 L3 31 L3 28 L21 18 L21 10 C21 6 22 2 24 2 Z" fill="${color}" stroke="#141414" stroke-opacity=".5" stroke-width="1"/>
+    <path d="M22.3 6 Q24 4 25.7 6 L25.4 8 L22.6 8 Z" fill="#1d2633"/>
+    <rect x="17" y="21.5" width="2.5" height="5" rx="1" fill="#555"/><rect x="28.5" y="21.5" width="2.5" height="5" rx="1" fill="#555"/>
+  </svg>`;
+}
+
+export type VehicleKind = 'car' | 'bus' | 'heli' | 'jet';
+
+function vehicleIcon(kind: VehicleKind, color: string, label?: string) {
+  const svg = kind === 'bus' ? busSvg(color) : kind === 'heli' ? heliSvg(color) : kind === 'jet' ? jetSvg(color) : carSvg(color, true, 1.05);
+  const box = kind === 'bus' ? 48 : kind === 'jet' ? 50 : kind === 'heli' ? 46 : 42;
+  // The number badge stays upright: only .bt-car rotates.
+  const badge = label ? `<span style="position:absolute;left:50%;top:-12px;transform:translateX(-50%);background:${color};color:#fff;font:700 12px/1 var(--font-sans);padding:3px 6px;border-radius:8px;border:2px solid #fff;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.35)">${escapeHtml(label)}</span>` : '';
+  return L.divIcon({
+    className: 'bt-marker',
+    html: `<div style="position:relative;width:${box}px;height:${box}px">${badge}<div class="bt-car" style="width:${box}px;height:${box}px;display:flex;align-items:center;justify-content:center">${svg}</div></div>`,
+    iconSize: [box, box],
+    iconAnchor: [box / 2, box / 2],
+  });
+}
+
 function carIcon(color: string, sign: boolean, size = 1) {
   const w = Math.round(22 * size);
   const h = Math.round(40 * size);
@@ -125,18 +182,18 @@ const rotate = (m: L.Marker, heading: number) => {
  * The ride's car. With `motion` it drives along the path by the server clock (smoothly, every frame);
  * otherwise it stands at `position`.
  */
-export function RideCar({ color, motion, position, clockOffset, follow }: { color: string; motion: { path: LatLon[]; startAt: number; endAt: number } | null; position: { pos: LatLon; heading: number } | null; clockOffset: number; follow?: boolean }) {
+export function RideCar({ color, motion, position, clockOffset, follow, kind = 'car', label }: { color: string; motion: { path: LatLon[]; startAt: number; endAt: number } | null; position: { pos: LatLon; heading: number } | null; clockOffset: number; follow?: boolean; kind?: VehicleKind; label?: string }) {
   const map = useLeaflet();
   const marker = useRef<L.Marker | null>(null);
   useEffect(() => {
     if (!map) return;
-    const m = L.marker([0, 0], { icon: carIcon(color, true, 1.05), interactive: false, keyboard: false, zIndexOffset: 1000 });
+    const m = L.marker([0, 0], { icon: vehicleIcon(kind, color, label), interactive: false, keyboard: false, zIndexOffset: 1000 });
     marker.current = m;
     return () => {
       m.remove();
       marker.current = null;
     };
-  }, [map, color]);
+  }, [map, color, kind, label]);
 
   useEffect(() => {
     const m = marker.current;
@@ -164,11 +221,11 @@ export function RideCar({ color, motion, position, clockOffset, follow }: { colo
       const d = ((p.heading - heading + 540) % 360) - 180;
       heading = (heading + d * 0.25 + 360) % 360;
       rotate(m, heading);
-      if (follow && !map.getBounds().pad(-0.2).contains(p.pos)) map.panTo(p.pos, { animate: true });
+      if (follow && !map.getBounds().pad(-0.2).contains(p.pos)) map.panTo(p.pos, { animate: true, duration: kind === 'jet' ? 1 : 0.5 });
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [map, motion, position, clockOffset, follow]);
+  }, [map, motion, position, clockOffset, follow, kind]);
   return null;
 }
 
@@ -250,5 +307,132 @@ export function SearchPulse({ pos }: { pos: LatLon }) {
     const m = L.marker(pos, { icon: L.divIcon({ className: 'bt-marker', html, iconSize: [120, 120], iconAnchor: [60, 60] }), interactive: false, keyboard: false, zIndexOffset: -100 }).addTo(map);
     return () => void m.remove();
   }, [map, pos]);
+  return null;
+}
+
+/** Small round stop markers along a bus ride (or all stops in the frame). */
+export function StopDots({ stops, color, onClick }: { stops: { lat: number; lon: number; name: string; id?: string }[]; color?: string | null; onClick?: (id: string) => void }) {
+  const map = useLeaflet();
+  useEffect(() => {
+    if (!map) return;
+    const layer = L.layerGroup(
+      stops.map((st) => {
+        const c = L.circleMarker([st.lat, st.lon], { radius: onClick ? 6 : 4, color: '#fff', weight: 2, fillColor: color || '#141414', fillOpacity: 1, interactive: !!onClick, bubblingMouseEvents: false });
+        if (onClick && st.id) {
+          c.on('click', () => onClick(st.id!));
+          c.bindTooltip(escapeHtml(st.name), { direction: 'top', offset: [0, -6] });
+        }
+        return c;
+      }),
+    ).addTo(map);
+    return () => void layer.remove();
+  }, [map, stops, color, onClick]);
+  return null;
+}
+
+/** Calls back with the frame after every move (to load stops and buses in view). */
+export function useMapFrame() {
+  const map = useLeaflet();
+  const [frame, setFrame] = useState<{ s: number; w: number; n: number; e: number; zoom: number } | null>(null);
+  useEffect(() => {
+    if (!map) return;
+    const update = () => {
+      const b = map.getBounds();
+      setFrame({ s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast(), zoom: map.getZoom() });
+    };
+    update();
+    map.on('moveend', update);
+    return () => void map.off('moveend', update);
+  }, [map]);
+  return frame;
+}
+
+interface LiveBus {
+  id: string;
+  route: number;
+  ref: string;
+  colour: string | null;
+  lat: number;
+  lon: number;
+  heading: number;
+}
+
+/** Buses of the real lines in the frame; positions refresh every 3 s and glide in between. */
+export function LiveBuses({ route, onPick }: { route?: number; onPick?: (b: LiveBus) => void }) {
+  const map = useLeaflet();
+  const frame = useMapFrame();
+  const q = frame ? `s=${frame.s.toFixed(4)}&w=${frame.w.toFixed(4)}&n=${frame.n.toFixed(4)}&e=${frame.e.toFixed(4)}${route ? `&route=${route}` : ''}` : '';
+  const { data } = useQuery({ queryKey: ['bus-live', q], queryFn: () => api<{ buses: LiveBus[] }>(`/bus/live?${q}`), enabled: !!frame && (frame.zoom >= 13 || !!route), refetchInterval: 3000, placeholderData: (p) => p });
+  const markers = useRef(new Map<string, { m: L.Marker; from: LatLon; to: LatLon; at: number }>());
+  useEffect(() => {
+    if (!map || !data) return;
+    const seen = new Set<string>();
+    const now = performance.now();
+    for (const b of data.buses) {
+      seen.add(b.id);
+      const cur = markers.current.get(b.id);
+      if (cur) {
+        const p = cur.m.getLatLng();
+        Object.assign(cur, { from: [p.lat, p.lng] as LatLon, to: [b.lat, b.lon] as LatLon, at: now });
+        rotate(cur.m, b.heading);
+      } else {
+        const m = L.marker([b.lat, b.lon], { icon: vehicleIcon('bus', b.colour || '#d0021b', b.ref), keyboard: false, zIndexOffset: 200 }).addTo(map);
+        if (onPick) m.on('click', () => onPick(b));
+        rotate(m, b.heading);
+        markers.current.set(b.id, { m, from: [b.lat, b.lon], to: [b.lat, b.lon], at: now });
+      }
+    }
+    for (const [id, v] of markers.current) {
+      if (!seen.has(id)) {
+        v.m.remove();
+        markers.current.delete(id);
+      }
+    }
+  }, [map, data, onPick]);
+  useEffect(() => {
+    let raf = 0;
+    const frameFn = (t: number) => {
+      raf = requestAnimationFrame(frameFn);
+      for (const v of markers.current.values()) {
+        const f = Math.min(1, (t - v.at) / 3000);
+        v.m.setLatLng([v.from[0] + (v.to[0] - v.from[0]) * f, v.from[1] + (v.to[1] - v.from[1]) * f]);
+      }
+    };
+    raf = requestAnimationFrame(frameFn);
+    const all = markers.current;
+    return () => {
+      cancelAnimationFrame(raf);
+      for (const v of all.values()) v.m.remove();
+      all.clear();
+    };
+  }, []);
+  return null;
+}
+
+/** Bus stops in the frame when zoomed in; a tap opens the departure board. */
+export function BusStops({ onPick }: { onPick: (id: string) => void }) {
+  const frame = useMapFrame();
+  const q = frame ? `s=${frame.s.toFixed(4)}&w=${frame.w.toFixed(4)}&n=${frame.n.toFixed(4)}&e=${frame.e.toFixed(4)}` : '';
+  const { data } = useQuery({ queryKey: ['bus-stops', q], queryFn: () => api<{ stops: { id: string; name: string; lat: number; lon: number }[] }>(`/bus/stops?${q}`), enabled: !!frame && frame.zoom >= 15, placeholderData: (p) => p, staleTime: 600_000 });
+  return <StopDots stops={frame && frame.zoom >= 15 ? (data?.stops ?? []) : []} onClick={onPick} />;
+}
+
+/** Helipads and airports to choose from. */
+export function PlaceMarkers({ places, selected, onPick, kind }: { places: { code: string; title: string; lat: number; lon: number }[]; selected?: string[]; onPick?: (code: string) => void; kind: 'heli' | 'jet' }) {
+  const map = useLeaflet();
+  useEffect(() => {
+    if (!map) return;
+    const layer = L.layerGroup(
+      places.map((p) => {
+        const on = selected?.includes(p.code);
+        const html = `<span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:${kind === 'heli' ? '50%' : '9px'};background:${on ? '#FFD600' : '#141414'};color:${on ? '#141414' : '#fff'};font:800 ${kind === 'heli' ? 15 : 10}px/1 var(--font-sans);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${kind === 'heli' ? 'H' : escapeHtml(p.code)}</span>`;
+        const m = L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'bt-marker', html, iconSize: [30, 30], iconAnchor: [15, 15] }), keyboard: false, zIndexOffset: on ? 800 : 300 });
+        m.bindTooltip(escapeHtml(p.title), { direction: 'top', offset: [0, -14] });
+        if (onPick) m.on('click', () => onPick(p.code));
+        return m;
+      }),
+    ).addTo(map);
+    return () => void layer.remove();
+  }, [map, places, selected, onPick, kind]);
   return null;
 }

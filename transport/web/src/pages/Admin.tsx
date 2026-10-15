@@ -20,6 +20,15 @@ interface Tariff {
   cars: string[];
   etaMin: [number, number];
 }
+interface AirClass {
+  id: string;
+  title: string;
+  model: string;
+  seats: number;
+  rate: number;
+  speed: number;
+  range: number;
+}
 interface Settings {
   timeScale: number;
   surgeMode: 'auto' | 'fixed';
@@ -29,6 +38,9 @@ interface Settings {
   cancelFee: number;
   childSeat: number;
   tariffs: Tariff[];
+  airTimeScale: number;
+  helicopters: AirClass[];
+  jets: AirClass[];
 }
 interface Overview {
   users: number;
@@ -67,6 +79,7 @@ export default function Admin() {
   if (error) return <Page title="Админка"><ErrorNote>{errorText(error)}</ErrorNote></Page>;
   if (!s || !ov) return <Page title="Админка"><Loading /></Page>;
   const setT = (i: number, patch: Partial<Tariff>) => setS({ ...s, tariffs: s.tariffs.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
+  const setAir = (key: 'helicopters' | 'jets', i: number, patch: Partial<AirClass>) => setS({ ...s, [key]: s[key].map((c, j) => (j === i ? { ...c, ...patch } : c)) });
   const saveSettings = async () => {
     setBusy(true);
     try {
@@ -129,6 +142,24 @@ export default function Admin() {
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section title="Вертолёты и джеты">
+        <div className="rounded-2xl bg-sunken p-4">
+          <Num label="Ускорение времени в полёте, ×" value={s.airTimeScale} onChange={(v) => setS({ ...s, airTimeScale: v })} />
+        </div>
+        {(['helicopters', 'jets'] as const).map((key) =>
+          s[key].map((c, i) => (
+            <div key={`${key}-${c.id}`} className="mt-2 rounded-2xl bg-sunken p-4">
+              <div className="mb-2 font-semibold">{c.model} <span className="font-normal text-muted">· {c.title}</span></div>
+              <div className="grid grid-cols-3 gap-2">
+                <Num label="₽ за час" value={c.rate} step={1000} onChange={(v) => setAir(key, i, { rate: v })} />
+                <Num label="Скорость, км/ч" value={c.speed} onChange={(v) => setAir(key, i, { speed: v })} />
+                <Num label="Дальность, км" value={c.range} onChange={(v) => setAir(key, i, { range: v })} />
+              </div>
+            </div>
+          )),
+        )}
         <Button className="mt-3 w-full" size="lg" variant="ink" loading={busy} onClick={() => void saveSettings()}>Сохранить настройки</Button>
       </Section>
 
