@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { bankEnabled } from '../domain/bank.js';
+import { businessesOf, gosEnabled, gosUid, linkShopBusiness } from '../domain/gos.js';
 import { cancelWithBank, captureWithBank, linkBankAccount, payoutAccount, payoutToBank, refundWithBank } from '../domain/bankpay.js';
 import { audit, HttpError, type Ctx } from '../context.js';
 import { getGlobalFees, METHODS, shopFees } from '../domain/fees.js';
@@ -52,6 +53,7 @@ export function shopSummary(ctx: Ctx, s: ShopRow) {
     mcc: s.mcc,
     payoutAccount: payoutAccount(s),
     bankEnabled: bankEnabled(ctx),
+    gosBusinessId: s.gos_doc_id,
     kkt: { rn: s.kkt_rn, fn: s.fn_number, fd: s.fd_counter, shift: s.shift_no },
     createdAt: s.created_at,
   };
@@ -114,12 +116,30 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
     const r = db
       .prepare('INSERT INTO shops(owner_id, name, legal_name, inn, tax_system, site, color, kkt_rn, fn_number, created_at, methods) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
       .run(user.id, b.name, b.legalName, b.inn, b.taxSystem, b.site, b.color, kkt.rn, kkt.fn, ctx.now(), JSON.stringify(METHODS));
-    const shop = getShop(ctx, Number(r.lastInsertRowid))!;
+    let shop = getShop(ctx, Number(r.lastInsertRowid))!;
+    // A business from the Бобуслуги registry: the shop appears in the business card there right away.
+    const gosBusinessId = (req.body as { gosBusinessId?: unknown }).gosBusinessId;
+    if (typeof gosBusinessId === 'number') shop = (await linkShopBusiness(ctx, shop, user.id, gosBusinessId)) ?? shop;
     audit(ctx, req, 'shop_create', 'shop', String(shop.id), b.name);
     return { shop: shopSummary(ctx, shop) };
   });
 
   app.get<P>('/api/m/shops/:shopId', async (req) => ({ shop: shopSummary(ctx, ownShop(req)) }));
+
+  // ---------- Бобуслуги ----------
+  app.get('/api/m/gos', async (req) => {
+    const user = requireUser(req);
+    const linked = !!gosUid(ctx, user.id);
+    return { enabled: gosEnabled(ctx), url: gosEnabled(ctx) ? ctx.cfg.gosPublicUrl : null, linked, businesses: linked ? await businessesOf(ctx, user.id) : [] };
+  });
+
+  app.post<P>('/api/m/shops/:shopId/gos-business', async (req) => {
+    const shop = ownShop(req);
+    const { businessId } = z.object({ businessId: z.number().int().nullable() }).parse(req.body);
+    const updated = await linkShopBusiness(ctx, shop, requireUser(req).id, businessId);
+    audit(ctx, req, 'shop_gos_link', 'shop', String(shop.id), String(businessId));
+    return { shop: shopSummary(ctx, updated ?? getShop(ctx, shop.id)!) };
+  });
 
   app.patch<P>('/api/m/shops/:shopId', async (req) => {
     const shop = ownShop(req);
@@ -128,6 +148,11 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
       name: b.name, legal_name: b.legalName, inn: b.inn, tax_system: b.taxSystem, site: b.site, color: b.color,
       methods: b.methods ? JSON.stringify(b.methods) : undefined, return_url: b.returnUrl, default_vat: b.defaultVat, mcc: b.mcc,
     };
+    // Name and INN of a shop tied to a registered business come from Бобуслуги.
+    if (shop.gos_doc_id) {
+      delete cols.legal_name;
+      delete cols.inn;
+    }
     for (const [k, v] of Object.entries(cols)) if (v !== undefined) db.prepare(`UPDATE shops SET ${k} = ? WHERE id = ?`).run(v, shop.id);
     audit(ctx, req, 'shop_update', 'shop', String(shop.id));
     return { shop: shopSummary(ctx, getShop(ctx, shop.id)!) };

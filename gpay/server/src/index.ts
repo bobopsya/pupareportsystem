@@ -3,6 +3,7 @@ import { loadConfig } from './config.js';
 import { createCtx } from './context.js';
 import { openDb } from './db.js';
 import { tickBank } from './domain/bankpay.js';
+import { syncTurnover } from './domain/gos.js';
 import { tick } from './domain/payments.js';
 import { deliverDue } from './domain/webhooks.js';
 
@@ -21,6 +22,11 @@ setInterval(() => {
   deliverDue(ctx).catch((err) => app.log.error(err));
   tickBank(ctx).catch((err) => app.log.error(err));
 }, 2000).unref();
+
+// Turnover of shops linked to a business on Бобуслуги (for the turnover tax), checked every minute, sent hourly per shop.
+setInterval(() => {
+  syncTurnover(ctx).catch((err) => app.log.warn({ err }, 'Бобуслуги: оборот не отправлен'));
+}, 60_000).unref();
 
 const shutdown = async () => {
   await app.close();

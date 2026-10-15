@@ -2,6 +2,7 @@ import type { MethodType } from '../checkout/types';
 
 export interface Shop {
   id: number;
+  gosBusinessId?: number | null;
   name: string;
   legalName: string;
   inn: string;

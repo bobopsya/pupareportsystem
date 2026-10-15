@@ -258,6 +258,14 @@ const MIGRATIONS: string[] = [
   UPDATE shops SET methods = '["bank_card","sbp","bobopay"]';
   DELETE FROM game_cards;
   `,
+  `
+  -- Бобуслуги: merchants sign in with their state account; shops belong to a registered business.
+  ALTER TABLE users ADD COLUMN gos_uid TEXT;
+  CREATE UNIQUE INDEX users_gos_uid ON users(gos_uid) WHERE gos_uid IS NOT NULL;
+  ALTER TABLE shops ADD COLUMN gos_doc_id INTEGER;
+  ALTER TABLE shops ADD COLUMN gos_synced_at INTEGER;
+  CREATE TABLE gos_states (state_hash TEXT PRIMARY KEY, next TEXT NOT NULL, link_user_id TEXT, expires_at INTEGER NOT NULL);
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

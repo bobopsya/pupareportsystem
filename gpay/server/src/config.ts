@@ -18,6 +18,10 @@ export interface Config {
   bankInternalUrl: string;
   bankPublicUrl: string;
   bankSecret: string;
+  /** Бобуслуги (Supabase): sign-in for merchants and the business registry. The server key stays on the server. */
+  supabaseUrl: string;
+  supabaseServiceKey: string;
+  gosPublicUrl: string;
 }
 
 const HEX = /^[0-9a-f]{32,128}$/i;
@@ -40,5 +44,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     bankInternalUrl: (env.BANK_INTERNAL_URL ?? '').replace(/\/$/, ''),
     bankPublicUrl: (env.BANK_PUBLIC_URL ?? env.BANK_INTERNAL_URL ?? '').replace(/\/$/, ''),
     bankSecret: env.BANK_GPAY_SECRET ?? '',
+    supabaseUrl: (env.SUPABASE_URL ?? '').replace(/\/$/, ''),
+    supabaseServiceKey: env.SUPABASE_SERVICE_KEY ?? '',
+    gosPublicUrl: (env.GOS_PUBLIC_URL ?? '').replace(/\/$/, ''),
   };
 }

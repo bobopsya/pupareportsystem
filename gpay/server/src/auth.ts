@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { audit, HttpError, type Ctx, type SessionUser } from './context.js';
+import { gosEnabled, gosRpc, type GosPerson } from './domain/gos.js';
 import { newId, sha256 } from './util.js';
 
 export const SESSION_COOKIE = 'gp_sid';
@@ -15,7 +16,7 @@ export const CSRF_VALUE = 'gpay';
 
 /** Routes that work without a cabinet session. /api/v1 authenticates by API key instead. */
 const isPublic = (url: string) =>
-  url === '/api/health' || url === '/api/auth/me' || url === '/api/auth/login' || url === '/api/auth/register' || url.startsWith('/api/v1/') || url.startsWith('/api/checkout/') || url.startsWith('/api/public/');
+  url === '/api/health' || url === '/api/auth/me' || url === '/api/auth/login' || url === '/api/auth/register' || url.startsWith('/api/auth/gos/') || url.startsWith('/api/v1/') || url.startsWith('/api/checkout/') || url.startsWith('/api/public/');
 
 export const passwordSchema = z.string().min(8, 'Пароль должен быть не короче 8 символов').max(200);
 export const hashPassword = (pw: string) => argon2.hash(pw, { type: argon2.argon2id });
@@ -114,6 +115,62 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
     return { user: req.user };
   });
 
+  // ---------- «Войти через Бобуслуги» ----------
+  app.get('/api/public/gos', async () => ({ gos: gosEnabled(ctx) ? { url: ctx.cfg.gosPublicUrl } : null }));
+  const GOS_COOKIE = 'gp_gos';
+  const safeNext = (n: unknown) => (typeof n === 'string' && /^\/[a-zA-Z0-9/_?=&%.-]*$/.test(n) && !n.startsWith('//') ? n : '/app');
+
+  app.get('/api/auth/gos/start', async (req, reply) => {
+    if (!gosEnabled(ctx)) return reply.redirect('/login');
+    const q = req.query as { next?: string; link?: string };
+    const state = crypto.randomBytes(24).toString('base64url');
+    db.prepare('DELETE FROM gos_states WHERE expires_at < ?').run(ctx.now());
+    db.prepare('INSERT INTO gos_states(state_hash, next, link_user_id, expires_at) VALUES(?,?,?,?)').run(sha256(state), safeNext(q.next), q.link === '1' && req.user ? req.user.id : null, ctx.now() + 15 * 60_000);
+    reply.setCookie(GOS_COOKIE, state, { path: '/api/auth/gos', httpOnly: true, secure: ctx.cfg.cookieSecure, sameSite: 'lax', maxAge: 15 * 60 });
+    return reply.redirect(`${ctx.cfg.gosPublicUrl}/#/connect?client=gpay&state=${encodeURIComponent(state)}`);
+  });
+
+  app.get('/api/auth/gos/callback', async (req, reply) => {
+    const q = req.query as { code?: string; state?: string };
+    const fail = (msg: string) => reply.redirect(`/login?gosError=${encodeURIComponent(msg)}`);
+    if (!gosEnabled(ctx)) return fail('Бобуслуги не подключены');
+    const cookieState = req.cookies[GOS_COOKIE];
+    reply.clearCookie(GOS_COOKIE, { path: '/api/auth/gos' });
+    if (!q.state || !q.code || cookieState !== q.state) return fail('Вход прерван — попробуйте ещё раз');
+    const st = db.prepare('SELECT * FROM gos_states WHERE state_hash = ?').get(sha256(q.state)) as { next: string; link_user_id: string | null; expires_at: number } | undefined;
+    db.prepare('DELETE FROM gos_states WHERE state_hash = ?').run(sha256(q.state));
+    if (!st || st.expires_at < ctx.now()) return fail('Вход устарел — попробуйте ещё раз');
+    let p: GosPerson;
+    try {
+      p = await gosRpc<GosPerson>(ctx, 'svc_redeem_code', { p_code: q.code, p_client: 'gpay' });
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : 'Бобуслуги не ответили');
+    }
+    if (p.banned) return fail('Аккаунт на Бобуслугах заблокирован');
+    const existing = db.prepare('SELECT * FROM users WHERE gos_uid = ?').get(p.id) as UserRow | undefined;
+    if (st.link_user_id) {
+      if (req.user?.id !== st.link_user_id) return fail('Войдите в GPAY и подключите Бобуслуги ещё раз');
+      if (existing && existing.id !== st.link_user_id) return reply.redirect(`/app?gosError=${encodeURIComponent('Этот аккаунт Бобуслуг уже привязан к другому продавцу')}`);
+      db.prepare('UPDATE users SET gos_uid = ? WHERE id = ?').run(p.id, st.link_user_id);
+      audit(ctx, req, 'gos_link', 'user', st.link_user_id, p.login);
+      return reply.redirect(`${st.next}${st.next.includes('?') ? '&' : '?'}gos=linked`);
+    }
+    let row = existing;
+    if (!row) {
+      // New merchant: the account is created from Бобуслуги; the password is random (sign in with Бобуслуги or set one in the profile).
+      const name = p.passport ? `${p.passport.first_name} ${p.passport.last_name}` : p.display_name;
+      const id = await createUser(ctx, `${p.login.toLowerCase()}@bobuslugi.gpay`, name.slice(0, 100), crypto.randomBytes(18).toString('base64url'));
+      db.prepare('UPDATE users SET gos_uid = ? WHERE id = ?').run(p.id, id);
+      row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow;
+      audit(ctx, req, 'register_gos', 'user', id, p.login);
+    }
+    if (row.blocked) return fail('Аккаунт заблокирован. Обратитесь в поддержку GPAY.');
+    startSession(req, reply, row.id);
+    req.user = toUser(row);
+    audit(ctx, req, 'login_gos', 'user', row.id);
+    return reply.redirect(st.next);
+  });
+
   app.post('/api/auth/logout', async (req, reply) => {
     const token = req.cookies[SESSION_COOKIE];
     if (token) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha256(token));
@@ -121,7 +178,9 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
     return { ok: true };
   });
 
-  app.get('/api/auth/me', async (req) => ({ user: req.user }));
+  app.get('/api/auth/me', async (req) => ({
+    user: req.user ? { ...req.user, gosLinked: !!(db.prepare('SELECT gos_uid FROM users WHERE id = ?').get(req.user.id) as { gos_uid: string | null }).gos_uid } : null,
+  }));
 
   const changeBody = z.object({ currentPassword: z.string().min(1), newPassword: passwordSchema, name: z.string().trim().min(2).max(100).optional() });
   app.post('/api/auth/profile', async (req) => {

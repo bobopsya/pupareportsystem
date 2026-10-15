@@ -1,10 +1,26 @@
 import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { GosButton, usePublicGos } from '../components/Gos';
 import { Logo } from '../components/Logo';
 import { CardLogos, PayLogo } from '../components/PaymentLogos';
 import { Button, ErrorNote, Field, Input } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { useAuth, type User } from '../lib/auth';
+
+function GosEntry({ next }: { next: string }) {
+  const gos = usePublicGos();
+  const [params] = useSearchParams();
+  const err = params.get('gosError');
+  if (!gos) return null;
+  return (
+    <>
+      {err && <div className="mb-4"><ErrorNote>{err}</ErrorNote></div>}
+      <GosButton next={next} />
+      <p className="mt-2 text-center text-xs text-muted">Реквизиты бизнеса подставятся из реестра Бобуслуг</p>
+      <div className="my-6 flex items-center gap-3 text-xs text-faint"><span className="h-px flex-1 bg-line" />или по email<span className="h-px flex-1 bg-line" /></div>
+    </>
+  );
+}
 
 function Shell({ children, title, sub }: { children: React.ReactNode; title: string; sub: React.ReactNode }) {
   return (
@@ -32,6 +48,7 @@ export function Login() {
   if (user) return <Navigate to="/app" replace />;
   return (
     <Shell title="Вход в личный кабинет" sub={<>Нет аккаунта? <Link to="/register" className="text-fg font-medium underline underline-offset-4">Подключите магазин</Link></>}>
+      <GosEntry next="/app" />
       <form
         className="flex flex-col gap-4"
         onSubmit={async (e) => {
@@ -69,6 +86,7 @@ export function Register() {
   if (user) return <Navigate to="/app" replace />;
   return (
     <Shell title="Подключение к GPAY" sub={<>Уже есть аккаунт? <Link to="/login" className="text-fg font-medium underline underline-offset-4">Войти</Link></>}>
+      <GosEntry next="/app/new" />
       <form
         className="flex flex-col gap-4"
         onSubmit={async (e) => {

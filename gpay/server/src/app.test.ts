@@ -414,3 +414,76 @@ describe('llms.txt', () => {
     expect(full.body).not.toContain('4111');
   });
 });
+
+describe('Бобуслуги', () => {
+  let gosCalls: { fn: string; args: Record<string, unknown> }[];
+  let codesMap: Map<string, string>;
+  const person = {
+    id: 'u-alice', login: 'alice', display_name: 'alice', banned: false,
+    passport: { first_name: 'Алиса', last_name: 'Псянская' },
+    businesses: [{ id: 7, number: '123 321', country_code: 'BOBO', name: 'Бобо-кофе', org_type: 'ИП', inn: '123412341234' }],
+  };
+
+  beforeEach(async () => {
+    const cfg = loadConfig({
+      COOKIE_SECURE: '0', PUBLIC_URL: 'https://pay.test', WEBHOOK_ALLOW_PRIVATE: '1', BANK_INTERNAL_URL: 'http://bank.internal', BANK_PUBLIC_URL: 'https://bank.test', BANK_GPAY_SECRET: 'shared',
+      SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_KEY: 'sb_secret_x', GOS_PUBLIC_URL: 'https://gos.test',
+    });
+    const bankHttp = ctx.bankHttp;
+    ctx = createCtx(openDb(null), cfg, () => now);
+    ctx.bankHttp = bankHttp;
+    ctx.http = async () => new Response('ok');
+    gosCalls = [];
+    codesMap = new Map();
+    ctx.gosHttp = async (url, init) => {
+      const fn = new URL(url).pathname.replace('/rest/v1/rpc/', '');
+      const args = JSON.parse(String(init.body));
+      gosCalls.push({ fn, args });
+      expect((init.headers as Record<string, string>).apikey).toBe('sb_secret_x');
+      if (fn === 'svc_redeem_code') return codesMap.has(args.p_code) ? Response.json(person) : Response.json({ message: 'E_BAD_CODE' }, { status: 400 });
+      if (fn === 'svc_person') return Response.json(person);
+      if (fn === 'svc_gpay_shop') return args.p_doc === 7 || args.p_doc === null ? Response.json({ ok: true }) : Response.json({ message: 'E_NOT_FOUND' }, { status: 400 });
+      return Response.json({ ok: true });
+    };
+    app = await buildApp(ctx);
+  });
+
+  async function signIn() {
+    const start = await app.inject({ url: '/api/auth/gos/start?next=/app/new' });
+    expect(String(start.headers.location)).toMatch(/^https:\/\/gos\.test\/#\/connect\?client=gpay&state=/);
+    const state = decodeURIComponent(String(start.headers.location).split('state=')[1]);
+    const gosCookie = String(([] as string[]).concat(start.headers['set-cookie'] as string).find((c) => c.startsWith('gp_gos=')));
+    codesMap.set('c1', 'u-alice');
+    const cb = await app.inject({ url: `/api/auth/gos/callback?code=c1&state=${encodeURIComponent(state)}`, headers: { cookie: gosCookie.split(';')[0] } });
+    expect(cb.headers.location).toBe('/app/new');
+    const sid = String(([] as string[]).concat(cb.headers['set-cookie'] as string).find((c) => c.startsWith('gp_sid=')));
+    return { ...H, cookie: sid.split(';')[0] };
+  }
+
+  it('вход через Бобуслуги создаёт продавца, магазин привязывается к бизнесу и сразу уходит на Бобуслуги', async () => {
+    const headers = await signIn();
+    const me = (await app.inject({ url: '/api/auth/me', headers })).json().user;
+    expect(me).toMatchObject({ name: 'Алиса Псянская', gosLinked: true });
+    const gos = (await app.inject({ url: '/api/m/gos', headers })).json();
+    expect(gos).toMatchObject({ enabled: true, linked: true, businesses: [{ id: 7, inn: '123412341234' }] });
+
+    const shop = await app.inject({ method: 'POST', url: '/api/m/shops', headers, payload: { name: 'Кофейня', legalName: 'что угодно', inn: '7700000001', taxSystem: 'usn_income', site: 'bobo.coffee', gosBusinessId: 7 } });
+    expect(shop.json().shop).toMatchObject({ legalName: 'ИП Бобо-кофе', inn: '123412341234', gosBusinessId: 7 });
+    expect(gosCalls.find((c) => c.fn === 'svc_gpay_shop')!.args).toMatchObject({ p_user: 'u-alice', p_doc: 7, p_name: 'Кофейня', p_site: 'bobo.coffee' });
+    const id = shop.json().shop.id;
+    // INN of a linked shop is not edited by hand.
+    await app.inject({ method: 'PATCH', url: `/api/m/shops/${id}`, headers, payload: { inn: '7700000001' } });
+    expect((await app.inject({ url: `/api/m/shops/${id}`, headers })).json().shop.inn).toBe('123412341234');
+    expect((await app.inject({ method: 'POST', url: `/api/m/shops/${id}/gos-business`, headers, payload: { businessId: 99 } })).statusCode).toBe(404);
+
+    // Turnover goes to Бобуслуги for the turnover tax.
+    const key = (await app.inject({ method: 'POST', url: `/api/m/shops/${id}/keys`, headers, payload: { name: 'k' } })).json().secret;
+    const p = (await api(key, 'POST', '/payments', { amount: { value: '1500.00', currency: 'RUB' }, description: 'Заказ', confirmation: { type: 'redirect', return_url: 'https://bobo.coffee/' } }, 'k1')).json();
+    ctx.db.prepare(`UPDATE payments SET status = 'succeeded', funding = 'bank', created_at = ? WHERE id = ?`).run(now - 3600_000 * 12, p.id);
+    now += 86400_000;
+    const { syncTurnover } = await import('./domain/gos.js');
+    expect(await syncTurnover(ctx)).toBe(1);
+    expect(gosCalls.find((c) => c.fn === 'svc_gpay_turnover')!.args).toMatchObject({ p_shop: id, p_month_rub: 150000 });
+    expect(await syncTurnover(ctx)).toBe(0);
+  });
+});

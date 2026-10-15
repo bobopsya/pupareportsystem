@@ -26,6 +26,7 @@ export interface ShopRow {
   shift_no: number;
   mcc: number;
   payout_account: string | null;
+  gos_doc_id: number | null;
   created_at: number;
 }
 

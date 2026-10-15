@@ -7,6 +7,7 @@ export interface User {
   email: string;
   name: string;
   role: 'merchant' | 'admin';
+  gosLinked?: boolean;
 }
 
 interface AuthState {

@@ -2,9 +2,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CreditCard, Dices, Store } from 'lucide-react';
 import { BoboMark } from '../checkout/AsyncMethods';
 import { useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShopAvatar } from '../checkout/Checkout';
 import type { MethodType } from '../checkout/types';
+import { BusinessSelect, GosButton, GosMark, legalOf, useGos } from '../components/Gos';
 import { Logo } from '../components/Logo';
 import { CardLogos, SbpMark } from '../components/PaymentLogos';
 import { Button, Card, CardHeader, cx, ErrorNote, Field, Input, PageHeader, Select, Toggle, useToast } from '../components/ui';
@@ -24,7 +25,7 @@ interface ShopFields {
   color: string;
 }
 
-function ShopFieldsForm({ v, set }: { v: ShopFields; set: (p: Partial<ShopFields>) => void }) {
+function ShopFieldsForm({ v, set, locked }: { v: ShopFields; set: (p: Partial<ShopFields>) => void; locked?: boolean }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <Field label="Название магазина" hint="Его увидят покупатели на странице оплаты">
@@ -34,17 +35,17 @@ function ShopFieldsForm({ v, set }: { v: ShopFields; set: (p: Partial<ShopFields
         <Input value={v.site} onChange={(e) => set({ site: e.target.value })} placeholder="zerno-coffee.ru" />
       </Field>
       <Field label="Юридическое название">
-        <Input value={v.legalName} onChange={(e) => set({ legalName: e.target.value })} placeholder="ООО «Зерно и Ко» / ИП Иванов И. И." />
+        <Input value={v.legalName} disabled={locked} onChange={(e) => set({ legalName: e.target.value })} placeholder="ООО «Зерно и Ко» / ИП Иванов И. И." />
       </Field>
       <Field
         label="ИНН"
-        aside={
+        aside={locked ? <span className="text-xs text-muted">из реестра Бобуслуг</span> :
           <button type="button" className="inline-flex items-center gap-1 text-xs text-brand" onClick={async () => set({ inn: (await api<{ newInn: string }>('/m/meta')).newInn })}>
             <Dices className="size-3.5" /> Сгенерировать
           </button>
         }
       >
-        <Input value={v.inn} onChange={(e) => set({ inn: e.target.value.replace(/\D/g, '').slice(0, 12) })} placeholder="10 или 12 цифр" inputMode="numeric" mono />
+        <Input value={v.inn} disabled={locked} onChange={(e) => set({ inn: e.target.value.replace(/\D/g, '').slice(0, 12) })} placeholder="10 или 12 цифр" inputMode="numeric" mono />
       </Field>
       <Field label="Система налогообложения">
         <Select value={v.taxSystem} onChange={(e) => set({ taxSystem: e.target.value })}>
@@ -67,6 +68,11 @@ export function NewShop() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const [v, setV] = useState<ShopFields>({ name: '', legalName: '', inn: '', taxSystem: 'usn_income', site: '', color: COLORS[0] });
+  const { data: gos } = useGos();
+  const [params] = useSearchParams();
+  const [bizId, setBizId] = useState<number | null>(Number(params.get('business')) || null);
+  const biz = gos?.businesses.find((b) => b.id === bizId) ?? null;
+  const fields = biz ? { ...v, legalName: legalOf(biz), inn: biz.inn } : v;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const first = !qc.getQueryData<Shop[]>(['shops'])?.length;
@@ -81,7 +87,24 @@ export function NewShop() {
             <p className="text-sm text-muted">Анкета для договора эквайринга. Проверка занимает пару секунд.</p>
           </div>
         </div>
-        <ShopFieldsForm v={v} set={(p) => setV({ ...v, ...p })} />
+        {gos?.enabled && (
+          <div className="mb-6 rounded-2xl bg-sunken p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><GosMark className="size-6" />Бизнес из реестра Бобуслуг</div>
+            {gos.linked ? (
+              gos.businesses.length ? (
+                <BusinessSelect businesses={gos.businesses} value={bizId} onChange={(b) => setBizId(b?.id ?? null)} />
+              ) : (
+                <p className="text-sm text-muted">В реестре нет вашего бизнеса. <a className="text-brand underline-offset-4 hover:underline" href={`${gos.url}/#/services`}>Зарегистрируйте ИП или компанию на Бобуслугах</a> — или заполните реквизиты вручную ниже.</p>
+              )
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted">Подключите Бобуслуги: название и ИНН подставятся из реестра, а магазин появится в карточке бизнеса.</p>
+                <GosButton link next="/app/new" label="Подключить Бобуслуги" />
+              </div>
+            )}
+          </div>
+        )}
+        <ShopFieldsForm v={fields} locked={!!biz} set={(p) => setV({ ...v, ...p })} />
         {error && <div className="mt-4"><ErrorNote>{error}</ErrorNote></div>}
         <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-faint max-w-sm">Нажимая кнопку, вы принимаете оферту GPAY на эквайринговое обслуживание и тарифы.</p>
@@ -94,7 +117,7 @@ export function NewShop() {
               setBusy(true);
               setError(null);
               try {
-                const r = await api<{ shop: Shop }>('/m/shops', { body: v });
+                const r = await api<{ shop: Shop }>('/m/shops', { body: { ...fields, gosBusinessId: biz?.id } });
                 qc.setQueryData<Shop[]>(['shops'], (old) => [...(old ?? []), r.shop]);
                 navigate(`/app/${r.shop.id}`);
               } catch (e) {
@@ -150,9 +173,10 @@ export default function Settings() {
       {error && <ErrorNote>{error}</ErrorNote>}
       <Card>
         <CardHeader title="Реквизиты" sub="Используются на странице оплаты и в кассовых чеках" />
-        <ShopFieldsForm v={v} set={(p) => setV({ ...v, ...p })} />
+        <ShopFieldsForm v={v} locked={!!shop.gosBusinessId} set={(p) => setV({ ...v, ...p })} />
         <div className="mt-5 flex justify-end"><Button variant="primary" loading={busy === 'info'} onClick={() => save('info', v)}>Сохранить</Button></div>
       </Card>
+      <GosBusinessCard shop={shop} onLinked={(s) => setV({ ...v, legalName: s.legalName, inn: s.inn })} />
       <Card>
         <CardHeader title="Способы оплаты" sub="Что увидит покупатель на странице оплаты" />
         <ul className="flex flex-col divide-y divide-line">
@@ -296,6 +320,42 @@ function Profile() {
           Сохранить
         </Button>
       </div>
+    </Card>
+  );
+}
+
+/** Settings: the shop's business on Бобуслуги (turnover tax, the shop shown in the business card). */
+function GosBusinessCard({ shop, onLinked }: { shop: Shop; onLinked: (s: Shop) => void }) {
+  const { data: gos } = useGos();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (!gos?.enabled) return null;
+  const link = async (businessId: number | null) => {
+    setBusy(true);
+    try {
+      const r = await api<{ shop: Shop }>(`/m/shops/${shop.id}/gos-business`, { body: { businessId } });
+      await qc.invalidateQueries({ queryKey: ['shops'] });
+      onLinked(r.shop);
+      toast(businessId ? 'Магазин привязан к бизнесу' : 'Привязка снята');
+    } catch (e) {
+      toast(errorText(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card>
+      <CardHeader title="Бизнес на Бобуслугах" sub="Магазин виден в карточке бизнеса, оборот идёт в расчёт налога с оборота" />
+      {!gos.linked ? (
+        <GosButton link next={`/app/${shop.id}/settings`} label="Подключить Бобуслуги" />
+      ) : gos.businesses.length ? (
+        <div className={busy ? 'pointer-events-none opacity-60' : ''}>
+          <BusinessSelect businesses={gos.businesses} value={shop.gosBusinessId ?? null} onChange={(b) => void link(b?.id ?? null)} />
+        </div>
+      ) : (
+        <p className="text-sm text-muted">В реестре нет вашего бизнеса. <a className="text-brand" href={`${gos.url}/#/services`}>Зарегистрировать на Бобуслугах</a></p>
+      )}
     </Card>
   );
 }
