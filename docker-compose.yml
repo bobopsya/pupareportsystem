@@ -4,6 +4,7 @@
 #   GPAY payment system:              add "gpay" to COMPOSE_PROFILES (deploy/install-gpay.sh does it)
 #   Bobobank (game bank):             add "bobobank" to COMPOSE_PROFILES (deploy/install-bobobank.sh does it)
 #   Бобуслуги (state services site):  add "bobuslugi" to COMPOSE_PROFILES (deploy/install-bobuslugi.sh clones it and does it)
+#   Бобо.Транспорт (game taxi):       add "transport" to COMPOSE_PROFILES (deploy/install-transport.sh does it)
 services:
   app:
     build: .
@@ -67,6 +68,9 @@ services:
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       GOS_PUBLIC_URL: ${GOS_PUBLIC_URL:-}
+      # Бобо.Транспорт (set by deploy/install-transport.sh); empty = «Войти через Bobobank» is off for the taxi.
+      TRANSPORT_PUBLIC_URL: ${TRANSPORT_PUBLIC_URL:-}
+      BANK_TRANSPORT_SECRET: ${BANK_TRANSPORT_SECRET:-}
     volumes:
       - ./bobobank-data:/data
     ports:
@@ -94,6 +98,32 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # Бобо.Транспорт: taxi game, pays through Bobobank, routes from OSRM and addresses from Nominatim.
+  transport:
+    build: ./transport
+    image: bobo-transport:latest
+    profiles: ["transport"]
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: "1"
+      PUBLIC_URL: https://${TAXI_DOMAIN:-taxi.localhost}
+      TRANSPORT_DB_KEY: ${TRANSPORT_DB_KEY:-}
+      BANK_INTERNAL_URL: http://bobobank:8082
+      BANK_PUBLIC_URL: https://${BANK_DOMAIN:-bank.localhost}
+      BANK_TRANSPORT_SECRET: ${BANK_TRANSPORT_SECRET:-}
+      # Public OSM servers by default; point to your own OSRM / Nominatim if you run them.
+      OSRM_URL: ${OSRM_URL:-https://router.project-osrm.org}
+      NOMINATIM_URL: ${NOMINATIM_URL:-https://nominatim.openstreetmap.org}
+    volumes:
+      - ./transport-data:/data
+    ports:
+      - "127.0.0.1:${TAXI_PORT:-8084}:8084"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   caddy:
     image: caddy:2-alpine
     profiles: ["caddy"]
@@ -104,6 +134,7 @@ services:
       GPAY_DOMAIN: ${GPAY_DOMAIN:-pay.localhost}
       BANK_DOMAIN: ${BANK_DOMAIN:-bank.localhost}
       GOS_DOMAIN: ${GOS_DOMAIN:-gos.localhost}
+      TAXI_DOMAIN: ${TAXI_DOMAIN:-taxi.localhost}
     ports:
       - "80:80"
       - "443:443"

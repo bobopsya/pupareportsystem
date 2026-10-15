@@ -123,6 +123,56 @@ jobs:
         if: failure()
         run: cat "$RUNNER_TEMP/bank.log" "$RUNNER_TEMP/gpay.log" || true
 
+  transport:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix transport/server
+          npm ci --prefix transport/web
+          npm ci --prefix bobobank/server
+          npm ci --prefix bobobank/web
+
+      - name: Typecheck
+        run: npm --prefix transport/server run typecheck && npm --prefix transport/web run typecheck
+
+      - name: Unit & API tests
+        run: npm --prefix transport/server test
+
+      - name: Build
+        run: |
+          npm --prefix transport/web run build && npm --prefix transport/server run build
+          npm --prefix bobobank/web run build && npm --prefix bobobank/server run build
+
+      # OSRM and Nominatim are replaced by a local fixture, map tiles are stubbed in the test: CI does not call OSM servers.
+      - name: End-to-end, Бобо.Транспорт with Bobobank (Playwright)
+        run: |
+          npx playwright install --with-deps chromium
+          SECRET=$(openssl rand -hex 32)
+          node transport/e2e/fake-osm.mjs 8099 > "$RUNNER_TEMP/osm.log" 2>&1 &
+          DATA_DIR="$RUNNER_TEMP/bank" COOKIE_SECURE=0 WEB_DIST="$PWD/bobobank/web/dist" HOST=127.0.0.1 PORT=8082 PUBLIC_URL=http://localhost:8082 \
+            TRANSPORT_PUBLIC_URL=http://localhost:8084 BANK_TRANSPORT_SECRET=$SECRET \
+            node bobobank/server/dist/index.js > "$RUNNER_TEMP/bank.log" 2>&1 &
+          DATA_DIR="$RUNNER_TEMP/taxi" COOKIE_SECURE=0 WEB_DIST="$PWD/transport/web/dist" HOST=127.0.0.1 PORT=8084 PUBLIC_URL=http://localhost:8084 \
+            BANK_INTERNAL_URL=http://127.0.0.1:8082 BANK_PUBLIC_URL=http://localhost:8082 BANK_TRANSPORT_SECRET=$SECRET \
+            OSRM_URL=http://127.0.0.1:8099 NOMINATIM_URL=http://127.0.0.1:8099 \
+            node transport/server/dist/index.js > "$RUNNER_TEMP/taxi.log" 2>&1 &
+          for _ in $(seq 30); do curl -fs http://127.0.0.1:8082/api/health && curl -fs http://127.0.0.1:8084/api/health && break; sleep 1; done
+          PW=$(DATA_DIR="$RUNNER_TEMP/bank" node bobobank/server/dist/cli.js create-admin 79990000001 "Админ" | awk '/Пароль/ {print $2}')
+          BANK_ADMIN_PHONE=79990000001 BANK_ADMIN_PASSWORD=$PW npx playwright test -c transport/playwright.config.ts
+
+      - name: Server logs
+        if: failure()
+        run: cat "$RUNNER_TEMP/taxi.log" "$RUNNER_TEMP/bank.log" "$RUNNER_TEMP/osm.log" || true
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -133,3 +183,5 @@ jobs:
         run: docker build -t gpay:ci gpay
       - name: Build Bobobank image
         run: docker build -t bobobank:ci bobobank
+      - name: Build Бобо.Транспорт image
+        run: docker build -t bobo-transport:ci transport

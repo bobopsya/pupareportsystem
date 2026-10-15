@@ -348,6 +348,7 @@ export function historyItem(ctx: Ctx, r: RideRow) {
     id: r.id,
     status: r.status,
     tariff: t?.title ?? r.tariff,
+    tariffId: r.tariff,
     from: safeJson<Point>(r.from_json, {} as Point),
     to: safeJson<Point>(r.to_json, {} as Point),
     amount: r.final_price ?? 0,

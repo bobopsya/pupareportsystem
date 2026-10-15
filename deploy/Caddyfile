@@ -27,3 +27,9 @@
 	encode zstd gzip
 	reverse_proxy bobuslugi:80
 }
+
+# Бобо.Транспорт (profile "transport").
+{$TAXI_DOMAIN:taxi.localhost} {
+	encode zstd gzip
+	reverse_proxy transport:8084
+}
