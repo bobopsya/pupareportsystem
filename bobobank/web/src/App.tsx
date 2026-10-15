@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Loading } from './components/ui';
 import { useAuth } from './lib/auth';
+import { RouteErrorBoundary } from './components/ErrorBoundary';
 
 const Landing = lazy(() => import('./pages/Landing'));
 const Login = lazy(() => import('./pages/Auth').then((m) => ({ default: m.Login })));
@@ -45,6 +46,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
+    <RouteErrorBoundary>
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/" element={<Landing />} />
@@ -82,5 +84,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
+    </RouteErrorBoundary>
   );
 }

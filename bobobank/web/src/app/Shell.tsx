@@ -2,12 +2,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Bell, BarChart3, Check, Clock, Gift, Home, Landmark, LayoutGrid, LogOut, MessageCircle, PiggyBank, Shield, ShoppingBag, X,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AccountPicker } from '../components/AccountPicker';
 import { BankCard } from '../components/BankCard';
 import { Logo, LogoMark } from '../components/Logo';
-import { Button, cx, useToast } from '../components/ui';
+import { RouteErrorBoundary } from '../components/ErrorBoundary';
+import { Button, cx, Loading, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money } from '../lib/format';
@@ -122,7 +123,12 @@ export default function Shell() {
         </header>
 
         <main className="mx-auto w-full max-w-3xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2 sm:px-6 lg:pb-16">
-          <Outlet />
+          {/* Pages load here: the header and tab bar stay on screen while a page's code arrives. */}
+          <RouteErrorBoundary>
+            <Suspense fallback={<Loading />}>
+              <Outlet />
+            </Suspense>
+          </RouteErrorBoundary>
         </main>
       </div>
 
