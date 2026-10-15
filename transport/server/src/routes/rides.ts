@@ -4,7 +4,9 @@ import { requireUser } from '../auth.js';
 import { HttpError, type Ctx } from '../context.js';
 import { inMoscow, type LatLon } from '../domain/geo.js';
 import { reverse, search } from '../domain/maps.js';
-import { board, cancel, complete, createRide, currentRide, estimate, historyItem, nearCars, ownRide, rate, serializeRide, settle, getRide } from '../domain/rides.js';
+import { airQuote, HELIPADS, JET_DESTINATIONS, JET_ORIGINS } from '../domain/air.js';
+import { board as busBoard, liveIn, plan, routeView, stopsIn, type Bbox } from '../domain/buses.js';
+import { board, cancel, complete, createAirRide, createBusRide, createRide, currentRide, estimate, historyItem, nearCars, ownRide, rate, serializeRide, settle, getRide, takeOff } from '../domain/rides.js';
 import { receiptPdf } from '../pdf.js';
 import { newId } from '../util.js';
 
@@ -13,6 +15,7 @@ const lon = z.number().min(-180).max(180);
 const point = z.object({ lat, lon, title: z.string().max(200).default(''), subtitle: z.string().max(300).default('') });
 const coords = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) });
 const TARIFFS = ['econom', 'comfort', 'comfort_plus', 'business', 'kids'] as const;
+
 
 export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
   const { db } = ctx;
@@ -34,6 +37,48 @@ export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
     const p = coords.parse(req.query);
     if (!inMoscow([p.lat, p.lon])) return { cars: [] };
     return { cars: await nearCars(ctx, [p.lat, p.lon]) };
+  });
+
+  // ---- Buses: real Moscow lines from OpenStreetMap ----
+  const bbox = z.object({ s: z.coerce.number(), w: z.coerce.number(), n: z.coerce.number(), e: z.coerce.number() }).transform((b): Bbox => ({ south: b.s, west: b.w, north: b.n, east: b.e }));
+  app.get('/api/bus/stops', async (req) => {
+    const b = bbox.parse(req.query);
+    // Stops only when zoomed in: a whole city of stops is noise.
+    if (b.north - b.south > 0.06 || b.east - b.west > 0.1) return { stops: [] };
+    return { stops: stopsIn(b) };
+  });
+  app.get('/api/bus/stops/:id', async (req) => busBoard(ctx, (req.params as { id: string }).id, ctx.now()));
+  app.get('/api/bus/live', async (req) => {
+    const q = z.object({ route: z.coerce.number().int().optional() }).parse(req.query);
+    return { now: ctx.now(), buses: liveIn(ctx, bbox.parse(req.query), ctx.now(), q.route) };
+  });
+  app.get('/api/bus/routes/:id', async (req) => routeView(Number((req.params as { id: string }).id)));
+  app.post('/api/bus/plan', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
+    const b = z.object({ from: point, to: point }).parse(req.body);
+    for (const p of [b.from, b.to]) if (!inMoscow([p.lat, p.lon])) throw new HttpError(400, 'Автобусы — только по Москве', 'outside');
+    return plan(ctx, req.user?.id ?? null, [b.from.lat, b.from.lon], [b.to.lat, b.to.lon], ctx.now());
+  });
+  app.post('/api/rides/bus', async (req) => {
+    const u = requireUser(req);
+    const b = z.object({ estimateId: z.string().max(64), option: z.number().int().min(0).max(10) }).parse(req.body);
+    return serializeRide(ctx, createBusRide(ctx, u, b));
+  });
+
+  // ---- Helicopters and private jets ----
+  app.get('/api/air/places', async () => ({ helipads: HELIPADS, origins: JET_ORIGINS, destinations: JET_DESTINATIONS }));
+  app.post('/api/air/estimate', async (req) => {
+    const b = z.object({ kind: z.enum(['heli', 'jet']), from: z.string().max(8), to: z.string().max(8) }).parse(req.body);
+    return airQuote(ctx, req.user?.id ?? null, b.kind, b.from, b.to);
+  });
+  app.post('/api/rides/air', async (req) => {
+    const u = requireUser(req);
+    const b = z.object({ estimateId: z.string().max(64), classId: z.string().max(32) }).parse(req.body);
+    return serializeRide(ctx, await createAirRide(ctx, u, b));
+  });
+  app.post('/api/rides/:id/takeoff', async (req) => {
+    const r = ownRide(ctx, requireUser(req).id, (req.params as { id: string }).id);
+    takeOff(ctx, r);
+    return serializeRide(ctx, getRide(ctx, r.id)!);
   });
 
   // ---- Places ----
@@ -107,6 +152,11 @@ export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
   /** «Остановите здесь»: the ride ends where the car is, the price is for the part driven. */
   app.post('/api/rides/:id/stop', async (req) => {
     const r = ownRide(ctx, requireUser(req).id, (req.params as { id: string }).id);
+    // Bus: get off at the next stop; the fare is already paid.
+    if (r.status === 'on_bus') {
+      ctx.db.prepare(`UPDATE rides SET status = 'completed', finished_at = ?, progress = ? WHERE id = ?`).run(ctx.now(), r.started_at && r.finish_at ? (ctx.now() - r.started_at) / (r.finish_at - r.started_at) : 1, r.id);
+      return serializeRide(ctx, getRide(ctx, r.id)!);
+    }
     if (r.status !== 'in_ride' || !r.started_at || !r.finish_at) throw new HttpError(409, 'Поездка не идёт');
     complete(ctx, r, (ctx.now() - r.started_at) / (r.finish_at - r.started_at));
     await settle(ctx, getRide(ctx, r.id)!);

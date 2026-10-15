@@ -1,6 +1,8 @@
 import { HttpError, type Ctx } from '../context.js';
 import { newId, safeJson } from '../util.js';
-import { bank, type BankCharge } from './bank.js';
+import { airQuote, registration, type AirKind } from './air.js';
+import { bank, holdOrConfirm, type BankCharge, type Confirmation } from './bank.js';
+import { arrivals, busRoute, busTravelMs, type BusOption } from './buses.js';
 import { newCar, newDriver, type Car, type Driver } from './fleet.js';
 import { along, distance, inMoscow, offset, pathLength, slice, type LatLon } from './geo.js';
 import { route } from './maps.js';
@@ -13,8 +15,23 @@ export interface Point {
   subtitle: string;
 }
 
-export type RideStatus = 'searching' | 'driver_coming' | 'arrived' | 'in_ride' | 'completed' | 'cancelled';
-export const ACTIVE: RideStatus[] = ['searching', 'driver_coming', 'arrived', 'in_ride'];
+export type Mode = 'taxi' | 'bus' | 'heli' | 'jet';
+export type RideStatus =
+  | 'awaiting_payment'
+  | 'searching' | 'driver_coming' | 'arrived' | 'in_ride'
+  | 'waiting_bus' | 'on_bus'
+  | 'preparing' | 'boarding' | 'in_flight'
+  | 'completed' | 'cancelled';
+export const ACTIVE: RideStatus[] = ['awaiting_payment', 'searching', 'driver_coming', 'arrived', 'in_ride', 'waiting_bus', 'on_bus', 'preparing', 'boarding', 'in_flight'];
+const ACTIVE_SQL = ACTIVE.map((x) => `'${x}'`).join(',');
+
+/** Mode-specific details of a ride (rides.extra). */
+export interface RideExtra {
+  /** Bus: line, stops, the departure of the bus from the first stop. */
+  bus?: { route: number; ref: string; kind: string; colour: string | null; to: string; board: BusOption['board']; alight: BusOption['alight']; dep: number; stops: number; boardAt: number; alightAt: number };
+  /** Helicopter or jet: aircraft class and places. */
+  air?: { kind: AirKind; classId: string; className: string; model: string; seats: number; from: string; to: string };
+}
 
 export interface RideRow {
   id: string;
@@ -57,6 +74,11 @@ export interface RideRow {
   tip: number;
   tip_status: string | null;
   created_at: number;
+  mode: Mode;
+  extra: string;
+  confirmation_id: string | null;
+  confirm_url: string | null;
+  confirm_expires_at: number | null;
 }
 
 /** The customer may change their mind for free for 2 minutes after a car is assigned. */
@@ -76,7 +98,7 @@ export function ownRide(ctx: Ctx, userId: string, id: string): RideRow {
 }
 
 export const currentRide = (ctx: Ctx, userId: string) =>
-  ctx.db.prepare(`SELECT * FROM rides WHERE user_id = ? AND status IN ('searching','driver_coming','arrived','in_ride') ORDER BY created_at DESC LIMIT 1`).get(userId) as RideRow | undefined;
+  ctx.db.prepare(`SELECT * FROM rides WHERE user_id = ? AND status IN (${ACTIVE_SQL}) ORDER BY created_at DESC LIMIT 1`).get(userId) as RideRow | undefined;
 
 function checkPoint(p: Point, what: string): LatLon {
   const ll: LatLon = [p.lat, p.lon];
@@ -126,18 +148,92 @@ export async function createRide(ctx: Ctx, user: { id: string; mandateId: string
   const id = newId('ride', 12);
   const to = safeJson<Point>(est.to_json, { lat: 0, lon: 0, title: '', subtitle: '' });
 
-  const charge = await bank<BankCharge>(ctx, 'POST', `/mandates/${user.mandateId}/holds`, { amount: hold, external_id: id, title: `Поездка до «${to.title}»` }, `hold_${id}`).catch((e) => {
-    if (e instanceof HttpError && e.code === 'mandate_revoked') ctx.db.prepare('UPDATE users SET mandate_id = NULL WHERE id = ?').run(user.id);
-    if (e instanceof HttpError && e.code === 'insufficient_funds') throw new HttpError(402, `Недостаточно средств: на время поездки заморозим ${Math.round(hold / 100)} ₽. Пополните счёт в Bobobank.`, 'insufficient_funds');
-    throw e;
-  });
+  const pay = await freeze(ctx, user, hold, id, `Поездка до «${to.title}»`);
   const now = ctx.now();
   ctx.db
     .prepare(
-      `INSERT INTO rides(id, user_id, status, tariff, from_json, to_json, distance_m, duration_s, route, surge, price, child_seat, comment, time_scale, hold_amount, hold_id, bank_status, assign_at, created_at)
-       VALUES(?,?,'searching',?,?,?,?,?,?,?,?,?,?,?,?,?,'held',?,?)`,
+      `INSERT INTO rides(id, user_id, status, tariff, from_json, to_json, distance_m, duration_s, route, surge, price, child_seat, comment, time_scale, hold_amount, hold_id, bank_status, assign_at, created_at, mode, confirmation_id, confirm_url, confirm_expires_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'taxi',?,?,?)`,
     )
-    .run(id, user.id, t.id, est.from_json, est.to_json, est.distance_m, est.duration_s, est.route, est.surge, price, seat ? 1 : 0, (input.comment ?? '').slice(0, 200), s.timeScale, hold, charge.id, now + 3000 + Math.floor(ctx.random() * 5000), now);
+    .run(
+      id, user.id, pay.charge ? 'searching' : 'awaiting_payment', t.id, est.from_json, est.to_json, est.distance_m, est.duration_s, est.route, est.surge, price, seat ? 1 : 0,
+      (input.comment ?? '').slice(0, 200), s.timeScale, hold, pay.charge?.id ?? null, pay.charge ? 'held' : 'none', now + 3000 + Math.floor(ctx.random() * 5000), now,
+      pay.confirmation?.id ?? null, pay.confirmation?.url ?? null, pay.confirmation?.expires_at ?? null,
+    );
+  return getRide(ctx, id)!;
+}
+
+/** Freezes the money, or asks the customer to confirm a large amount in the Bobobank app. */
+async function freeze(ctx: Ctx, user: { id: string; mandateId: string | null }, amount: number, rideId: string, title: string): Promise<{ charge?: BankCharge; confirmation?: Confirmation }> {
+  if (!user.mandateId) throw new HttpError(403, 'Привяжите счёт Bobobank, чтобы заказать', 'no_mandate');
+  return holdOrConfirm(ctx, user.mandateId, amount, rideId, title).catch((e) => {
+    if (e instanceof HttpError && e.code === 'mandate_revoked') ctx.db.prepare('UPDATE users SET mandate_id = NULL WHERE id = ?').run(user.id);
+    if (e instanceof HttpError && e.code === 'insufficient_funds') throw new HttpError(402, `Недостаточно средств: на время поездки заморозим ${Math.round(amount / 100).toLocaleString('ru-RU')} ₽. Пополните счёт в Bobobank.`, 'insufficient_funds');
+    throw e;
+  });
+}
+
+const PILOT_PREP_MS = 20_000;
+
+/** Helicopter or private jet: priced by flight time, paid up front (usually with a confirmation in the app). */
+export async function createAirRide(ctx: Ctx, user: { id: string; mandateId: string | null }, input: { estimateId: string; classId: string }) {
+  if (!user.mandateId) throw new HttpError(403, 'Привяжите счёт Bobobank, чтобы заказать', 'no_mandate');
+  if (currentRide(ctx, user.id)) throw new HttpError(409, 'У вас уже есть активный заказ', 'has_ride');
+  const est = ctx.db.prepare('SELECT * FROM estimates WHERE id = ?').get(input.estimateId) as
+    | { user_id: string | null; from_json: string; to_json: string; distance_m: number; route: string; prices: string; created_at: number; mode: string }
+    | undefined;
+  if (!est || (est.mode !== 'heli' && est.mode !== 'jet') || (est.user_id && est.user_id !== user.id) || ctx.now() - est.created_at > ESTIMATE_TTL) throw new HttpError(409, 'Цена устарела — пересчитываем', 'estimate_expired');
+  const kind = est.mode as AirKind;
+  const opt = (JSON.parse(est.prices) as ReturnType<typeof airQuote>['options']).find((o) => o.id === input.classId);
+  if (!opt || !opt.available) throw new HttpError(400, opt?.reason ?? 'Этот борт недоступен');
+  const s = getSettings(ctx);
+  const from = safeJson<Point & { code: string }>(est.from_json, {} as Point & { code: string });
+  const to = safeJson<Point & { code: string }>(est.to_json, {} as Point & { code: string });
+  const id = newId('ride', 12);
+  const label = kind === 'heli' ? `Вертолёт ${opt.model}: ${from.title} → ${to.title}` : `Частный джет ${opt.model}: ${from.title} → ${to.title}`;
+  const pay = await freeze(ctx, user, opt.price, id, label);
+  const pilot = newDriver(ctx);
+  const craft: Car = { model: opt.model, color: kind === 'heli' ? 'Чёрный' : 'Белый', colorHex: kind === 'heli' ? '#1d1d1f' : '#f4f4f2', plate: registration(ctx, kind) };
+  const extra: RideExtra = { air: { kind, classId: opt.id, className: opt.title, model: opt.model, seats: opt.seats, from: from.code, to: to.code } };
+  const now = ctx.now();
+  ctx.db
+    .prepare(
+      `INSERT INTO rides(id, user_id, status, tariff, from_json, to_json, distance_m, duration_s, route, surge, price, time_scale, hold_amount, hold_id, bank_status, assign_at, created_at, mode, extra, driver, car, confirmation_id, confirm_url, confirm_expires_at)
+       VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    )
+    .run(
+      id, user.id, pay.charge ? 'preparing' : 'awaiting_payment', opt.id, est.from_json, est.to_json, est.distance_m, opt.durationS, est.route, opt.price, s.airTimeScale, opt.price,
+      pay.charge?.id ?? null, pay.charge ? 'held' : 'none', now + PILOT_PREP_MS, now, kind, JSON.stringify(extra), JSON.stringify(pilot), JSON.stringify(craft),
+      pay.confirmation?.id ?? null, pay.confirmation?.url ?? null, pay.confirmation?.expires_at ?? null,
+    );
+  return getRide(ctx, id)!;
+}
+
+/** A bus ride: the next bus of the line to the boarding stop; the fare is charged when the passenger gets on. */
+export function createBusRide(ctx: Ctx, user: { id: string; mandateId: string | null }, input: { estimateId: string; option: number }) {
+  if (!user.mandateId) throw new HttpError(403, 'Привяжите счёт Bobobank, чтобы платить за проезд', 'no_mandate');
+  if (currentRide(ctx, user.id)) throw new HttpError(409, 'У вас уже есть активная поездка', 'has_ride');
+  const est = ctx.db.prepare('SELECT * FROM estimates WHERE id = ?').get(input.estimateId) as { user_id: string | null; to_json: string; from_json: string; prices: string; created_at: number; mode: string } | undefined;
+  if (!est || est.mode !== 'bus' || (est.user_id && est.user_id !== user.id) || ctx.now() - est.created_at > ESTIMATE_TTL) throw new HttpError(409, 'Расписание обновилось — ищем заново', 'estimate_expired');
+  const o = (JSON.parse(est.prices) as BusOption[]).find((x) => x.n === input.option);
+  const r = o && busRoute(o.route);
+  if (!o || !r) throw new HttpError(400, 'Нет такого варианта');
+  const s = getSettings(ctx);
+  const now = ctx.now();
+  const walkMs = (o.walkS * 1000) / s.timeScale;
+  const next = arrivals(ctx, r, o.board.idx, now + walkMs, 1)[0];
+  if (!next) throw new HttpError(409, 'Автобус сейчас не ходит', 'no_service');
+  const rideMs = busTravelMs(ctx, r.stops[o.alight.idx].at - r.stops[o.board.idx].at);
+  const id = newId('ride', 12);
+  const extra: RideExtra = { bus: { route: r.id, ref: r.ref, kind: r.kind, colour: r.colour, to: r.to, board: o.board, alight: o.alight, dep: next.dep, stops: o.stops, boardAt: r.stops[o.board.idx].at, alightAt: r.stops[o.alight.idx].at } };
+  const from: Point = { lat: o.board.lat, lon: o.board.lon, title: o.board.name, subtitle: `Остановка, ${o.board.walkM} м пешком` };
+  const to: Point = { lat: o.alight.lat, lon: o.alight.lon, title: o.alight.name, subtitle: `Остановка, ${o.alight.walkM} м до места` };
+  ctx.db
+    .prepare(
+      `INSERT INTO rides(id, user_id, status, tariff, from_json, to_json, distance_m, duration_s, route, surge, price, time_scale, hold_amount, bank_status, assign_at, arrive_at, finish_at, created_at, mode, extra)
+       VALUES(?,?,'waiting_bus',?,?,?,?,?,?,1,?,?,0,'none',?,?,?,?,'bus',?)`,
+    )
+    .run(id, user.id, r.ref, JSON.stringify(from), JSON.stringify(to), o.distance, o.rideS, JSON.stringify(o.path), r.fare, s.timeScale, now, next.at, next.at + rideMs, now, JSON.stringify(extra));
   return getRide(ctx, id)!;
 }
 
@@ -179,20 +275,25 @@ export function complete(ctx: Ctx, r: RideRow, fraction: number, at = ctx.now())
   ctx.db.prepare(`UPDATE rides SET status = 'completed', finished_at = ?, final_price = ?, progress = ?, bank_op = 'capture' WHERE id = ? AND status = 'in_ride'`).run(at, total, f, r.id);
 }
 
-export function cancel(ctx: Ctx, r: RideRow, by: 'user' | 'admin' | 'system' = 'user') {
-  if (r.status === 'in_ride') throw new HttpError(409, 'Поездка уже идёт — можно попросить остановиться', 'bad_status');
+export function cancel(ctx: Ctx, r: RideRow, by: 'user' | 'admin' | 'system' | 'bank' = 'user') {
+  if (r.status === 'in_ride' || r.status === 'on_bus') throw new HttpError(409, 'Поездка уже идёт — можно попросить остановиться', 'bad_status');
+  if (r.status === 'in_flight') throw new HttpError(409, 'Борт уже в воздухе', 'bad_status');
   if (!ACTIVE.includes(r.status)) throw new HttpError(409, 'Поездка уже завершена', 'bad_status');
   const s = getSettings(ctx);
   const now = ctx.now();
   let fee = 0;
-  if (by === 'user' && (r.status === 'arrived' || (r.status === 'driver_coming' && r.assigned_at && now - r.assigned_at >= FREE_CANCEL_MS))) {
+  // Nothing is frozen yet: a bus before boarding, a ride waiting for the bank's confirmation.
+  const nothingHeld = r.status === 'waiting_bus' || (r.status === 'awaiting_payment' && !r.confirmation_id);
+  if (r.mode === 'heli' || r.mode === 'jet') {
+    if (by === 'user' && r.status === 'boarding') fee = Math.round(r.price / 10 / 100) * 100;
+  } else if (by === 'user' && (r.status === 'arrived' || (r.status === 'driver_coming' && r.assigned_at && now - r.assigned_at >= FREE_CANCEL_MS))) {
     const t = tariffOf(ctx, r.tariff)!;
     const waitedGameS = r.status === 'arrived' && r.arrived_at ? ((now - r.arrived_at) / 1000) * r.time_scale - s.freeWaitMin * 60 : 0;
     fee = Math.min(r.hold_amount, s.cancelFee * 100 + waitingPrice(t, waitedGameS));
   }
   ctx.db
     .prepare(`UPDATE rides SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, cancel_fee = ?, final_price = ?, bank_op = ? WHERE id = ? AND status = ?`)
-    .run(now, by, fee, fee, fee ? 'capture' : 'void', r.id, r.status);
+    .run(now, by, fee, fee, nothingHeld ? null : fee ? 'capture' : 'void', r.id, r.status);
   return fee;
 }
 
@@ -200,7 +301,23 @@ const short = (p: Point) => p.title || 'Точка на карте';
 
 /** Charge or release the hold. Network errors are retried on the next tick; a refusal is final. */
 export async function settle(ctx: Ctx, r: RideRow) {
-  if (!r.bank_op || !r.hold_id) return;
+  if (!r.bank_op) return;
+  // Cancelled while the bank was waiting for the customer: release the hold if they approved it after all.
+  if (!r.hold_id && r.confirmation_id) {
+    try {
+      const c = await bank<Confirmation>(ctx, 'GET', `/confirmations/${r.confirmation_id}`);
+      if (c.status === 'pending') return;
+      if (c.status === 'approved' && c.charge) await bank<BankCharge>(ctx, 'POST', `/holds/${c.charge.id}/void`, undefined, `void_${r.id}`);
+      ctx.db.prepare(`UPDATE rides SET bank_op = NULL, bank_status = ? WHERE id = ?`).run(c.status === 'approved' ? 'voided' : 'none', r.id);
+    } catch {
+      // Retried on the next tick.
+    }
+    return;
+  }
+  if (!r.hold_id) {
+    ctx.db.prepare('UPDATE rides SET bank_op = NULL WHERE id = ?').run(r.id);
+    return;
+  }
   const from = safeJson<Point>(r.from_json, {} as Point);
   const to = safeJson<Point>(r.to_json, {} as Point);
   try {
@@ -208,8 +325,9 @@ export async function settle(ctx: Ctx, r: RideRow) {
     if (r.bank_op === 'void' || !r.final_price) {
       c = await bank<BankCharge>(ctx, 'POST', `/holds/${r.hold_id}/void`, undefined, `void_${r.id}`);
     } else {
-      const title = r.status === 'cancelled' ? 'Плата за отмену' : 'Поездка';
-      c = await bank<BankCharge>(ctx, 'POST', `/holds/${r.hold_id}/capture`, { amount: r.final_price, title, subtitle: `${short(from)} → ${short(to)}` }, `capture_${r.id}`);
+      const what = r.mode === 'heli' ? 'Вертолёт' : r.mode === 'jet' ? 'Частный джет' : 'Поездка';
+      const title = r.status === 'cancelled' ? 'Плата за отмену' : what;
+      c = await bank<BankCharge>(ctx, 'POST', `/holds/${r.hold_id}/capture`, { amount: r.final_price, title, subtitle: `${r.mode === 'taxi' ? '' : `${what}: `}${short(from)} → ${short(to)}` }, `capture_${r.id}`);
     }
     ctx.db.prepare('UPDATE rides SET bank_op = NULL, bank_status = ?, bank_error = NULL WHERE id = ?').run(c.status, r.id);
   } catch (e) {
@@ -222,10 +340,72 @@ export async function settle(ctx: Ctx, r: RideRow) {
 const busy = new Set<string>();
 
 /** Every 2 seconds: assigns cars, moves rides through the stages, settles with the bank. */
+async function guarded(rows: RideRow[], fn: (r: RideRow) => Promise<void>) {
+  await Promise.all(
+    rows.filter((r) => !busy.has(r.id)).map(async (r) => {
+      busy.add(r.id);
+      try {
+        await fn(r);
+      } finally {
+        busy.delete(r.id);
+      }
+    }),
+  );
+}
+
+/** The customer's answer in the bank app: approved — go on; declined or expired — cancel. */
+async function checkConfirmation(ctx: Ctx, r: RideRow) {
+  if (!r.confirmation_id) return;
+  let c: Confirmation;
+  try {
+    c = await bank<Confirmation>(ctx, 'GET', `/confirmations/${r.confirmation_id}`);
+  } catch {
+    return;
+  }
+  const now = ctx.now();
+  if (c.status === 'approved' && c.charge) {
+    const next = r.mode === 'taxi' ? 'searching' : 'preparing';
+    const at = r.mode === 'taxi' ? now + 3000 + Math.floor(ctx.random() * 5000) : now + PILOT_PREP_MS;
+    ctx.db.prepare(`UPDATE rides SET status = ?, hold_id = ?, bank_status = 'held', assign_at = ? WHERE id = ? AND status = 'awaiting_payment'`).run(next, c.charge.id, at, r.id);
+  } else if (c.status === 'declined' || c.status === 'expired') {
+    ctx.db
+      .prepare(`UPDATE rides SET status = 'cancelled', cancelled_at = ?, cancelled_by = 'bank', bank_error = ? WHERE id = ? AND status = 'awaiting_payment'`)
+      .run(now, c.status === 'declined' ? 'Оплата отклонена в Bobobank' : 'Оплату не подтвердили за 10 минут', r.id);
+  }
+}
+
+/** The bus reached the stop: the fare is charged like a validator does; without money the passenger stays at the stop. */
+async function boardBus(ctx: Ctx, r: RideRow) {
+  const u = ctx.db.prepare('SELECT mandate_id FROM users WHERE id = ?').get(r.user_id) as { mandate_id: string | null } | undefined;
+  const x = safeJson<RideExtra>(r.extra, {}).bus!;
+  try {
+    if (!u?.mandate_id) throw new HttpError(403, 'Привязка к Bobobank отключена');
+    const c = await bank<BankCharge>(ctx, 'POST', `/mandates/${u.mandate_id}/charges`, { amount: r.price, external_id: `bus_${r.id}`, title: `${x.kind === 'trolleybus' ? 'Троллейбус' : 'Автобус'} ${x.ref}`, subtitle: `${x.board.name} → ${x.alight.name}` }, `bus_${r.id}`);
+    ctx.db.prepare(`UPDATE rides SET status = 'on_bus', started_at = arrive_at, hold_id = ?, bank_status = 'captured', final_price = price WHERE id = ? AND status = 'waiting_bus'`).run(c.id, r.id);
+  } catch (e) {
+    const err = e as HttpError;
+    if (!err.statusCode || err.statusCode >= 500) return; // the bank is down: try on the next tick
+    ctx.db.prepare(`UPDATE rides SET status = 'cancelled', cancelled_at = ?, cancelled_by = 'bank', bank_error = ? WHERE id = ?`).run(ctx.now(), `Проезд не оплачен: ${err.message}`, r.id);
+  }
+}
+
 export async function tick(ctx: Ctx) {
   const now = ctx.now();
   const s = getSettings(ctx);
-  const due = ctx.db.prepare(`SELECT * FROM rides WHERE status = 'searching' AND assign_at <= ?`).all(now) as RideRow[];
+  await guarded(ctx.db.prepare(`SELECT * FROM rides WHERE status = 'awaiting_payment' AND confirmation_id IS NOT NULL`).all() as RideRow[], (r) => checkConfirmation(ctx, r));
+
+  // Buses: boarding with the fare, then to the alighting stop.
+  await guarded(ctx.db.prepare(`SELECT * FROM rides WHERE status = 'waiting_bus' AND arrive_at <= ?`).all(now) as RideRow[], (r) => boardBus(ctx, r));
+  ctx.db.prepare(`UPDATE rides SET status = 'completed', finished_at = finish_at, progress = 1 WHERE status = 'on_bus' AND finish_at <= ?`).run(now);
+
+  // Helicopters and jets: preparation → boarding → flight.
+  ctx.db.prepare(`UPDATE rides SET status = 'boarding', arrived_at = assign_at WHERE status = 'preparing' AND mode IN ('heli','jet') AND assign_at <= ?`).run(now);
+  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'boarding' AND arrived_at <= ?`).all(now - s.autoBoardS * 1000) as RideRow[]) takeOff(ctx, r, r.arrived_at! + s.autoBoardS * 1000);
+  ctx.db
+    .prepare(`UPDATE rides SET status = 'completed', finished_at = finish_at, final_price = price, progress = 1, bank_op = 'capture' WHERE status = 'in_flight' AND finish_at <= ?`)
+    .run(now);
+
+  const due = ctx.db.prepare(`SELECT * FROM rides WHERE status = 'searching' AND mode = 'taxi' AND assign_at <= ?`).all(now) as RideRow[];
   await Promise.all(
     due.filter((r) => !busy.has(r.id)).map(async (r) => {
       busy.add(r.id);
@@ -237,7 +417,7 @@ export async function tick(ctx: Ctx) {
     }),
   );
   ctx.db.prepare(`UPDATE rides SET status = 'arrived', arrived_at = arrive_at WHERE status = 'driver_coming' AND arrive_at <= ?`).run(now);
-  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'arrived' AND arrived_at <= ?`).all(now - s.autoBoardS * 1000) as RideRow[]) {
+  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'arrived' AND mode = 'taxi' AND arrived_at <= ?`).all(now - s.autoBoardS * 1000) as RideRow[]) {
     board(ctx, r, r.arrived_at! + s.autoBoardS * 1000);
   }
   for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'in_ride' AND finish_at <= ?`).all(now) as RideRow[]) complete(ctx, r, 1, r.finish_at!);
@@ -256,9 +436,17 @@ export async function tick(ctx: Ctx) {
   ctx.db.prepare('DELETE FROM estimates WHERE created_at < ?').run(now - 2 * ESTIMATE_TTL);
 }
 
+/** Everyone is on board: the flight takes the real flight time divided by the air time scale. */
+export function takeOff(ctx: Ctx, r: RideRow, at = ctx.now()) {
+  if (r.status !== 'boarding') throw new HttpError(409, 'Посадка ещё не началась', 'bad_status');
+  const ms = Math.max(30_000, (r.duration_s * 1000) / r.time_scale);
+  ctx.db.prepare(`UPDATE rides SET status = 'in_flight', started_at = ?, finish_at = ? WHERE id = ? AND status = 'boarding'`).run(at, at + ms, r.id);
+}
+
 export async function rate(ctx: Ctx, r: RideRow, mandateId: string | null, stars: number, tip: number) {
   if (r.status !== 'completed') throw new HttpError(409, 'Оценить можно после поездки', 'bad_status');
   if (r.rating) throw new HttpError(409, 'Вы уже оценили эту поездку', 'already');
+  if (tip > 0 && r.mode === 'bus') throw new HttpError(400, 'В автобусе чаевые не принимают');
   if (tip > 0) {
     if (!mandateId) throw new HttpError(403, 'Привяжите счёт Bobobank, чтобы оставить чаевые', 'no_mandate');
     const driver = safeJson<Driver | null>(r.driver, null);
@@ -302,11 +490,44 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
   } else if (r.status === 'completed') {
     left = r.progress !== null && r.progress < 1 ? slice(path, 0, r.progress) : path;
   }
+  const extra = safeJson<RideExtra>(r.extra, {});
+  if (r.mode === 'bus' && extra.bus) {
+    const line = busRoute(extra.bus.route);
+    const b = extra.bus;
+    if (line && r.status === 'waiting_bus' && r.arrive_at) {
+      // The bus drives from the first stop of the line; the client moves it between polls.
+      const prefix = slice(line.path, 0, b.boardAt / line.length);
+      motion = { path: prefix, startAt: b.dep, endAt: r.arrive_at };
+      car = along(prefix, (now - b.dep) / (r.arrive_at - b.dep));
+      etaS = Math.max(0, Math.round(((r.arrive_at - now) / 1000) * r.time_scale));
+    } else if (r.status === 'on_bus' && r.started_at && r.finish_at) {
+      const f = (now - r.started_at) / (r.finish_at - r.started_at);
+      motion = { path, startAt: r.started_at, endAt: r.finish_at };
+      car = along(path, f);
+      etaS = Math.max(0, Math.round(r.duration_s * (1 - f)));
+      left = slice(path, f);
+    }
+  }
+  if ((r.mode === 'heli' || r.mode === 'jet') && r.status === 'in_flight' && r.started_at && r.finish_at) {
+    const f = (now - r.started_at) / (r.finish_at - r.started_at);
+    motion = { path, startAt: r.started_at, endAt: r.finish_at };
+    car = along(path, f);
+    etaS = Math.max(0, Math.round(r.duration_s * (1 - f)));
+    left = slice(path, f);
+  } else if ((r.mode === 'heli' || r.mode === 'jet') && r.status !== 'completed') {
+    car = { pos: [from.lat, from.lon], heading: path.length > 1 ? along(path, 0).heading : 0 };
+  }
   const waitedGameS = r.status === 'arrived' && r.arrived_at ? Math.round(((now - r.arrived_at) / 1000) * r.time_scale) : 0;
+  const busView = extra.bus && { ...extra.bus, line: busRoute(extra.bus.route) ? { path: busRoute(extra.bus.route)!.path, stops: busRoute(extra.bus.route)!.stops.slice(extra.bus.board.idx, extra.bus.alight.idx + 1) } : null };
   return {
     id: r.id,
+    mode: r.mode,
+    bus: busView ?? null,
+    air: extra.air ?? null,
+    confirmation: r.status === 'awaiting_payment' ? { url: r.confirm_url, expiresAt: r.confirm_expires_at } : null,
+    boardingUntil: r.status === 'boarding' && r.arrived_at ? r.arrived_at + s.autoBoardS * 1000 : r.status === 'preparing' ? r.assign_at : null,
     status: r.status,
-    tariff: { id: r.tariff, title: t?.title ?? r.tariff, waitPerMin: (t?.waitPerMin ?? 0) * 100 },
+    tariff: { id: r.tariff, title: t?.title ?? extra.air?.className ?? r.tariff, waitPerMin: (t?.waitPerMin ?? 0) * 100 },
     from,
     to: safeJson<Point>(r.to_json, {} as Point),
     distance: r.distance_m,
@@ -326,10 +547,10 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     motion,
     etaS,
     waiting: r.status === 'arrived' ? { waitedS: waitedGameS, freeS: s.freeWaitMin * 60, autoBoardAt: (r.arrived_at ?? now) + s.autoBoardS * 1000 } : null,
-    freeCancelUntil: r.status === 'searching' ? null : r.status === 'driver_coming' && r.assigned_at ? r.assigned_at + FREE_CANCEL_MS : r.status === 'arrived' ? now : null,
-    cancelFeeNow: s.cancelFee * 100,
+    freeCancelUntil: r.status === 'searching' ? null : r.status === 'driver_coming' && r.assigned_at ? r.assigned_at + FREE_CANCEL_MS : r.status === 'arrived' || r.status === 'boarding' ? now : null,
+    cancelFeeNow: r.mode === 'heli' || r.mode === 'jet' ? Math.round(r.price / 10 / 100) * 100 : s.cancelFee * 100,
     timeScale: r.time_scale,
-    bank: { status: r.bank_status, pending: !!r.bank_op, error: r.bank_status === 'failed' ? r.bank_error : null },
+    bank: { status: r.bank_status, pending: !!r.bank_op, error: r.bank_status === 'failed' || r.cancelled_by === 'bank' ? r.bank_error : null },
     rating: r.rating,
     tip: r.tip,
     progress: r.progress,
@@ -344,10 +565,13 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
 
 export function historyItem(ctx: Ctx, r: RideRow) {
   const t = tariffOf(ctx, r.tariff);
+  const extra = safeJson<RideExtra>(r.extra, {});
   return {
     id: r.id,
+    mode: r.mode,
     status: r.status,
-    tariff: t?.title ?? r.tariff,
+    tariff: extra.bus ? `${extra.bus.kind === 'trolleybus' ? 'Троллейбус' : 'Автобус'} ${extra.bus.ref}` : extra.air ? extra.air.model : (t?.title ?? r.tariff),
+    colour: extra.bus?.colour ?? null,
     tariffId: r.tariff,
     from: safeJson<Point>(r.from_json, {} as Point),
     to: safeJson<Point>(r.to_json, {} as Point),

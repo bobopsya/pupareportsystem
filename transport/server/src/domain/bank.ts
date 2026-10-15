@@ -53,3 +53,24 @@ export async function bank<T>(ctx: Ctx, method: 'GET' | 'POST', path: string, bo
   if (!res.ok) throw new HttpError(res.status === 401 ? 502 : res.status, data.error ?? `Bobobank: ошибка ${res.status}`, data.code);
   return data;
 }
+
+export interface Confirmation {
+  id: string;
+  status: 'pending' | 'approved' | 'declined' | 'expired';
+  amount: number;
+  expires_at: number;
+  url: string;
+  charge: BankCharge | null;
+}
+
+/** A hold, or — above the mandate limit — a request the customer confirms in the Bobobank app. */
+export async function holdOrConfirm(ctx: Ctx, mandateId: string, amount: number, externalId: string, title: string): Promise<{ charge: BankCharge } | { confirmation: Confirmation }> {
+  const r = await bank<BankCharge | { status: 'confirmation_required'; confirmation: Confirmation }>(
+    ctx,
+    'POST',
+    `/mandates/${mandateId}/holds`,
+    { amount, external_id: externalId, title, allow_confirmation: true },
+    `hold_${externalId}`,
+  );
+  return 'confirmation' in r ? { confirmation: r.confirmation } : { charge: r };
+}

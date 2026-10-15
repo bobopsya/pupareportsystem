@@ -27,6 +27,31 @@ const DEFAULT_TARIFFS: Tariff[] = [
   { id: 'kids', title: 'Детский', base: 249, perKm: 16, perMin: 9, min: 399, waitPerMin: 12, seats: 3, cars: ['Skoda Octavia', 'Kia K5', 'Volkswagen Tiguan'], etaMin: [4, 9] },
 ];
 
+/** A helicopter or a business jet class: rate per flight hour, cruise speed and range. */
+export interface AirClass {
+  id: string;
+  title: string;
+  model: string;
+  seats: number;
+  /** Rubles per flight hour. */
+  rate: number;
+  speed: number;
+  range: number;
+}
+
+export const DEFAULT_HELICOPTERS: AirClass[] = [
+  { id: 'r44', title: 'Лёгкий', model: 'Robinson R44', seats: 3, rate: 75_000, speed: 190, range: 550 },
+  { id: 'bell407', title: 'Комфорт', model: 'Bell 407', seats: 6, rate: 180_000, speed: 230, range: 600 },
+  { id: 'h145', title: 'Бизнес', model: 'Airbus H145', seats: 8, rate: 290_000, speed: 240, range: 650 },
+];
+
+export const DEFAULT_JETS: AirClass[] = [
+  { id: 'light', title: 'Light', model: 'Cessna Citation CJ3', seats: 6, rate: 350_000, speed: 700, range: 3000 },
+  { id: 'midsize', title: 'Midsize', model: 'Cessna Citation XLS', seats: 8, rate: 480_000, speed: 780, range: 3500 },
+  { id: 'supermid', title: 'Super-mid', model: 'Bombardier Challenger 350', seats: 9, rate: 650_000, speed: 830, range: 5900 },
+  { id: 'heavy', title: 'Heavy', model: 'Gulfstream G650', seats: 13, rate: 1_100_000, speed: 900, range: 12_900 },
+];
+
 export interface Settings {
   /** How much faster than real time cars drive (a 25-minute ride takes ~4 minutes at ×6). */
   timeScale: number;
@@ -40,13 +65,35 @@ export interface Settings {
   cancelFee: number;
   childSeat: number;
   tariffs: Tariff[];
+  /** Flights go faster than real time than cars do: a 2-hour flight takes ~4 minutes at ×30. */
+  airTimeScale: number;
+  helicopters: AirClass[];
+  jets: AirClass[];
 }
 
-export const DEFAULT_SETTINGS: Settings = { timeScale: 6, surgeMode: 'auto', surgeFixed: 1, freeWaitMin: 3, autoBoardS: 45, cancelFee: 99, childSeat: 100, tariffs: DEFAULT_TARIFFS };
+export const DEFAULT_SETTINGS: Settings = {
+  timeScale: 6,
+  surgeMode: 'auto',
+  surgeFixed: 1,
+  freeWaitMin: 3,
+  autoBoardS: 45,
+  cancelFee: 99,
+  childSeat: 100,
+  tariffs: DEFAULT_TARIFFS,
+  airTimeScale: 30,
+  helicopters: DEFAULT_HELICOPTERS,
+  jets: DEFAULT_JETS,
+};
 
 export function getSettings(ctx: Ctx): Settings {
   const s = getSetting<Partial<Settings>>(ctx.db, 'settings', {});
-  return { ...DEFAULT_SETTINGS, ...s, tariffs: s.tariffs?.length ? s.tariffs : DEFAULT_TARIFFS };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...s,
+    tariffs: s.tariffs?.length ? s.tariffs : DEFAULT_TARIFFS,
+    helicopters: s.helicopters?.length ? s.helicopters : DEFAULT_HELICOPTERS,
+    jets: s.jets?.length ? s.jets : DEFAULT_JETS,
+  };
 }
 
 export function saveSettings(ctx: Ctx, patch: Partial<Settings>) {

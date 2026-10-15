@@ -13,7 +13,7 @@ export const CSRF_VALUE = 'bobotransport';
 
 /** Without a session one can look at the map, search addresses and see prices. */
 const isPublic = (url: string) =>
-  url === '/api/health' || url === '/api/me' || url.startsWith('/api/auth/') || url.startsWith('/api/geo/') || url === '/api/cars/near' || url === '/api/rides/estimate';
+  url === '/api/health' || url === '/api/me' || url.startsWith('/api/auth/') || url.startsWith('/api/geo/') || url === '/api/cars/near' || url === '/api/rides/estimate' || url.startsWith('/api/bus/') || url.startsWith('/api/air/');
 
 interface UserRow {
   id: string;

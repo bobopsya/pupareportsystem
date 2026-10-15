@@ -105,6 +105,16 @@ const MIGRATIONS: string[] = [
   -- Answers from Nominatim and OSRM: the public servers ask to cache and not to repeat requests.
   CREATE TABLE geo_cache (key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at INTEGER NOT NULL);
   `,
+  `
+  -- Buses, helicopters and private jets share the ride table; mode-specific details go to extra (JSON).
+  ALTER TABLE rides ADD COLUMN mode TEXT NOT NULL DEFAULT 'taxi';
+  ALTER TABLE rides ADD COLUMN extra TEXT NOT NULL DEFAULT '{}';
+  -- An amount above the Bobobank mandate limit waits for the customer's confirmation in the bank app.
+  ALTER TABLE rides ADD COLUMN confirmation_id TEXT;
+  ALTER TABLE rides ADD COLUMN confirm_url TEXT;
+  ALTER TABLE rides ADD COLUMN confirm_expires_at INTEGER;
+  ALTER TABLE estimates ADD COLUMN mode TEXT NOT NULL DEFAULT 'taxi';
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

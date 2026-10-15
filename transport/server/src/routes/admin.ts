@@ -18,6 +18,16 @@ const tariffSchema = z.object({
   etaMin: z.tuple([z.number().int().min(1).max(60), z.number().int().min(1).max(60)]),
 });
 
+const airSchema = z.object({
+  id: z.string().min(1).max(32),
+  title: z.string().min(1).max(40),
+  model: z.string().min(1).max(60),
+  seats: z.number().int().min(1).max(30),
+  rate: z.number().min(0).max(100_000_000),
+  speed: z.number().min(50).max(1200),
+  range: z.number().min(10).max(20_000),
+});
+
 export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
   const { db } = ctx;
 
@@ -64,6 +74,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
         cancelFee: z.number().int().min(0).max(10_000).optional(),
         childSeat: z.number().int().min(0).max(10_000).optional(),
         tariffs: z.array(tariffSchema).min(1).max(5).optional(),
+        airTimeScale: z.number().min(1).max(600).optional(),
+        helicopters: z.array(airSchema).min(1).max(6).optional(),
+        jets: z.array(airSchema).min(1).max(6).optional(),
       })
       .parse(req.body);
     saveSettings(ctx, b);
