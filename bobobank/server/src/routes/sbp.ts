@@ -3,13 +3,14 @@ import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { audit, type Ctx } from '../context.js';
 import { ownedAccount } from '../domain/ledger.js';
-import { decideRequest, loadOrder, payOrder } from '../domain/orders.js';
+import { checkoutUrl, decideRequest, loadOrder, payOrder } from '../domain/orders.js';
 
 /** GPAY orders paid from the app: SBP QR code, the Bobo Pay button, and Bobo Pay requests sent to the phone. */
 export function registerSbpRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/sbp/:id', async (req) => {
     requireUser(req);
-    return { payment: await loadOrder(ctx, (req.params as { id: string }).id) };
+    const id = (req.params as { id: string }).id;
+    return { payment: await loadOrder(ctx, id), checkoutUrl: checkoutUrl(ctx, id) };
   });
 
   app.post('/api/sbp/:id/pay', async (req) => {

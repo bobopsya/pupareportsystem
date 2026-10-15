@@ -87,8 +87,11 @@ export async function payOrder(ctx: Ctx, userId: string, acc: AccountRow, orderI
   ctx.db.prepare(`UPDATE sbp_payments SET status = 'succeeded' WHERE id = ?`).run(rec.id);
   notify(ctx, userId, 'purchase', `−${humanMoney(order.amount, order.currency)}`, `${order.merchant.name} · ${method === 'sbp' ? 'СБП' : 'Bobo Pay'}`);
   const entry = ctx.db.prepare('SELECT id FROM entries WHERE tx_id = ? AND account_id = ?').get(rec.txId, acc.id) as { id: number };
-  return { entryId: entry.id, returnUrl: order.return_url ?? null };
+  return { entryId: entry.id, returnUrl: order.return_url ?? null, checkoutUrl: checkoutUrl(ctx, order.id) };
 }
+
+/** The GPAY payment page for the order: after paying, the customer goes back there and on to the shop's return page. */
+export const checkoutUrl = (ctx: Ctx, orderId: string) => (ctx.cfg.gpayPublicUrl ? `${ctx.cfg.gpayPublicUrl}/pay/${encodeURIComponent(orderId)}` : null);
 
 // ---------- Bobo Pay by phone: GPAY asks, the customer confirms in the app ----------
 

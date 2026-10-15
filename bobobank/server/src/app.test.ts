@@ -251,6 +251,8 @@ describe('GPAY integration', () => {
     await credit(adminH, a.main.id, '5000.00');
     const pay = await app.inject({ method: 'POST', url: '/api/sbp/pay_test123456/pay', headers: a.headers, payload: { accountId: a.main.id, method: 'bobopay' } });
     expect(pay.statusCode).toBe(200);
+    // The customer goes back to the GPAY page, which forwards to the shop.
+    expect(pay.json().checkoutUrl).toBe('http://gpay.internal/pay/pay_test123456');
     expect(gpayCalls.at(-1)!.url).toBe('http://gpay.internal/internal/bank/payments/pay_test123456/bobopay');
     const rf = await internal('POST', '/internal/v1/sbp/pay_test123456/refund', { amount: 29_000, refund_id: 'rf_1' }, { key: 'rf_1' });
     expect(rf.statusCode).toBe(200);

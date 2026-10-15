@@ -131,6 +131,10 @@ test('the Bobo Pay button on the GPAY checkout pays from the bank app', async ({
   await page.getByRole('button', { name: /Оплатить/ }).click();
   await expect(page.getByText('Оплачено через Bobo Pay')).toBeVisible();
   expect(await balance(page)).toBe(before - 9_900);
+  // Back to the GPAY page on its own, and from there on to the shop's return page.
+  await expect(page).toHaveURL(new RegExp(`/pay/${p.id}\\?from=bank$`), { timeout: 10_000 });
+  await expect(page.getByText('Оплата прошла успешно')).toBeVisible();
+  await expect(page).toHaveURL(`${GPAY}/`, { timeout: 10_000 });
   const status = await (await request.get(`${GPAY}/api/v1/payments/${p.id}`, { headers: { Authorization: `Bearer ${m.key}` } })).json();
   expect(status).toMatchObject({ status: 'succeeded', test: false, payment_method: { type: 'bobopay' } });
 });

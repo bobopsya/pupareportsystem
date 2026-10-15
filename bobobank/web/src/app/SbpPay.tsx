@@ -30,12 +30,26 @@ export default function SbpPay() {
   const nav = useNavigate();
   const refresh = useRefresh();
   const { data: home } = useHome();
-  const { data, error } = useQuery({ queryKey: ['sbp', id], queryFn: () => api<{ payment: P }>(`/sbp/${id}`).then((r) => r.payment), enabled: !!id, retry: false });
+  const { data: order, error } = useQuery({ queryKey: ['sbp', id], queryFn: () => api<{ payment: P; checkoutUrl: string | null }>(`/sbp/${id}`), enabled: !!id, retry: false });
+  const data = order?.payment;
   const accounts = useMemo(() => home?.accounts.filter((a) => a.currency === (data?.currency ?? 'RUB') && ['current', 'savings', 'business', 'credit_card', 'kids'].includes(a.kind)) ?? [], [home, data]);
   const [from, setFrom] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [done, setDone] = useState<{ entryId: number; returnUrl: string | null } | null>(null);
+  const [done, setDone] = useState<{ entryId: number; returnUrl: string | null; checkoutUrl: string | null } | null>(null);
+  // After paying, the customer goes back to the GPAY page, which then opens the shop's return page.
+  const back = done?.checkoutUrl ? `${done.checkoutUrl}?from=bank` : done?.returnUrl ?? null;
+  const [left, setLeft] = useState(3);
+  useEffect(() => {
+    if (!back) return;
+    if (left <= 0) {
+      window.location.replace(back);
+      return;
+    }
+    const t = setTimeout(() => setLeft((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [back, left]);
+  const cancel = () => (order?.checkoutUrl ? window.location.assign(order.checkoutUrl) : nav('/app'));
   useEffect(() => {
     if (!from && accounts.length) setFrom(accounts[0].id);
   }, [accounts, from]);
@@ -56,7 +70,9 @@ export default function SbpPay() {
         amount={money(data.amount, data.currency, { exact: true })}
         lines={[['Получатель', data.merchant.name], ['Назначение', data.description || 'Оплата заказа'], ['Через', method === 'sbp' ? 'Система быстрых платежей' : 'Bobo Pay']]}
         entryId={done.entryId}
-        onDone={() => (done.returnUrl ? (window.location.href = done.returnUrl) : nav('/app', { replace: true }))}
+        doneLabel={back ? 'Вернуться в магазин' : 'Готово'}
+        extra={back ? <p className="mt-4 text-sm text-muted">Возвращаем в магазин через {Math.max(left, 0)} с…</p> : undefined}
+        onDone={() => (back ? window.location.replace(back) : nav('/app', { replace: true }))}
       />,
     );
   }
@@ -64,7 +80,7 @@ export default function SbpPay() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api<{ entryId: number; returnUrl: string | null }>(`/sbp/${id}/pay`, { body: { accountId: from, method } });
+      const r = await api<{ entryId: number; returnUrl: string | null; checkoutUrl: string | null }>(`/sbp/${id}/pay`, { body: { accountId: from, method } });
       refresh();
       setDone(r);
     } catch (e) {
@@ -93,7 +109,7 @@ export default function SbpPay() {
       ) : (
         <div className="mt-3"><ErrorNote>{data.status === 'succeeded' ? 'Этот заказ уже оплачен.' : 'Платёж больше нельзя оплатить.'}</ErrorNote></div>
       )}
-      <Button className="mt-3 w-full" variant="ghost" onClick={() => nav('/app')}>Отмена</Button>
+      <Button className="mt-3 w-full" variant="ghost" onClick={cancel}>{order?.checkoutUrl ? 'Вернуться к оплате' : 'Отмена'}</Button>
     </>,
   );
 }

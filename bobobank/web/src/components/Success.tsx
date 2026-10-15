@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Button } from './ui';
 
 /** Final screen of a payment: green check, amount, details, receipt. */
-export function Success({ title, amount, lines, entryId, onDone, extra }: { title: string; amount: string; lines: [string, ReactNode][]; entryId?: number; onDone: () => void; extra?: ReactNode }) {
+export function Success({ title, amount, lines, entryId, onDone, extra, doneLabel = 'Готово' }: { title: string; amount: string; lines: [string, ReactNode][]; entryId?: number; onDone: () => void; extra?: ReactNode; doneLabel?: string }) {
   return (
     <div className="flex min-h-[70dvh] flex-col items-center justify-center text-center bb-fade">
       <div className="flex size-20 items-center justify-center rounded-full bg-brand text-on-brand bb-pop">
@@ -22,7 +22,7 @@ export function Success({ title, amount, lines, entryId, onDone, extra }: { titl
       {extra}
       <div className="mt-6 flex w-full max-w-sm flex-col gap-2">
         {entryId && <Button size="lg" icon={<FileText className="size-5" />} onClick={() => window.open(`/api/history/${entryId}/receipt.pdf`, '_blank')}>Чек по операции</Button>}
-        <Button size="lg" variant="primary" icon={<Check className="size-5" />} onClick={onDone}>Готово</Button>
+        <Button size="lg" variant="primary" icon={<Check className="size-5" />} onClick={onDone}>{doneLabel}</Button>
       </div>
     </div>
   );

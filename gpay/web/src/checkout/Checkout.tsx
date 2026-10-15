@@ -298,7 +298,9 @@ function Declined({ declined, attemptsLeft, onRetry, onOther }: { declined: { me
 function ResultView({ data, embed }: { data: CheckoutData; embed: boolean }) {
   const p = data.payment;
   const ok = p.status === 'succeeded' || p.status === 'waiting_for_capture';
-  const [redirectIn, setRedirectIn] = useState<number | null>(ok && p.returnUrl && !embed ? 10 : null);
+  // Back from the Bobobank app: the customer has already seen the success screen there, so go on to the shop sooner.
+  const fromBank = new URLSearchParams(location.search).get('from') === 'bank';
+  const [redirectIn, setRedirectIn] = useState<number | null>(ok && p.returnUrl && !embed ? (fromBank ? 3 : 10) : null);
   useEffect(() => {
     if (redirectIn === null) return;
     if (redirectIn <= 0) {
