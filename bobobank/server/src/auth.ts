@@ -122,7 +122,8 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
       throw new HttpError(400, 'Неверный код');
     }
     const age = (ctx.now() - Date.parse(body.birthDate)) / (365.25 * 24 * 3600_000);
-    if (!(age >= 14 && age < 120)) throw new HttpError(400, 'Открыть счёт можно с 14 лет');
+    // Dates in a Бобопаспорт follow the lore (12.34.1234 and the like), so age is checked only for typed-in dates.
+    if (!person && !(age >= 14 && age < 120)) throw new HttpError(400, 'Открыть счёт можно с 14 лет');
     const id = await createUser(ctx, body.phone, body.name.replace(/\s+/g, ' '), body.password, { birthDate: body.birthDate });
     db.prepare('DELETE FROM phone_codes WHERE phone = ?').run(body.phone);
     if (person) {

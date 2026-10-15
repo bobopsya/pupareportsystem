@@ -176,6 +176,12 @@ describe('вход и KYC через Бобуслуги', () => {
     expect(cookieOf(again, 'bb_sid')).toBeTruthy();
   });
 
+  it('лорная дата рождения из паспорта (1234 год) не мешает открыть счёт', async () => {
+    people.set('u-lore', person('u-lore', 'dmirti', { passport: { number: '1234 4321 4321 4321 1234 321', country_code: 'BOBO', last_name: 'Шмуков', first_name: 'Дмирти', birth_date: '1234-09-11' } }));
+    const a = await register('u-lore', '+79001230000');
+    expect(a.home.profile).toMatchObject({ name: 'Дмирти Шмуков', birthDate: '1234-09-11', gos: { ok: true } });
+  });
+
   it('вход без cookie состояния отклоняется', async () => {
     const start = await app.inject({ url: '/api/auth/gos/start' });
     const state = decodeURIComponent(String(start.headers.location).split('state=')[1]);
