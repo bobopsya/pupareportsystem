@@ -15,6 +15,7 @@ import { registerGosApi, registerGosRoutes } from './routes/gos.js';
 import { registerMarketRoutes } from './routes/market.js';
 import { ensureStocks } from './domain/market.js';
 import { registerInternalRoutes } from './routes/internal.js';
+import { registerPartnerRoutes } from './routes/partner.js';
 import { registerSbpRoutes } from './routes/sbp.js';
 import { registerSupportRoutes } from './routes/support.js';
 
@@ -87,6 +88,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerSupportRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
   registerInternalRoutes(app, ctx);
+  registerPartnerRoutes(app, ctx);
 
   const webDist = ctx.cfg.webDist;
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {

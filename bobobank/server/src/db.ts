@@ -447,6 +447,41 @@ const MIGRATIONS: string[] = [
   CREATE INDEX trades_user ON trades(user_id, created_at);
   CREATE INDEX trades_ticker ON trades(ticker, created_at);
   `,
+  `
+  -- Partner services («Войти через Bobobank»): a mandate lets the service hold and charge one account.
+  CREATE TABLE mandates (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    client TEXT NOT NULL,
+    account_id TEXT NOT NULL REFERENCES accounts(id),
+    limit_per_tx INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at INTEGER NOT NULL,
+    revoked_at INTEGER
+  );
+  CREATE INDEX mandates_user ON mandates(user_id, client, status);
+  CREATE TABLE partner_codes (
+    code_hash TEXT PRIMARY KEY,
+    client TEXT NOT NULL,
+    mandate_id TEXT NOT NULL REFERENCES mandates(id),
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER
+  );
+  CREATE TABLE partner_charges (
+    id TEXT PRIMARY KEY,
+    mandate_id TEXT NOT NULL REFERENCES mandates(id),
+    hold_id TEXT,
+    external_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    captured INTEGER NOT NULL DEFAULT 0,
+    refunded INTEGER NOT NULL DEFAULT 0,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL,
+    tx_id TEXT,
+    created_at INTEGER NOT NULL,
+    UNIQUE (mandate_id, external_id)
+  );
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

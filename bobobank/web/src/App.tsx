@@ -29,6 +29,7 @@ const Notifications = lazy(() => import('./app/Notifications'));
 const Profile = lazy(() => import('./app/Profile'));
 const More = lazy(() => import('./app/More'));
 const SbpPay = lazy(() => import('./app/SbpPay'));
+const Connect = lazy(() => import('./app/Connect'));
 const PsyExchange = lazy(() => import('./app/GosPages').then((m) => ({ default: m.PsyExchange })));
 const Treasury = lazy(() => import('./app/GosPages').then((m) => ({ default: m.Treasury })));
 const Invest = lazy(() => import('./app/Invest'));
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/admin/*" element={<RequireAuth><Admin /></RequireAuth>} />
         <Route path="/sbp/pay" element={<RequireAuth><SbpPay /></RequireAuth>} />
+        <Route path="/connect" element={<RequireAuth><Connect /></RequireAuth>} />
         <Route path="/gos/pay" element={<RequireAuth><GosPay /></RequireAuth>} />
         <Route path="/app" element={<RequireAuth><Shell /></RequireAuth>}>
           <Route index element={<HomePage />} />

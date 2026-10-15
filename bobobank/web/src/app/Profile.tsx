@@ -9,6 +9,7 @@ import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { longDate, money } from '../lib/format';
 import { useHome, useMeta, useRefresh } from '../lib/hooks';
+import { ConnectedServices } from './Connect';
 import { GosProfileCard } from './GosPages';
 import { SectionTitle } from './Shell';
 
@@ -68,6 +69,8 @@ export default function Profile() {
       </Card>
 
       <GosProfileCard gos={p.gos} />
+
+      <ConnectedServices />
 
       <SectionTitle>Оформление</SectionTitle>
       <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

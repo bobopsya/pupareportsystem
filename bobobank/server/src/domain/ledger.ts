@@ -33,6 +33,7 @@ export const SYSTEM = {
   external: 'Переводы в другие банки',
   psy: 'Обмен псякоинов Бобуслуг',
   market: 'Брокерские операции',
+  transport: 'Расчёты с сервисом «Бобо.Транспорт»',
 } as const;
 export type SystemCode = keyof typeof SYSTEM;
 

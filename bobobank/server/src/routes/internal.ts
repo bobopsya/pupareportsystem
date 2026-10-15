@@ -20,42 +20,47 @@ declare module 'fastify' {
 }
 
 const minor = z.number().int().positive().max(100_000_000_000);
+/** /internal/partner/* has its own per-partner secrets (routes/partner.ts). */
+const isGpay = (url: string) => url.startsWith('/internal/') && !url.startsWith('/internal/partner/');
+
+/** Replays the stored response for a repeated Idempotence-Key (network retries from GPAY and partners). */
+export const makeIdempotent = (ctx: Ctx) => (handler: (req: FastifyRequest) => unknown) => async (req: FastifyRequest, reply: FastifyReply) => {
+  const { db } = ctx;
+  const key = req.headers['idempotence-key'] as string | undefined;
+  if (key) {
+    const prev = db.prepare('SELECT status, response FROM idempotency WHERE key = ?').get(`${req.url}:${key}`) as { status: number; response: string } | undefined;
+    if (prev) return reply.code(prev.status).send(JSON.parse(prev.response));
+  }
+  let status = 200;
+  let body: unknown;
+  try {
+    body = await handler(req);
+  } catch (e) {
+    if (!(e instanceof HttpError)) throw e;
+    status = e.statusCode;
+    body = { error: e.message, code: e.code };
+  }
+  if (key) db.prepare('INSERT OR REPLACE INTO idempotency(key, status, response, created_at) VALUES(?,?,?,?)').run(`${req.url}:${key}`, status, JSON.stringify(body), ctx.now());
+  return reply.code(status).send(body);
+};
 
 /** API for GPAY only: card authorizations, refunds, payouts and shop linking. Every call is HMAC-signed. */
 export function registerInternalRoutes(app: FastifyInstance, ctx: Ctx) {
   const { db } = ctx;
 
   app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/internal/')) return;
+    if (!isGpay(req.url)) return;
     if (!ctx.cfg.gpaySecret) return reply.code(503).send({ error: 'Интеграция с GPAY не настроена' });
   });
   app.addHook('preHandler', async (req, reply) => {
-    if (!req.url.startsWith('/internal/')) return;
+    if (!isGpay(req.url)) return;
     const path = req.url.split('?')[0];
     if (!verify(ctx.cfg.gpaySecret, req.headers[SIGNATURE_HEADER] as string | undefined, req.method, path, req.rawBody ?? '', Math.floor(ctx.now() / 1000))) {
       return reply.code(401).send({ error: 'Неверная подпись запроса' });
     }
   });
 
-  /** Replays the stored response for a repeated Idempotence-Key (network retries from GPAY). */
-  const idempotent = (handler: (req: FastifyRequest) => unknown) => async (req: FastifyRequest, reply: FastifyReply) => {
-    const key = req.headers['idempotence-key'] as string | undefined;
-    if (key) {
-      const prev = db.prepare('SELECT status, response FROM idempotency WHERE key = ?').get(`${req.url}:${key}`) as { status: number; response: string } | undefined;
-      if (prev) return reply.code(prev.status).send(JSON.parse(prev.response));
-    }
-    let status = 200;
-    let body: unknown;
-    try {
-      body = await handler(req);
-    } catch (e) {
-      if (!(e instanceof HttpError)) throw e;
-      status = e.statusCode;
-      body = { error: e.message, code: e.code };
-    }
-    if (key) db.prepare('INSERT OR REPLACE INTO idempotency(key, status, response, created_at) VALUES(?,?,?,?)').run(`${req.url}:${key}`, status, JSON.stringify(body), ctx.now());
-    return reply.code(status).send(body);
-  };
+  const idempotent = makeIdempotent(ctx);
 
   app.get('/internal/v1/cards', async () => ({ hashes: cardHashes(ctx), bins: Object.values(BINS) }));
 

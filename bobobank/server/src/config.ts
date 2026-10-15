@@ -21,6 +21,9 @@ export interface Config {
   supabaseServiceKey: string;
   supabaseAnonKey: string;
   gosPublicUrl: string;
+  /** Бобо.Транспорт: public URL (sign-in redirect) and the shared HMAC secret of the partner API. */
+  transportPublicUrl: string;
+  transportSecret: string;
 }
 
 const HEX = /^[0-9a-f]{32,128}$/i;
@@ -46,5 +49,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     supabaseServiceKey: env.SUPABASE_SERVICE_KEY ?? '',
     supabaseAnonKey: env.SUPABASE_ANON_KEY ?? '',
     gosPublicUrl: (env.GOS_PUBLIC_URL ?? '').replace(/\/$/, ''),
+    transportPublicUrl: (env.TRANSPORT_PUBLIC_URL ?? '').replace(/\/$/, ''),
+    transportSecret: env.BANK_TRANSPORT_SECRET ?? '',
   };
 }
