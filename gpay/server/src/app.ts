@@ -8,7 +8,6 @@ import path from 'node:path';
 import { ZodError } from 'zod';
 import { registerAuth } from './auth.js';
 import { ApiError, HttpError, type Ctx } from './context.js';
-import { seedGameCards } from './domain/cards.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { apiErrorBody, registerApiV1 } from './routes/api-v1.js';
 import { registerBankInternalRoutes } from './routes/bank-internal.js';
@@ -20,7 +19,6 @@ import { registerMerchantRoutes } from './routes/merchant.js';
 const EMBEDDABLE = /^\/(pay|l)\//;
 
 export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
-  seedGameCards(ctx.db, ctx.now());
   const app = Fastify({
     logger: opts.logger ? { level: ctx.cfg.logLevel, redact: ['req.headers.cookie', 'req.headers.authorization'] } : false,
     trustProxy: ctx.cfg.trustProxy ? (_addr: string, hop: number) => hop < 1 : false,

@@ -41,13 +41,13 @@ export function SupportDesk() {
             {!data ? <Loading /> : data.items.map((t) => (
               <button key={t.id} type="button" onClick={() => nav(`/admin/support/${t.id}`)} className={cx('flex w-full flex-col gap-0.5 border-b border-line px-4 py-3 text-left last:border-0 hover:bg-sunken/70', t.id === id && 'bg-brand-soft')}>
                 <span className="flex items-center justify-between gap-2"><span className="truncate font-semibold">{t.user.name}</span><span className="shrink-0 text-xs text-faint">{ago(t.updatedAt)}</span></span>
-                <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-sm text-muted">{t.last}</span>{t.unread > 0 && <span className="min-w-5 rounded-full bg-bad px-1.5 text-center text-xs font-bold text-white">{t.unread}</span>}</span>
+                <span className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate text-sm text-muted">{t.last}</span>{t.unread > 0 && <span className="min-w-5 rounded-full bg-bad px-1.5 text-center text-xs font-semibold text-white">{t.unread}</span>}</span>
               </button>
             ))}
             {data && !data.items.length && <div className="px-5 py-10 text-center text-sm text-muted">Обращений нет</div>}
           </Card>
         </div>
-        {id ? <ThreadView id={id} /> : <div className="hidden items-center justify-center rounded-[28px] border-2 border-dashed border-line text-muted lg:flex">Выберите обращение</div>}
+        {id ? <ThreadView id={id} /> : <div className="hidden items-center justify-center rounded-2xl border-2 border-dashed border-line text-muted lg:flex">Выберите обращение</div>}
       </div>
     </>
   );
@@ -86,7 +86,7 @@ function ThreadView({ id }: { id: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" aria-label="Назад" onClick={() => nav('/admin/support')} className="-ml-1 inline-flex size-9 items-center justify-center rounded-full hover:bg-sunken lg:hidden"><ChevronLeft className="size-5" /></button>
           <div className="min-w-0 flex-1">
-            <div className="font-bold">{c.name}</div>
+            <div className="font-semibold">{c.name}</div>
             <div className="text-sm text-muted num">{c.phone} · {c.tariff === 'prime' ? 'Prime' : 'Стандарт'}</div>
           </div>
           {user?.role === 'admin' && <Button size="sm" onClick={() => nav(`/admin/clients/${c.id}`)}>Карточка клиента</Button>}

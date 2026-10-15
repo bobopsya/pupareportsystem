@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, request as pwRequest, test, type APIRequestContext, type Page } from '@playwright/test';
 
 const BANK = process.env.BANK_URL ?? 'http://localhost:8082';
 const GPAY = process.env.GPAY_URL ?? 'http://localhost:8081';
@@ -109,4 +109,55 @@ test('SBP from the bank app pays a GPAY order', async ({ page, request }) => {
   expect(await balance(page)).toBe(before - 15_000);
   const status = await (await request.get(`${GPAY}/api/v1/payments/${p.id}`, { headers: { Authorization: `Bearer ${m.key}` } })).json();
   expect(status).toMatchObject({ status: 'succeeded', test: false, payment_method: { type: 'sbp' } });
+});
+
+async function login(page: Page) {
+  await page.goto(`${BANK}/login`);
+  await page.getByLabel('Телефон').fill(PHONE.slice(1));
+  await page.getByLabel('Пароль').fill('password123');
+  await page.getByRole('button', { name: 'Войти' }).click();
+  await expect(page.getByText('Последние операции')).toBeVisible();
+}
+
+test('the Bobo Pay button on the GPAY checkout pays from the bank app', async ({ page, request }) => {
+  await login(page);
+  const m = await gpayMerchant(request);
+  const p = await m.pay('99.00');
+  const before = await balance(page);
+  await page.goto(`${GPAY}/pay/${p.id}`);
+  await page.getByRole('tab', { name: /Bobo Pay/ }).click();
+  await page.getByRole('link', { name: 'Bobo Pay' }).click();
+  await expect(page.getByText('Кофейня «Бобо»')).toBeVisible();
+  await page.getByRole('button', { name: /Оплатить/ }).click();
+  await expect(page.getByText('Оплачено через Bobo Pay')).toBeVisible();
+  expect(await balance(page)).toBe(before - 9_900);
+  const status = await (await request.get(`${GPAY}/api/v1/payments/${p.id}`, { headers: { Authorization: `Bearer ${m.key}` } })).json();
+  expect(status).toMatchObject({ status: 'succeeded', test: false, payment_method: { type: 'bobopay' } });
+});
+
+test('a recent recipient opens the transfer with the number filled in, and can be kept in favourites', async ({ page }) => {
+  // A friend in the bank, and a transfer to them with a message (the message used to hide the number).
+  const friendPhone = `79${String(Date.now() + 3).slice(-9)}`;
+  const friend = await pwRequest.newContext({ baseURL: BANK, extraHTTPHeaders: H });
+  const { code } = await (await friend.post('/api/auth/code', { data: { phone: friendPhone } })).json();
+  expect((await friend.post('/api/auth/register', { data: { phone: friendPhone, code, name: 'Друг Бобов', birthDate: '1994-03-03', password: 'password123' } })).ok()).toBeTruthy();
+  await login(page);
+  const home = await (await page.request.get(`${BANK}/api/home`)).json();
+  const sent = await page.request.post(`${BANK}/api/transfers`, { headers: H, data: { fromAccountId: home.accounts[0].id, recipient: { type: 'phone', phone: friendPhone }, amount: '50.00', comment: 'За кофе' } });
+  expect(sent.ok()).toBeTruthy();
+
+  await page.goto(`${BANK}/app/payments`);
+  await page.getByRole('button', { name: 'Друг Б.' }).first().click();
+  await expect(page.getByLabel('Номер телефона получателя')).toHaveValue(new RegExp(friendPhone.slice(-2) + '$'));
+  await page.getByLabel('Сумма').fill('10');
+  await page.getByRole('button', { name: /Перевести/ }).click();
+  await expect(page.getByText('Перевод отправлен')).toBeVisible();
+  await page.getByRole('button', { name: 'Добавить в избранное' }).click();
+  await expect(page.getByRole('button', { name: 'В избранном' })).toBeVisible();
+
+  await page.goto(`${BANK}/app/payments`);
+  await expect(page.getByText('Избранное')).toBeVisible();
+  await page.getByRole('button', { name: 'Друг Б.' }).first().click();
+  await expect(page.getByLabel('Номер телефона получателя')).toHaveValue(new RegExp(friendPhone.slice(-2) + '$'));
+  await expect(page.getByLabel('Сумма')).toHaveValue('10');
 });

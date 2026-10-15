@@ -9,9 +9,9 @@ export function Success({ title, amount, lines, entryId, onDone, extra }: { titl
       <div className="flex size-20 items-center justify-center rounded-full bg-brand text-on-brand bb-pop">
         <svg viewBox="0 0 24 24" className="size-10" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" className="bb-draw" /></svg>
       </div>
-      <h1 className="mt-5 text-[22px] font-extrabold">{title}</h1>
-      <div className="mt-1 text-[36px] font-extrabold num">{amount}</div>
-      <div className="mt-5 w-full max-w-sm rounded-[24px] bg-surface p-4 text-left shadow-card">
+      <h1 className="mt-5 text-[22px] font-semibold">{title}</h1>
+      <div className="mt-1 text-[36px] font-semibold num">{amount}</div>
+      <div className="mt-5 w-full max-w-sm rounded-2xl bg-surface p-4 text-left shadow-card">
         {lines.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-3 py-1.5 text-sm">
             <span className="text-muted">{k}</span>

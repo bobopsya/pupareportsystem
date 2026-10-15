@@ -300,6 +300,45 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX audit_ts ON audit(ts);
   `,
+  `
+  CREATE TABLE favorites (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    title TEXT NOT NULL,
+    type TEXT NOT NULL,
+    value TEXT NOT NULL,
+    bik TEXT,
+    amount INTEGER,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX favorites_user ON favorites(user_id, created_at);
+
+  -- "Bobo Pay": GPAY orders paid from the app, by button (redirect) or by a request to the customer's phone.
+  CREATE TABLE payment_requests (
+    id TEXT PRIMARY KEY,
+    external_id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    merchant TEXT NOT NULL DEFAULT '{}',
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    account_id TEXT,
+    tx_id TEXT,
+    refunded INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    decided_at INTEGER
+  );
+  CREATE INDEX payment_requests_user ON payment_requests(user_id, status);
+  CREATE INDEX payment_requests_ext ON payment_requests(external_id);
+  ALTER TABLE sbp_payments ADD COLUMN method TEXT NOT NULL DEFAULT 'sbp';
+
+  -- Flat card designs replace the gradient ones.
+  UPDATE cards SET design = CASE design
+    WHEN 'night' THEN 'black' WHEN 'graphite' THEN 'black' WHEN 'sunset' THEN 'black'
+    WHEN 'emerald' THEN 'green' WHEN 'aurora' THEN 'green' WHEN 'gold' THEN 'prime' ELSE design END;
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

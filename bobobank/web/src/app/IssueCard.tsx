@@ -17,10 +17,10 @@ const NETWORKS: { id: Network; title: string; note: string }[] = [
   { id: 'unionpay', title: 'UnionPay', note: 'Платёжная система Китая' },
 ];
 const DESIGNS: Record<Product, string[]> = {
-  virtual: ['green', 'emerald', 'aurora', 'sunset', 'night', 'graphite'],
-  plastic: ['green', 'emerald', 'aurora', 'sunset', 'night', 'graphite'],
-  kids: ['kids', 'aurora', 'sunset', 'green'],
-  prime: ['gold', 'night', 'graphite'],
+  virtual: ['green', 'black', 'white', 'silver'],
+  plastic: ['green', 'black', 'white', 'silver'],
+  kids: ['kids', 'green', 'white'],
+  prime: ['prime', 'black'],
 };
 
 export default function IssueCard() {
@@ -44,7 +44,7 @@ export default function IssueCard() {
       <div className="flex min-h-[70dvh] flex-col items-center justify-center text-center bb-fade">
         <div className="bb-card-in"><BankCard card={issued} size="lg" /></div>
         <div className="mt-6 inline-flex size-12 items-center justify-center rounded-full bg-brand text-on-brand bb-pop"><Check className="size-6" strokeWidth={3} /></div>
-        <h1 className="mt-4 text-2xl font-extrabold">Карта выпущена</h1>
+        <h1 className="mt-4 text-2xl font-semibold">Карта выпущена</h1>
         <p className="mt-1 max-w-sm text-muted">{issued.form === 'virtual' ? 'Ей уже можно платить в интернете и через GPAY.' : 'Пластик привезём за 3 дня, а пока платите цифровой картой.'}</p>
         <div className="mt-6 flex w-full max-w-sm flex-col gap-2">
           <Button size="lg" variant="primary" onClick={() => nav(`/app/cards/${issued.id}`, { replace: true })}>Открыть карту</Button>
@@ -59,9 +59,9 @@ export default function IssueCard() {
       <Screen title="Новая карта">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Choice icon={<Smartphone className="size-6" />} title="Виртуальная" text="Бесплатно, выпуск за секунду. Для покупок в интернете и через GPAY." onClick={() => (setProduct('virtual'), setDesign('green'))} />
-          <Choice icon={<CreditCard className="size-6" />} title="Пластиковая" text="Бесконтактная карта с доставкой, кешбэк до 3%." onClick={() => (setProduct('plastic'), setDesign('emerald'))} />
+          <Choice icon={<CreditCard className="size-6" />} title="Пластиковая" text="Бесконтактная карта с доставкой, кешбэк до 3%." onClick={() => (setProduct('plastic'), setDesign('black'))} />
           <Choice icon={<Baby className="size-6" />} title="Детская" text="Отдельный счёт, лимит трат и уведомления родителю." onClick={() => (setProduct('kids'), setDesign('kids'))} />
-          <Choice icon={<Crown className="size-6" />} title="Bobo Prime" text={prime ? 'Металлический дизайн, кешбэк до 7%.' : 'Нужна подписка Bobo Prime.'} disabled={!prime} onClick={() => (setProduct('prime'), setDesign('gold'))} />
+          <Choice icon={<Crown className="size-6" />} title="Bobo Prime" text={prime ? 'Металлический дизайн, кешбэк до 7%.' : 'Нужна подписка Bobo Prime.'} disabled={!prime} onClick={() => (setProduct('prime'), setDesign('prime'))} />
           <Choice icon={<Landmark className="size-6" />} title="Кредитная" text="120 дней без процентов, решение за минуту." onClick={() => nav('/app/credits/apply/credit_card')} />
         </div>
       </Screen>
@@ -89,20 +89,20 @@ export default function IssueCard() {
     <Screen title={{ virtual: 'Виртуальная карта', plastic: 'Пластиковая карта', kids: 'Детская карта', prime: 'Карта Bobo Prime' }[product]} back={null} actions={<Button size="sm" variant="ghost" onClick={() => setProduct(null)}>Назад</Button>}>
       <div className="flex justify-center"><BankCard card={{ ...preview, holder: preview.holder.toUpperCase() }} size="lg" /></div>
 
-      <h2 className="mt-7 mb-3 font-extrabold">Платёжная система</h2>
+      <h2 className="mt-7 mb-3 font-semibold">Платёжная система</h2>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {NETWORKS.map((n) => (
           <button key={n.id} type="button" onClick={() => setNetwork(n.id)} className={cx('flex flex-col items-start gap-2 rounded-[20px] border-2 bg-surface p-3 text-left transition-colors', network === n.id ? 'border-brand' : 'border-transparent shadow-card')}>
             <NetworkLogo network={n.id} className="h-7 w-11 border border-line" />
-            <span><span className="block text-sm font-bold">{n.title}</span><span className="block text-xs text-muted leading-snug">{n.note}</span></span>
+            <span><span className="block text-sm font-semibold">{n.title}</span><span className="block text-xs text-muted leading-snug">{n.note}</span></span>
           </button>
         ))}
       </div>
 
-      <h2 className="mt-7 mb-3 font-extrabold">Дизайн</h2>
+      <h2 className="mt-7 mb-3 font-semibold">Дизайн</h2>
       <div className="flex flex-wrap gap-3">
         {DESIGNS[product].map((d) => (
-          <button key={d} type="button" aria-label={d} onClick={() => setDesign(d)} className={cx('h-12 w-[76px] rounded-xl ring-offset-2 ring-offset-bg transition', design === d ? 'ring-[3px] ring-brand' : 'ring-0')} style={{ background: DESIGN_BG[d] }} />
+          <button key={d} type="button" aria-label={d} onClick={() => setDesign(d)} className={cx('h-12 w-[76px] rounded-lg border border-line ring-offset-2 ring-offset-bg transition', design === d ? 'ring-2 ring-brand' : 'ring-0')} style={{ background: DESIGN_BG[d] }} />
         ))}
       </div>
 
@@ -133,9 +133,9 @@ export default function IssueCard() {
 
 function Choice({ icon, title, text, onClick, disabled }: { icon: ReactNode; title: string; text: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" disabled={disabled} onClick={onClick} className="flex items-start gap-3 rounded-[24px] bg-surface p-4 text-left shadow-card transition-transform active:scale-[0.99] disabled:opacity-50">
+    <button type="button" disabled={disabled} onClick={onClick} className="flex items-start gap-3 rounded-2xl bg-surface p-4 text-left shadow-card transition-transform active:scale-[0.99] disabled:opacity-50">
       <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand">{icon}</span>
-      <span><span className="block text-[17px] font-bold">{title}</span><span className="block text-sm text-muted">{text}</span></span>
+      <span><span className="block text-[17px] font-semibold">{title}</span><span className="block text-sm text-muted">{text}</span></span>
     </button>
   );
 }

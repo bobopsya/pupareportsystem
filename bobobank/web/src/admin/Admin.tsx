@@ -44,13 +44,13 @@ export default function Admin() {
     <nav className="flex h-full flex-col gap-1 p-4">
       <div className="mb-5 flex items-center justify-between px-2">
         <Logo compact />
-        <span className="rounded-lg bg-ink px-2 py-0.5 text-xs font-bold text-on-ink">{admin ? 'Админка' : 'Поддержка'}</span>
+        <span className="rounded-lg bg-ink px-2 py-0.5 text-xs font-semibold text-on-ink">{admin ? 'Админка' : 'Поддержка'}</span>
       </div>
       {items.map((i) => (
         <NavLink key={i.to} to={i.to} end={i.end} onClick={() => setOpen(false)} className={({ isActive }) => cx('flex h-11 items-center gap-3 rounded-2xl px-3 text-[15px] font-semibold', isActive ? 'bg-brand-soft text-brand-strong dark:text-brand' : 'text-muted hover:bg-sunken hover:text-fg')}>
           <i.icon className="size-5" />
           {i.label}
-          {!!i.badge && <span className="ml-auto min-w-5 rounded-full bg-bad px-1.5 text-center text-xs font-bold text-white">{i.badge}</span>}
+          {!!i.badge && <span className="ml-auto min-w-5 rounded-full bg-bad px-1.5 text-center text-xs font-semibold text-white">{i.badge}</span>}
         </NavLink>
       ))}
       <button type="button" onClick={() => nav('/app')} className="mt-auto flex h-11 items-center gap-3 rounded-2xl px-3 text-[15px] font-semibold text-muted hover:bg-sunken"><ArrowLeft className="size-5" />В приложение</button>
@@ -67,7 +67,7 @@ export default function Admin() {
       <div className="min-w-0">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-bg/90 px-4 backdrop-blur-xl lg:hidden">
           <button type="button" aria-label="Меню" onClick={() => setOpen(!open)} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-sunken">{open ? <X className="size-5" /> : <Menu className="size-5" />}</button>
-          <span className="font-bold">{admin ? 'Админка Bobobank' : 'Поддержка Bobobank'}</span>
+          <span className="font-semibold">{admin ? 'Админка Bobobank' : 'Поддержка Bobobank'}</span>
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
           <Routes>

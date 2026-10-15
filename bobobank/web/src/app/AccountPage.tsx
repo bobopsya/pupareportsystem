@@ -67,10 +67,10 @@ export default function AccountPage() {
 
   return (
     <Screen title={a.name} sub={`${ACCOUNT_KIND_TITLE[a.kind]} •• ${a.number.slice(-4)}`} actions={<button type="button" aria-label="Переименовать" onClick={() => setRename(true)} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-sunken"><Pencil className="size-5" /></button>}>
-      <Card className="bg-gradient-to-br from-brand to-brand-strong !text-on-brand">
-        <div className="text-sm opacity-80">{creditCard ? 'Доступно' : 'Баланс'}</div>
-        <div className="text-[34px] font-extrabold leading-tight num">{money(creditCard ? a.available : a.balance, a.currency, { exact: true })}</div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm opacity-90">
+      <Card>
+        <div className="text-sm text-muted">{creditCard ? 'Доступно' : 'Баланс'}</div>
+        <div className="text-[32px] font-semibold leading-tight num">{money(creditCard ? a.available : a.balance, a.currency, { exact: true })}</div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
           {creditCard && <span>Долг {money(Math.max(0, -a.balance))} из {money(a.creditLimit)}</span>}
           {deposit && <span>{String(a.params.rate)}% годовых</span>}
           {a.kind === 'deposit' && typeof a.params.endsAt === 'number' && <span>до {longDate(a.params.endsAt)}</span>}
@@ -98,7 +98,7 @@ export default function AccountPage() {
             <div className="flex items-start gap-3">
               <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#111] text-white"><Store className="size-5" /></span>
               <div className="min-w-0 flex-1">
-                <div className="font-bold">Выручка магазина на этот счёт</div>
+                <div className="font-semibold">Выручка магазина на этот счёт</div>
                 <p className="text-sm text-muted">Получите код и введите его в кабинете GPAY: Настройки магазина → Выплаты → Bobobank.</p>
                 {data.gpayLinks.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">{data.gpayLinks.map((l) => <Badge key={`${l.shopId}${l.usedAt}`} tone="brand" icon={<Link2 className="size-3" />}>{l.shopName} · №{l.shopId}</Badge>)}</div>
@@ -108,7 +108,7 @@ export default function AccountPage() {
             {code ? (
               <div className="mt-4 rounded-2xl bg-sunken p-4 text-center">
                 <div className="text-xs text-muted">Код подключения — действует 30 минут</div>
-                <button type="button" onClick={() => { copy(code.code); toast('Код скопирован'); }} className="mt-1 text-[32px] font-extrabold tracking-[0.12em] num">{code.code}</button>
+                <button type="button" onClick={() => { copy(code.code); toast('Код скопирован'); }} className="mt-1 text-[32px] font-semibold tracking-[0.12em] num">{code.code}</button>
                 {meta?.gpayUrl && <a href={`${meta.gpayUrl}/app`} target="_blank" rel="noreferrer" className="mt-1 block text-sm font-semibold text-brand">Открыть кабинет GPAY</a>}
               </div>
             ) : (

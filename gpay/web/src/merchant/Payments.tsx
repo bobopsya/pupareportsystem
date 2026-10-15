@@ -80,8 +80,7 @@ export default function Payments() {
           <option value="">Все способы</option>
           <option value="bank_card">Карта</option>
           <option value="sbp">СБП</option>
-          <option value="installments">Частями</option>
-          <option value="crypto">Криптовалюта</option>
+          <option value="bobopay">Bobo Pay</option>
         </Select>
         <Select value={currency} onChange={(e) => set('currency', e.target.value)} className="w-auto" aria-label="Валюта">
           <option value="">Все валюты</option>

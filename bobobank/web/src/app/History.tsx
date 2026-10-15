@@ -43,7 +43,7 @@ export default function History() {
     <Screen title="История" back={null}>
       <div className="relative">
         <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-faint" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по операциям" className="pl-11" />
+        <Input autoFocus={new URLSearchParams(location.search).has('focus')} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по операциям" className="pl-11" />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Segmented value={dir} onChange={setDir} options={[{ value: 'all', label: 'Все' }, { value: 'out', label: 'Списания' }, { value: 'in', label: 'Пополнения' }]} />
@@ -59,13 +59,13 @@ export default function History() {
         <div className="mt-4 flex flex-col gap-4">
           {pending.length > 0 && (
             <Card pad={false} className="overflow-hidden">
-              <div className="px-4 pt-3 text-sm font-bold text-warn">В обработке</div>
+              <div className="px-4 pt-3 text-sm font-semibold text-warn">В обработке</div>
               {pending.map((p) => <PendingRow key={p.id} p={p} />)}
             </Card>
           )}
           {groups.map((g) => (
             <div key={g.day}>
-              <div className="mb-2 px-1 text-sm font-bold text-muted first-letter:uppercase">{g.day}</div>
+              <div className="mb-2 px-1 text-sm font-semibold text-muted first-letter:uppercase">{g.day}</div>
               <Card pad={false} className="overflow-hidden">{g.items.map((e) => <EntryRow key={e.id} e={e} />)}</Card>
             </div>
           ))}

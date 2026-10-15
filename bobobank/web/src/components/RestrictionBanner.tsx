@@ -9,11 +9,11 @@ export function RestrictionBanner({ items }: { items: Restriction[] }) {
   const nav = useNavigate();
   if (!items.length) return null;
   return (
-    <div className="mb-4 rounded-[24px] bg-bad-soft p-4 sm:p-5">
+    <div className="mb-4 rounded-2xl bg-bad-soft p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-bad text-white"><ShieldAlert className="size-5" /></span>
         <div className="min-w-0 flex-1">
-          <div className="font-bold text-bad">{items.length === 1 ? items[0].typeTitle : 'Ограничения по счетам'}</div>
+          <div className="font-semibold text-bad">{items.length === 1 ? items[0].typeTitle : 'Ограничения по счетам'}</div>
           <ul className="mt-1 space-y-1 text-sm text-fg/80">
             {items.map((r) => (
               <li key={r.id}>

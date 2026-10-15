@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { audit, HttpError, type Ctx } from '../context.js';
 import { decide, pendingConfirmations } from '../domain/acquiring.js';
+import { pendingRequests } from '../domain/orders.js';
 import { BANK, CASHBACK_CATEGORIES, CATEGORIES, CORR_ACCOUNT, PREFIX, RESTRICTION_REASONS, RESTRICTION_TYPES, type Category } from '../domain/bank.js';
 import { chooseCategories, chosenCategories, monthAccrued, RAISED_CATEGORIES, redeemBonus } from '../domain/bonus.js';
 import { DESIGNS, issueCard, NETWORKS, ownedCard, revealCard, serializeCard, TARIFFS, type CardLimits, type CardRow } from '../domain/cards.js';
@@ -15,9 +16,9 @@ import {
   activeRestrictions, available, getAccount, mainAccount, notify, openAccount, ownedAccount, serializeAccount, userAccounts, type AccountRow,
 } from '../domain/ledger.js';
 import { CURRENCIES, humanMoney, parseAmount } from '../domain/money.js';
-import { formatPhone, getUser, resolveRecipient, transfer, transferFee, type Recipient } from '../domain/transfers.js';
+import { formatPhone, getUser, normalizePhone, resolveRecipient, transfer, transferFee, type Recipient, type RecipientRef } from '../domain/transfers.js';
 import { operationPdf, requisitesPdf, statementPdf } from '../pdf.js';
-import { newId, randomDigits, safeJson, sha256 } from '../util.js';
+import { decrypt, newId, randomDigits, safeJson, sha256 } from '../util.js';
 
 const currency = z.enum(CURRENCIES);
 const amountSchema = z.union([z.string(), z.number()]).transform((v) => parseAmount(v));
@@ -459,6 +460,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
     z.object({ type: z.literal('card'), pan: z.string().min(12).max(30) }),
     z.object({ type: z.literal('account'), number: z.string().min(20).max(30), bik: z.string(), name: z.string().trim().min(2).max(120), inn: z.string().optional(), purpose: z.string().max(210).optional() }),
     z.object({ type: z.literal('own'), accountId: z.string() }),
+    z.object({ type: z.literal('card_id'), cardId: z.string() }),
   ]);
 
   const resolve = (userId: string, r: z.infer<typeof recipient>, cur: string) => {
@@ -467,6 +469,12 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
       if (acc.status !== 'open') throw new HttpError(400, 'Счёт закрыт');
       if (acc.kind === 'deposit') throw new HttpError(400, 'Вклад не пополняется — откройте новый вклад');
       return { account: acc, user: getUser(ctx, userId)!, display: acc.name, subtitle: `На счёт •• ${acc.number.slice(-4)}` };
+    }
+    if (r.type === 'card_id') {
+      // Saved card recipient: the number itself is never sent back to the client.
+      const c = db.prepare(`SELECT pan_enc FROM cards WHERE id = ? AND status != 'closed'`).get(r.cardId) as { pan_enc: string } | undefined;
+      if (!c) throw new HttpError(404, 'Карта получателя закрыта или не найдена');
+      return resolveRecipient(ctx, { type: 'card', pan: decrypt(ctx.secret, c.pan_enc) }, cur);
     }
     return resolveRecipient(ctx, r as Recipient, cur);
   };
@@ -503,15 +511,79 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
     return { txId: r.txId, entryId: entry.id, fee: r.fee, to: to.display };
   });
 
+  /** Recent people the customer sent money to: from the recipient stored with each transfer. */
   app.get('/api/transfers/recent', async (req) => {
     const u = me(req);
     const rows = db
       .prepare(
-        `SELECT e.title, e.subtitle, t.meta, MAX(e.created_at) ts FROM entries e JOIN accounts a ON a.id = e.account_id JOIN transactions t ON t.id = e.tx_id
-         WHERE a.user_id = ? AND t.kind = 'transfer' AND e.amount < 0 GROUP BY e.title ORDER BY ts DESC LIMIT 8`,
+        `SELECT e.title, e.subtitle, t.meta, e.created_at ts FROM entries e JOIN accounts a ON a.id = e.account_id JOIN transactions t ON t.id = e.tx_id
+         WHERE a.user_id = ? AND t.kind = 'transfer' AND e.amount < 0 ORDER BY e.id DESC LIMIT 100`,
       )
-      .all(u.id) as { title: string; subtitle: string; ts: number }[];
-    return { items: rows.map((r) => ({ name: r.title, subtitle: r.subtitle, phone: /\+7 [\d -]+/.exec(r.subtitle)?.[0] ?? null })) };
+      .all(u.id) as { title: string; subtitle: string; meta: string; ts: number }[];
+    const seen = new Set<string>();
+    const items: { name: string; subtitle: string; type: string; phone: string | null; cardId: string | null; number: string | null; bik: string | null }[] = [];
+    for (const r of rows) {
+      const rec = safeJson<{ recipient?: RecipientRef }>(r.meta, {}).recipient;
+      // Transfers made before recipients were stored: the phone may still be in the subtitle.
+      const legacyPhone = /\+7 [\d -]{13}/.exec(r.subtitle)?.[0]?.replace(/\D/g, '') ?? null;
+      const ref: RecipientRef = rec ?? { type: legacyPhone ? 'phone' : 'account', name: r.title, phone: legacyPhone ?? undefined };
+      if (ref.type === 'account' && !ref.number) continue;
+      const key = `${ref.type}:${ref.phone ?? ref.cardId ?? ref.number}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        name: ref.name,
+        subtitle: ref.type === 'phone' ? formatPhone(ref.phone!) : ref.type === 'card' ? `Карта •• ${ref.last4}` : `Счёт •• ${ref.number!.slice(-4)}`,
+        type: ref.type,
+        phone: ref.phone ?? null,
+        cardId: ref.cardId ?? null,
+        number: ref.number ?? null,
+        bik: ref.bik ?? null,
+      });
+      if (items.length >= 10) break;
+    }
+    return { items };
+  });
+
+  // ---------- Favourites ----------
+  const favView = (f: { id: string; title: string; type: string; value: string; bik: string | null; amount: number | null; created_at: number }) => ({
+    id: f.id,
+    title: f.title,
+    type: f.type,
+    value: f.value,
+    bik: f.bik,
+    amount: f.amount,
+    subtitle: f.type === 'phone' ? formatPhone(f.value) : f.type === 'card' ? `Карта •• ${String(db.prepare('SELECT last4 FROM cards WHERE id = ?').pluck().get(f.value) ?? '')}` : `Счёт •• ${f.value.slice(-4)}`,
+  });
+
+  app.get('/api/favorites', async (req) => {
+    const rows = db.prepare('SELECT * FROM favorites WHERE user_id = ? ORDER BY created_at').all(me(req).id) as Parameters<typeof favView>[0][];
+    return { items: rows.map(favView) };
+  });
+
+  app.post('/api/favorites', async (req) => {
+    const u = me(req);
+    const b = z
+      .object({ title: z.string().trim().min(1).max(40), type: z.enum(['phone', 'card', 'account']), value: z.string().min(1).max(30), bik: z.string().regex(/^\d{9}$/).optional(), amount: amountSchema.optional() })
+      .parse(req.body);
+    if ((db.prepare('SELECT COUNT(*) c FROM favorites WHERE user_id = ?').get(u.id) as { c: number }).c >= 30) throw new HttpError(400, 'В избранном не больше 30 получателей');
+    const value = b.type === 'phone' ? normalizePhone(b.value) : b.value.replace(/\s/g, '');
+    if (!value) throw new HttpError(400, 'Некорректный номер телефона');
+    if (b.type === 'card' && !db.prepare(`SELECT 1 FROM cards WHERE id = ? AND status != 'closed'`).get(value)) throw new HttpError(400, 'Карта получателя не найдена');
+    const dup = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND type = ? AND value = ?').get(u.id, b.type, value) as { id: string } | undefined;
+    if (dup) {
+      db.prepare('UPDATE favorites SET title = ?, amount = ? WHERE id = ?').run(b.title, b.amount ?? null, dup.id);
+      return { favorite: favView(db.prepare('SELECT * FROM favorites WHERE id = ?').get(dup.id) as Parameters<typeof favView>[0]) };
+    }
+    const id = newId('fav', 12);
+    db.prepare('INSERT INTO favorites(id, user_id, title, type, value, bik, amount, created_at) VALUES(?,?,?,?,?,?,?,?)').run(id, u.id, b.title, b.type, value, b.bik ?? null, b.amount ?? null, ctx.now());
+    return { favorite: favView(db.prepare('SELECT * FROM favorites WHERE id = ?').get(id) as Parameters<typeof favView>[0]) };
+  });
+
+  app.delete('/api/favorites/:id', async (req) => {
+    const r = db.prepare('DELETE FROM favorites WHERE id = ? AND user_id = ?').run((req.params as { id: string }).id, me(req).id);
+    if (!r.changes) throw new HttpError(404, 'Не найдено');
+    return { ok: true };
   });
 
   // ---------- FX ----------
@@ -669,7 +741,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
     const u = me(req);
     const unread = (db.prepare('SELECT COUNT(*) c FROM notifications WHERE user_id = ? AND read_at IS NULL').get(u.id) as { c: number }).c;
     const chatUnread = (db.prepare('SELECT COALESCE(SUM(unread_client), 0) c FROM support_threads WHERE user_id = ?').get(u.id) as { c: number }).c;
-    return { confirmations: pendingConfirmations(ctx, u.id), unread, chatUnread };
+    return { confirmations: pendingConfirmations(ctx, u.id), requests: pendingRequests(ctx, u.id), unread, chatUnread };
   });
 
   app.post('/api/confirmations/:id', async (req) => {

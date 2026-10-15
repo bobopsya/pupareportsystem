@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Bitcoin, CreditCard, Dices, SplitSquareHorizontal, Store } from 'lucide-react';
+import { CreditCard, Dices, Store } from 'lucide-react';
+import { BoboMark } from '../checkout/AsyncMethods';
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShopAvatar } from '../checkout/Checkout';
@@ -112,10 +113,9 @@ export function NewShop() {
 }
 
 const METHOD_ROWS: { type: MethodType; title: string; sub: string; icon: ReactNode }[] = [
-  { type: 'bank_card', title: 'Банковские карты', sub: 'МИР, Visa, Mastercard, UnionPay · 3-D Secure', icon: <CreditCard className="size-5" /> },
-  { type: 'sbp', title: 'СБП', sub: 'Оплата по QR-коду через приложение банка', icon: <SbpMark className="size-5" /> },
-  { type: 'installments', title: 'Оплата частями', sub: '4 платежа раз в две недели, деньги магазину сразу', icon: <SplitSquareHorizontal className="size-5" /> },
-  { type: 'crypto', title: 'Криптовалюта', sub: 'USDT (TRC-20) и Bitcoin с автоконвертацией', icon: <Bitcoin className="size-5" /> },
+  { type: 'bank_card', title: 'Карты Bobobank', sub: 'МИР, Visa, Mastercard, UnionPay · подтверждение в приложении банка', icon: <CreditCard className="size-5" /> },
+  { type: 'sbp', title: 'СБП', sub: 'QR-код открывает заказ в приложении Bobobank', icon: <SbpMark className="size-5" /> },
+  { type: 'bobopay', title: 'Bobo Pay', sub: 'Кнопка оплаты в Bobobank или запрос по номеру телефона', icon: <BoboMark className="size-5" /> },
 ];
 
 export default function Settings() {

@@ -27,7 +27,7 @@ export default function Apply() {
   const [amount, setAmount] = useState(product === 'loan' ? 30_000_000 : 10_000_000);
   const [term, setTerm] = useState(24);
   const [network, setNetwork] = useState<Network>('mir');
-  const [design, setDesign] = useState('night');
+  const [design, setDesign] = useState('black');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!data || !home) return <Loading />;
@@ -55,7 +55,7 @@ export default function Apply() {
         <div>
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-muted">{loan ? 'Сумма кредита' : 'Кредитный лимит'}</span>
-            <span className="text-[26px] font-extrabold num">{money(amount)}</span>
+            <span className="text-[26px] font-semibold num">{money(amount)}</span>
           </div>
           <input type="range" min={min} max={max} step={step} value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="mt-2 w-full accent-[var(--color-brand)]" aria-label="Сумма" />
           <div className="flex justify-between text-xs text-faint num"><span>{money(min)}</span><span>{money(max)}</span></div>
@@ -63,12 +63,12 @@ export default function Apply() {
         {loan ? (
           <>
             <div>
-              <div className="flex items-baseline justify-between"><span className="text-sm text-muted">Срок</span><span className="text-lg font-bold">{term} мес.</span></div>
+              <div className="flex items-baseline justify-between"><span className="text-sm text-muted">Срок</span><span className="text-lg font-semibold">{term} мес.</span></div>
               <input type="range" min={3} max={60} step={1} value={term} onChange={(e) => setTerm(Number(e.target.value))} className="mt-2 w-full accent-[var(--color-brand)]" aria-label="Срок" />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Ставка</div><div className="text-lg font-extrabold">от {p.loanRate}%</div></div>
-              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Платёж в месяц</div><div className="text-lg font-extrabold num">{money(annuity(amount, p.loanRate, term))}</div></div>
+              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Ставка</div><div className="text-lg font-semibold">от {p.loanRate}%</div></div>
+              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Платёж в месяц</div><div className="text-lg font-semibold num">{money(annuity(amount, p.loanRate, term))}</div></div>
             </div>
           </>
         ) : (
@@ -79,11 +79,11 @@ export default function Apply() {
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              {['night', 'green', 'aurora', 'graphite', 'sunset'].map((d) => <button key={d} type="button" aria-label={d} onClick={() => setDesign(d)} className={cx('h-10 w-16 rounded-xl ring-offset-2 ring-offset-surface', design === d && 'ring-[3px] ring-brand')} style={{ background: DESIGN_BG[d] }} />)}
+              {['black', 'green', 'white', 'silver'].map((d) => <button key={d} type="button" aria-label={d} onClick={() => setDesign(d)} className={cx('h-10 w-16 rounded-lg ring-offset-2 ring-offset-surface border border-line', design === d && 'ring-2 ring-brand')} style={{ background: DESIGN_BG[d] }} />)}
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Без процентов</div><div className="text-lg font-extrabold">{p.creditCardGraceDays} дней</div></div>
-              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Ставка после</div><div className="text-lg font-extrabold">{p.creditCardRate}%</div></div>
+              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Без процентов</div><div className="text-lg font-semibold">{p.creditCardGraceDays} дней</div></div>
+              <div className="rounded-2xl bg-sunken p-3"><div className="text-xs text-muted">Ставка после</div><div className="text-lg font-semibold">{p.creditCardRate}%</div></div>
             </div>
           </>
         )}

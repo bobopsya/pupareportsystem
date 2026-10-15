@@ -112,8 +112,8 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
     if (c >= 10) throw new HttpError(400, 'Не больше 10 магазинов на аккаунт');
     const kkt = newKktNumbers();
     const r = db
-      .prepare('INSERT INTO shops(owner_id, name, legal_name, inn, tax_system, site, color, kkt_rn, fn_number, created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
-      .run(user.id, b.name, b.legalName, b.inn, b.taxSystem, b.site, b.color, kkt.rn, kkt.fn, ctx.now());
+      .prepare('INSERT INTO shops(owner_id, name, legal_name, inn, tax_system, site, color, kkt_rn, fn_number, created_at, methods) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+      .run(user.id, b.name, b.legalName, b.inn, b.taxSystem, b.site, b.color, kkt.rn, kkt.fn, ctx.now(), JSON.stringify(METHODS));
     const shop = getShop(ctx, Number(r.lastInsertRowid))!;
     audit(ctx, req, 'shop_create', 'shop', String(shop.id), b.name);
     return { shop: shopSummary(ctx, shop) };
@@ -348,12 +348,8 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
     const b = z
       .object({ amount: z.string().max(20), currency: z.enum(CURRENCIES), destination: z.enum(['bobobank', 'card']).default('card'), cardLast4: z.string().regex(/^\d{4}$/, 'Последние 4 цифры карты').optional() })
       .parse(req.body);
-    let po;
-    if (b.destination === 'bobobank') po = await payoutToBank(ctx, shop, parseAmount(b.amount), b.currency);
-    else {
-      if (!b.cardLast4) throw new HttpError(400, 'Укажите последние 4 цифры карты');
-      po = createPayout(ctx, shop, parseAmount(b.amount), b.currency, { type: 'bank_card', card_last4: b.cardLast4 });
-    }
+    if (b.destination !== 'bobobank') throw new HttpError(400, 'Выплаты доступны только на счёт в Bobobank');
+    const po = await payoutToBank(ctx, shop, parseAmount(b.amount), b.currency);
     audit(ctx, req, 'payout', 'payout', po.id, `${b.amount} ${b.currency}`);
     return { payout: serializePayout(po) };
   });
@@ -455,7 +451,7 @@ export function registerMerchantRoutes(app: FastifyInstance, ctx: Ctx) {
     const sampleId = `pay_test_${randomString(15)}`;
     const object = {
       id: sampleId, status: 'succeeded', paid: true, amount: { value: '1500.00', currency: 'RUB' }, income_amount: { value: '1458.00', currency: 'RUB' }, description: 'Тестовое уведомление',
-      recipient: { account_id: String(shop.id), gateway_id: `${shop.id}01` }, payment_method: { type: 'bank_card', id: `pm_${randomString(20)}`, saved: false, title: 'Visa •• 1111', card: { first6: '411111', last4: '1111', expiry_month: '12', expiry_year: '2030', card_type: 'Visa' } },
+      recipient: { account_id: String(shop.id), gateway_id: `${shop.id}01` }, payment_method: { type: 'bank_card', id: `pm_${randomString(20)}`, saved: false, title: 'МИР •• 7891', card: { first6: '220455', last4: '7891', expiry_month: '12', expiry_year: '2030', card_type: 'МИР', issuer_name: 'Bobobank' } },
       captured_at: new Date(now).toISOString(), created_at: new Date(now - 30_000).toISOString(), test: false, refundable: true, metadata: { test: 'true' },
     };
     const id = newId('evt', 20);

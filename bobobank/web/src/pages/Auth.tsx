@@ -12,7 +12,7 @@ function Frame({ title, sub, children, foot }: { title: string; sub: string; chi
     <div className="flex min-h-dvh flex-col items-center px-4 pb-10 pt-[max(2rem,env(safe-area-inset-top))]">
       <Link to="/" className="mb-10"><Logo /></Link>
       <div className="w-full max-w-sm bb-fade">
-        <h1 className="text-[28px] font-extrabold leading-tight">{title}</h1>
+        <h1 className="text-[28px] font-semibold leading-tight">{title}</h1>
         <p className="mt-1 text-muted">{sub}</p>
         <div className="mt-6">{children}</div>
         <div className="mt-6 text-center text-sm text-muted">{foot}</div>
@@ -137,7 +137,7 @@ export function Register() {
         {step === 'code' && (
           <form onSubmit={(e) => (e.preventDefault(), code.length === 4 && setStep('profile'))} className="flex flex-col gap-4">
             <Field label="Код из СМС">
-              <Input inputMode="numeric" autoComplete="one-time-code" value={code} maxLength={4} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))} className="text-center text-[26px] font-extrabold tracking-[0.5em] num" placeholder="••••" />
+              <Input inputMode="numeric" autoComplete="one-time-code" value={code} maxLength={4} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))} className="text-center text-[26px] font-semibold tracking-[0.5em] num" placeholder="••••" />
             </Field>
             {error && <ErrorNote>{error}</ErrorNote>}
             <Button type="submit" size="lg" variant="primary" disabled={code.length !== 4}>Продолжить</Button>

@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { audit, HttpError, type Ctx } from '../context.js';
-import { brandOf, luhn, OUTCOMES } from '../domain/cards.js';
 import { getGlobalFees, METHODS, setGlobalFees } from '../domain/fees.js';
 import { convert, getRates, setRates } from '../domain/fx.js';
 import { getShop, type PaymentRow, type ShopRow } from '../domain/payments.js';
@@ -82,26 +81,6 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
     setGlobalFees(db, b);
     audit(ctx, req, 'admin_fees', null, null, JSON.stringify(b));
     return { fees: getGlobalFees(db) };
-  });
-
-  app.get('/api/admin/cards', async () => ({
-    items: db.prepare('SELECT pan, outcome, label, created_at createdAt FROM game_cards ORDER BY created_at, pan').all(),
-    outcomes: Object.fromEntries(Object.entries(OUTCOMES).map(([k, v]) => [k, v.title])),
-  }));
-
-  app.post('/api/admin/cards', async (req) => {
-    const b = z.object({ pan: z.string().transform((s) => s.replace(/\D/g, '')), outcome: z.enum(Object.keys(OUTCOMES) as [keyof typeof OUTCOMES]), label: z.string().trim().max(60).default('') }).parse(req.body);
-    if (b.pan.length !== 16 || !luhn(b.pan)) throw new HttpError(400, 'Номер должен состоять из 16 цифр и проходить проверку Луна');
-    if (!brandOf(b.pan)) throw new HttpError(400, 'Номер должен начинаться с BIN Visa (4), Mastercard (51–55, 2221–2720), МИР (2200–2204) или UnionPay (62)');
-    db.prepare('INSERT INTO game_cards(pan, outcome, label, created_at) VALUES(?,?,?,?) ON CONFLICT(pan) DO UPDATE SET outcome = excluded.outcome, label = excluded.label').run(b.pan, b.outcome, b.label, ctx.now());
-    audit(ctx, req, 'admin_card', 'card', `*${b.pan.slice(-4)}`, b.outcome);
-    return { ok: true };
-  });
-
-  app.delete<{ Params: { pan: string } }>('/api/admin/cards/:pan', async (req) => {
-    db.prepare('DELETE FROM game_cards WHERE pan = ?').run(req.params.pan);
-    audit(ctx, req, 'admin_card_delete', 'card', `*${req.params.pan.slice(-4)}`);
-    return { ok: true };
   });
 
   app.get('/api/admin/audit', async () => ({ items: db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 300').all() }));

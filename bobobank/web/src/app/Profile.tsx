@@ -1,8 +1,9 @@
-import { Check, Crown, KeyRound, LogOut, Phone, Shield } from 'lucide-react';
+import { Check, Crown, KeyRound, LogOut, Moon, Phone, Shield } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Row, Screen } from '../components/Screen';
-import { Badge, Button, Card, ErrorNote, Field, Input, Loading, Modal, useToast } from '../components/ui';
+import { Badge, Button, Card, ErrorNote, Field, Input, Loading, Modal, Segmented, useToast } from '../components/ui';
+import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { longDate, money } from '../lib/format';
@@ -17,6 +18,7 @@ export default function Profile() {
   const { data } = useHome();
   const { data: meta } = useMeta();
   const [pw, setPw] = useState(false);
+  const [theme, setThemeState] = useState<Theme>(getTheme);
   const [busy, setBusy] = useState(false);
   if (!data) return <Loading />;
   const p = data.profile;
@@ -36,20 +38,20 @@ export default function Profile() {
   return (
     <Screen title="Профиль">
       <Card className="flex items-center gap-4">
-        <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-brand text-2xl font-extrabold text-on-brand">{p.name[0]}</span>
+        <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-brand text-2xl font-semibold text-on-brand">{p.name[0]}</span>
         <div className="min-w-0">
-          <div className="truncate text-xl font-extrabold">{p.name}</div>
+          <div className="truncate text-xl font-semibold">{p.name}</div>
           <div className="text-sm text-muted num">{p.phoneFormatted}</div>
           <div className="mt-1 text-xs text-faint">Клиент с {longDate(p.createdAt)}</div>
         </div>
       </Card>
 
       <SectionTitle>Тариф</SectionTitle>
-      <Card id="prime" className={prime ? 'bg-gradient-to-br from-[#f6e3ad] to-[#d9b260] !text-[#3b2a06]' : ''}>
+      <Card id="prime" className={prime ? '!bg-[#2B2A28] !text-[#E7C987]' : ''}>
         <div className="flex items-center gap-3">
           <Crown className="size-7" />
           <div className="min-w-0 flex-1">
-            <div className="text-lg font-extrabold">Bobo Prime</div>
+            <div className="text-lg font-semibold">Bobo Prime</div>
             <div className="text-sm opacity-80">{prime ? `Подключён${p.tariffPaidUntil ? ` · оплачен до ${longDate(p.tariffPaidUntil)}` : ''}` : `${money(39_900)} в месяц`}</div>
           </div>
           {prime && <Badge tone="brand" icon={<Check className="size-3" />}>Активен</Badge>}
@@ -60,6 +62,12 @@ export default function Profile() {
           <li>• Карта Prime в золотом дизайне</li>
         </ul>
         <Button className="mt-4 w-full" variant={prime ? 'secondary' : 'primary'} loading={busy} onClick={() => void setTariff(prime ? 'standard' : 'prime')}>{prime ? 'Отключить подписку' : 'Подключить за 399 ₽'}</Button>
+      </Card>
+
+      <SectionTitle>Оформление</SectionTitle>
+      <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="inline-flex items-center gap-2 font-medium"><Moon className="size-5 text-brand" />Тема</span>
+        <Segmented value={theme} onChange={(t) => (setThemeState(t), setTheme(t))} options={[{ value: 'system', label: 'Как в системе' }, { value: 'light', label: 'Светлая' }, { value: 'dark', label: 'Тёмная' }]} />
       </Card>
 
       <SectionTitle>Безопасность</SectionTitle>

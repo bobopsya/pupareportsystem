@@ -57,7 +57,7 @@ export default function CardPage() {
         <BankCard card={card} size="lg" number={details?.pan} cvc={details?.cvc} />
         <div className="mt-4 text-center">
           <div className="text-sm text-muted">{card.kind === 'credit' ? 'Доступно с учётом лимита' : 'Доступно'}</div>
-          <div className="text-[30px] font-extrabold num">{money(account.available, account.currency, { exact: account.available % 100 !== 0 })}</div>
+          <div className="text-[30px] font-semibold num">{money(account.available, account.currency, { exact: account.available % 100 !== 0 })}</div>
           {account.held > 0 && <div className="text-sm text-warn">Ожидает списания {money(account.held, account.currency)}</div>}
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function CardPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[['Номер', details.pan.replace(/(\d{4})(?=\d)/g, '$1 ')], ['Срок', card.exp], ['CVC', details.cvc]].map(([k, v]) => (
               <button key={k} type="button" onClick={() => { copy(v.replace(/\s/g, '')); toast(`${k} скопирован`); }} className="flex items-center justify-between gap-2 rounded-2xl bg-sunken px-4 py-3 text-left">
-                <span><span className="block text-xs text-muted">{k}</span><span className="font-bold num">{v}</span></span>
+                <span><span className="block text-xs text-muted">{k}</span><span className="font-semibold num">{v}</span></span>
                 <Copy className="size-4 text-muted" />
               </button>
             ))}

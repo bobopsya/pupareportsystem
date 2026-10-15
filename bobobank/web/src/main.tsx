@@ -5,9 +5,12 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ToastProvider } from './components/ui';
 import './index.css';
+import { applyTheme, getTheme } from './lib/theme';
 import { AuthProvider } from './lib/auth';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 3_000 } } });
+
+applyTheme(getTheme());
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

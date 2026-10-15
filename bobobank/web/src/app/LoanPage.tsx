@@ -47,7 +47,7 @@ export default function LoanPage() {
           <span className="text-sm text-muted">Остаток долга</span>
           {data.status === 'overdue' ? <Badge tone="bad">Просрочка</Badge> : data.status === 'closed' ? <Badge>Погашен</Badge> : <Badge tone="brand">Платёж {data.paidCount + 1} из {data.term}</Badge>}
         </div>
-        <div className="text-[34px] font-extrabold num">{money(data.debt)}</div>
+        <div className="text-[34px] font-semibold num">{money(data.debt)}</div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-sunken"><div className="h-full rounded-full bg-brand" style={{ width: `${((data.principal - data.debt) / data.principal) * 100}%` }} /></div>
         <div className="mt-1 text-xs text-muted">Выплачено {money(data.principal - data.debt)} из {money(data.principal)}</div>
         {data.next && (
@@ -75,7 +75,7 @@ export default function LoanPage() {
               <div className="text-sm font-semibold">{longDate(s.dueAt)}</div>
               <div className="text-xs text-muted num">долг {money(s.principal)} · проценты {money(s.interest)}</div>
             </div>
-            <div className="font-bold num">{money(s.payment)}</div>
+            <div className="font-semibold num">{money(s.payment)}</div>
           </div>
         ))}
       </Card>

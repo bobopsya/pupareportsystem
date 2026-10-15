@@ -64,9 +64,9 @@ export default function OpenAccount() {
 
 function Opt({ icon, title, text, onClick, disabled }: { icon: ReactNode; title: string; text: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" disabled={disabled} onClick={onClick} className="flex items-start gap-3 rounded-[24px] bg-surface p-4 text-left shadow-card active:scale-[0.99] disabled:opacity-60">
+    <button type="button" disabled={disabled} onClick={onClick} className="flex items-start gap-3 rounded-2xl bg-surface p-4 text-left shadow-card active:scale-[0.99] disabled:opacity-60">
       <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand">{icon}</span>
-      <span><span className="block text-[17px] font-bold">{title}</span><span className="block text-sm text-muted">{text}</span></span>
+      <span><span className="block text-[17px] font-semibold">{title}</span><span className="block text-sm text-muted">{text}</span></span>
     </button>
   );
 }

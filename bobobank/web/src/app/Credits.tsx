@@ -51,7 +51,7 @@ export default function Credits() {
           <div className="flex items-start gap-3">
             {a.status === 'processing' ? <Spinner className="size-7 text-brand" /> : a.status === 'approved' ? <CheckCircle2 className="size-7 text-brand" /> : <Clock className="size-7 text-warn" />}
             <div className="min-w-0 flex-1">
-              <div className="font-bold">{a.product === 'loan' ? 'Кредит наличными' : 'Кредитная карта'} · {money(a.amount)}</div>
+              <div className="font-semibold">{a.product === 'loan' ? 'Кредит наличными' : 'Кредитная карта'} · {money(a.amount)}</div>
               <div className="text-sm text-muted">
                 {a.status === 'processing' && 'Банк проверяет заявку, это займёт несколько секунд…'}
                 {a.status === 'review' && 'Заявка на дополнительной проверке у специалиста. Мы пришлём уведомление.'}
@@ -69,13 +69,13 @@ export default function Credits() {
       ))}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <button type="button" onClick={() => nav('/app/credits/apply/loan')} className="flex min-h-[148px] flex-col justify-between rounded-[24px] bg-[#e7efff] p-5 text-left text-[#1d3f8f] dark:bg-[#151d33] dark:text-[#82a8ff]">
+        <button type="button" onClick={() => nav('/app/credits/apply/loan')} className="flex min-h-[148px] flex-col justify-between rounded-2xl bg-[#e7efff] p-5 text-left text-[#1d3f8f] dark:bg-[#151d33] dark:text-[#82a8ff]">
           <Landmark className="size-7" />
-          <span><span className="block text-lg font-extrabold">Кредит наличными</span><span className="block text-sm opacity-80">от {data.products.loanRate}%, до 5 млн ₽, решение за минуту</span></span>
+          <span><span className="block text-lg font-semibold">Кредит наличными</span><span className="block text-sm opacity-80">от {data.products.loanRate}%, до 5 млн ₽, решение за минуту</span></span>
         </button>
-        <button type="button" onClick={() => nav('/app/credits/apply/credit_card')} className="flex min-h-[148px] flex-col justify-between rounded-[24px] bg-brand p-5 text-left text-on-brand">
+        <button type="button" onClick={() => nav('/app/credits/apply/credit_card')} className="flex min-h-[148px] flex-col justify-between rounded-2xl bg-brand p-5 text-left text-on-brand">
           <CreditCard className="size-7" />
-          <span><span className="block text-lg font-extrabold">Кредитная карта</span><span className="block text-sm opacity-90">{data.products.creditCardGraceDays} дней без процентов на покупки</span></span>
+          <span><span className="block text-lg font-semibold">Кредитная карта</span><span className="block text-sm opacity-90">{data.products.creditCardGraceDays} дней без процентов на покупки</span></span>
         </button>
       </div>
 
@@ -83,10 +83,10 @@ export default function Credits() {
       {(data.loans.length > 0 || data.creditCards.length > 0) && (
         <Card pad={false} className="divide-y divide-line overflow-hidden">
           {data.creditCards.map((a) => (
-            <Row key={a.id} onClick={() => nav(`/app/accounts/${a.id}`)} icon={<CategoryIcon category="credit" />} title="Кредитная карта" sub={`Доступно ${money(a.available)} из ${money(a.creditLimit)}`} right={a.balance < 0 ? <span className="font-bold num text-bad">{money(a.balance)}</span> : <Badge tone="brand">Без долга</Badge>} />
+            <Row key={a.id} onClick={() => nav(`/app/accounts/${a.id}`)} icon={<CategoryIcon category="credit" />} title="Кредитная карта" sub={`Доступно ${money(a.available)} из ${money(a.creditLimit)}`} right={a.balance < 0 ? <span className="font-semibold num text-bad">{money(a.balance)}</span> : <Badge tone="brand">Без долга</Badge>} />
           ))}
           {data.loans.map((l) => (
-            <Row key={l.id} onClick={() => nav(`/app/loans/${l.id}`)} icon={<CategoryIcon category="credit" />} title={`Кредит ${money(l.principal)}`} sub={l.status === 'closed' ? 'Погашен' : l.next ? `Платёж ${money(l.next.amount)} · ${longDate(l.next.dueAt)}` : ''} right={l.status === 'overdue' ? <Badge tone="bad">Просрочка</Badge> : l.status === 'closed' ? <Badge>Закрыт</Badge> : <span className="font-bold num">{money(l.debt)}</span>} />
+            <Row key={l.id} onClick={() => nav(`/app/loans/${l.id}`)} icon={<CategoryIcon category="credit" />} title={`Кредит ${money(l.principal)}`} sub={l.status === 'closed' ? 'Погашен' : l.next ? `Платёж ${money(l.next.amount)} · ${longDate(l.next.dueAt)}` : ''} right={l.status === 'overdue' ? <Badge tone="bad">Просрочка</Badge> : l.status === 'closed' ? <Badge>Закрыт</Badge> : <span className="font-semibold num">{money(l.debt)}</span>} />
           ))}
         </Card>
       )}

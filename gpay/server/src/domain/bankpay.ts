@@ -76,22 +76,27 @@ export async function tickBank(ctx: Ctx) {
   if (!bankEnabled(ctx)) return;
   const rows = ctx.db.prepare(`SELECT * FROM payments WHERE status = 'pending' AND bank_auth_id IS NOT NULL AND pending_action LIKE '%bank_confirm%' LIMIT 50`).all() as PaymentRow[];
   for (const p of rows) {
+    const isRequest = p.bank_auth_id!.startsWith('req_');
     let r;
     try {
-      r = await bankRequest<{ status: string; reason?: string }>(ctx, 'GET', `/internal/v1/authorizations/${p.bank_auth_id}`);
+      r = await bankRequest<{ status: string; reason?: string }>(ctx, 'GET', isRequest ? `/internal/v1/requests/${p.bank_auth_id}` : `/internal/v1/authorizations/${p.bank_auth_id}`);
     } catch {
       continue;
     }
     const fresh = getPaymentRow(ctx, p.id)!;
     if (fresh.status !== 'pending' || !fresh.pending_action?.includes('bank_confirm')) continue;
     const method = safeJson<Record<string, unknown>>(fresh.method, {});
-    if (r.data.status === 'captured' || r.data.status === 'approved') {
+    if (isRequest && r.data.status === 'paid') {
+      // Bobo Pay by phone: the bank has already debited the customer; it is a single-stage payment.
+      addEvent(ctx, p.id, 'bobopay_confirmed', { method: method.title });
+      authorize(ctx, { ...fresh, capture: 1 }, method, { funding: 'bank', bankAuthId: p.bank_auth_id! });
+    } else if (!isRequest && (r.data.status === 'captured' || r.data.status === 'approved')) {
       addEvent(ctx, p.id, '3ds_passed', { method: method.title, bank: BANK_NAME });
       authorize(ctx, fresh, method, { funding: 'bank', bankAuthId: p.bank_auth_id! });
     } else if (r.data.status !== 'pending') {
       ctx.db.prepare('UPDATE payments SET method_type = NULL, method = NULL, bank_auth_id = NULL, pending_action = NULL WHERE id = ?').run(p.id);
       const msg =
-        r.data.reason === 'declined_by_customer' ? 'Покупка отклонена в приложении банка.'
+        r.data.reason === 'declined_by_customer' || (isRequest && r.data.status === 'declined') ? 'Покупка отклонена в приложении банка.'
         : r.data.status === 'expired' ? 'Покупка не подтверждена в приложении банка вовремя.'
         : 'Банк отклонил операцию.';
       decline(ctx, getPaymentRow(ctx, p.id)!, r.data.status === 'expired' ? '3d_secure_failed' : 'general_decline', msg, String(method.title ?? ''));
@@ -103,7 +108,7 @@ const bankError = (data: { error?: string }, fallback: string) => new ApiError(4
 
 /** Two-stage payments: the bank turns the hold into a charge before GPAY marks the payment captured. */
 export async function captureWithBank(ctx: Ctx, shop: ShopRow, p: PaymentRow, amount?: number) {
-  if (p.status === 'waiting_for_capture' && p.bank_auth_id) {
+  if (p.status === 'waiting_for_capture' && p.bank_auth_id?.startsWith('auth_')) {
     const r = await bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/capture`, { amount: amount ?? p.amount }, `capture:${p.id}`);
     if (!r.ok) throw bankError(r.data, 'не удалось списать деньги');
   }
@@ -111,7 +116,7 @@ export async function captureWithBank(ctx: Ctx, shop: ShopRow, p: PaymentRow, am
 }
 
 export async function cancelWithBank(ctx: Ctx, p: PaymentRow) {
-  if ((p.status === 'waiting_for_capture' || p.status === 'pending') && p.bank_auth_id) {
+  if ((p.status === 'waiting_for_capture' || p.status === 'pending') && p.bank_auth_id?.startsWith('auth_')) {
     await bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/void`, {}, `void:${p.id}`).catch(() => {});
   }
   return cancelByMerchant(ctx, p);
@@ -122,7 +127,7 @@ export async function refundWithBank(ctx: Ctx, shop: ShopRow, p: PaymentRow, amo
   const sum = checkRefund(ctx, shop, p, amount, description);
   const id = newId('rf');
   if (p.funding === 'bank') {
-    const path = p.bank_auth_id ? `/internal/v1/authorizations/${p.bank_auth_id}/refund` : `/internal/v1/sbp/${p.id}/refund`;
+    const path = p.bank_auth_id?.startsWith('auth_') ? `/internal/v1/authorizations/${p.bank_auth_id}/refund` : `/internal/v1/sbp/${p.id}/refund`;
     const r = await bankRequest(ctx, 'POST', path, { amount: sum, refund_id: id }, `refund:${id}`);
     if (!r.ok) throw bankError(r.data, 'возврат не выполнен');
   }
@@ -182,27 +187,50 @@ export function sbpInfo(ctx: Ctx, p: PaymentRow) {
     description: p.description,
     merchant: { name: shop.name, inn: shop.inn, mcc: shop.mcc, shop_id: shop.id, site: shop.site || undefined },
     sbp: shop.status === 'active' && shopMethods(shop).includes('sbp') && p.currency === 'RUB',
+    bobopay: shop.status === 'active' && shopMethods(shop).includes('bobopay'),
     return_url: p.return_url,
   };
 }
 
-/** Bobobank paid the order by SBP: the payment succeeds at once (SBP is always single-stage). */
-export function sbpPaidByBank(ctx: Ctx, p: PaymentRow, input: { operationId: string; payer?: { name?: string; phone?: string } }) {
+const PAID_TITLE = { sbp: `СБП · ${BANK_NAME}`, bobopay: 'Bobo Pay' } as const;
+
+/** Bobobank paid the order from its app (SBP QR code or the Bobo Pay button): the payment succeeds at once. */
+export function paidByBank(ctx: Ctx, p: PaymentRow, method: 'sbp' | 'bobopay', input: { operationId: string; payer?: { name?: string; phone?: string } }) {
   const info = sbpInfo(ctx, p);
   if (p.status !== 'pending') throw new ApiError(400, 'invalid_state', p.status === 'succeeded' ? 'Заказ уже оплачен' : 'Платёж больше нельзя оплатить');
-  if (!info.sbp) throw new ApiError(400, 'invalid_request', 'Магазин не принимает оплату через СБП');
-  // The buyer may have started "another bank" on the checkout; the real payment wins.
+  if (!info[method]) throw new ApiError(400, 'invalid_request', 'Магазин не принимает этот способ оплаты');
+  // A card confirmation or a phone request may be waiting: the payment made in the app wins.
   ctx.db.prepare('UPDATE payments SET processing_until = NULL, pending_action = NULL, bank_auth_id = NULL WHERE id = ?').run(p.id);
-  const method = {
-    type: 'sbp',
+  const m = {
+    type: method,
     id: newId('pm', 20),
     saved: false,
-    title: `СБП · ${BANK_NAME}`,
+    title: PAID_TITLE[method],
     sbp_operation_id: input.operationId || `B${randomString(31, '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')}`,
     payer_bank_details: { bank_id: '100000000909', bic: BANK_BIK, name: BANK_NAME },
     payer: input.payer,
   };
-  addEvent(ctx, p.id, 'attempt', { method: method.title });
-  authorize(ctx, { ...getPaymentRow(ctx, p.id)!, capture: 1 }, method, { funding: 'bank' });
+  addEvent(ctx, p.id, 'attempt', { method: m.title });
+  authorize(ctx, { ...getPaymentRow(ctx, p.id)!, capture: 1 }, m, { funding: 'bank' });
   return getPaymentRow(ctx, p.id)!;
+}
+
+/** Bobo Pay by phone number: the customer gets a request in the Bobobank app and the page waits. */
+export async function requestBobopay(ctx: Ctx, p: PaymentRow, phone: string): Promise<PayResult> {
+  const shop = getShop(ctx, p.shop_id)!;
+  const digits = phone.replace(/\D/g, '');
+  const r = await bankRequest<{ id: string; expires_at: number }>(
+    ctx,
+    'POST',
+    '/internal/v1/requests',
+    { phone: digits, payment_id: p.id, amount: p.amount, currency: p.currency, description: p.description, merchant: { name: shop.name, shop_id: shop.id, mcc: shop.mcc, inn: shop.inn, site: shop.site || undefined } },
+    `req:${p.id}:${p.attempts}:${digits}`,
+  );
+  if (!r.ok) throw new ApiError(400, 'invalid_request', r.data.error ?? 'Банк не принял запрос', 'phone');
+  const method = { type: 'bobopay', id: newId('pm', 20), saved: false, title: 'Bobo Pay', phone: `+7 *** ***-${digits.slice(-4, -2)}-${digits.slice(-2)}` };
+  ctx.db
+    .prepare('UPDATE payments SET method_type = ?, method = ?, bank_auth_id = ?, pending_action = ? WHERE id = ?')
+    .run('bobopay', JSON.stringify(method), r.data.id, JSON.stringify({ type: 'bank_confirm', until: r.data.expires_at, bank: BANK_NAME, via: 'phone' }), p.id);
+  addEvent(ctx, p.id, 'bobopay_requested', { method: method.title });
+  return { result: 'processing', until: r.data.expires_at };
 }

@@ -179,7 +179,7 @@ function CreateLink({ kind: initial, onClose, onCreated }: { kind: 'link' | 'inv
       <Modal open onClose={onClose} title={kind === 'invoice' ? 'Счёт готов' : 'Ссылка готова'} footer={<Button variant="primary" onClick={onClose}>Готово</Button>}>
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="rounded-2xl border border-line bg-white p-3"><QR text={created.url} className="size-40" /></div>
-          <p className="text-sm text-muted">Отправьте ссылку покупателю — он сможет оплатить картой, через СБП, частями или криптовалютой.</p>
+          <p className="text-sm text-muted">Отправьте ссылку покупателю — он сможет оплатить картой Bobobank, через СБП или Bobo Pay.</p>
           <div className="w-full flex items-center gap-1 rounded-[10px] border border-line bg-sunken pl-3 pr-1 h-10">
             <span className="flex-1 truncate font-mono text-[13px] text-left">{created.url}</span>
             <CopyButton text={created.url} />

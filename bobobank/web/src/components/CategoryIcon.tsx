@@ -56,7 +56,7 @@ export function Initials({ name, className }: { name: string; className?: string
   let h = 0;
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
   return (
-    <span className={cx('inline-flex size-11 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white', className)} style={{ background: `hsl(${h} 55% 48%)` }}>
+    <span className={cx('inline-flex size-11 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold text-white', className)} style={{ background: `hsl(${h} 55% 48%)` }}>
       {ini || '•'}
     </span>
   );

@@ -25,9 +25,9 @@ export default function Operation() {
     <Screen title={KIND[e.kind] ?? 'Операция'}>
       <Card className="flex flex-col items-center text-center">
         <CategoryIcon category={e.category} size="lg" />
-        <div className="mt-3 text-lg font-bold">{e.title}</div>
+        <div className="mt-3 text-lg font-semibold">{e.title}</div>
         <div className="text-sm text-muted">{e.subtitle}</div>
-        <div className={cx('mt-3 text-[34px] font-extrabold num', e.amount > 0 && 'text-ok')}>{money(e.amount, e.currency, { sign: true, exact: true })}</div>
+        <div className={cx('mt-3 text-[34px] font-semibold num', e.amount > 0 && 'text-ok')}>{money(e.amount, e.currency, { sign: true, exact: true })}</div>
         <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-sm font-semibold text-brand-strong dark:text-brand">Выполнено</div>
       </Card>
       <Card className="mt-3 divide-y divide-line !py-1">

@@ -18,13 +18,11 @@ export type Tariff = keyof typeof TARIFFS;
 
 export const DESIGNS = {
   green: 'Зелёная',
-  emerald: 'Изумруд',
-  night: 'Ночная',
-  aurora: 'Северное сияние',
-  sunset: 'Закат',
-  graphite: 'Графит',
-  gold: 'Prime Gold',
-  kids: 'Космос',
+  black: 'Чёрная',
+  white: 'Белая',
+  silver: 'Серебряная',
+  prime: 'Prime',
+  kids: 'Детская',
 } as const;
 export type Design = keyof typeof DESIGNS;
 

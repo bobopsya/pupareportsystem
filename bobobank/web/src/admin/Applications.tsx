@@ -42,7 +42,7 @@ export function Applications() {
             <Card key={a.id} className="!p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <button type="button" onClick={() => nav(`/admin/clients/${a.user_id}`)} className="font-bold hover:text-brand">{a.user_name}</button>
+                  <button type="button" onClick={() => nav(`/admin/clients/${a.user_id}`)} className="font-semibold hover:text-brand">{a.user_name}</button>
                   <div className="text-sm text-muted num">{a.user_phone} · {dateTime(a.created_at)}</div>
                 </div>
                 <Badge tone={STATUS[a.status]?.[1] ?? 'neutral'}>{STATUS[a.status]?.[0] ?? a.status}</Badge>

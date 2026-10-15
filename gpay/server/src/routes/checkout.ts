@@ -1,20 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, type Ctx } from '../context.js';
-import { OUTCOMES } from '../domain/cards.js';
 import { METHOD_TITLE } from '../domain/fees.js';
 import { getRates } from '../domain/fx.js';
 import { linkState, type LinkRow } from '../domain/links.js';
 import { formatAmount, LIMITS, parseAmount } from '../domain/money.js';
 import {
-  abortAsync, createPayment, getShop, loadPayment, MAX_ATTEMPTS, payWithCard, shopMethods, startAsync, type PaymentRow,
+  abortAsync, createPayment, getShop, loadPayment, MAX_ATTEMPTS, setEmail, shopMethods, type PaymentRow,
 } from '../domain/payments.js';
 import type { FiscalReceipt, ReceiptRequest } from '../domain/receipts.js';
 import { quittancePdf, receiptPdf } from '../pdf.js';
 import { safeJson, sha256 } from '../util.js';
 import { bankCards } from '../domain/bank.js';
-import { isBankCard, payWithBankCard } from '../domain/bankpay.js';
-import { findGameCard } from '../domain/cards.js';
+import { isBankCard, payWithBankCard, requestBobopay } from '../domain/bankpay.js';
 
 function publicShop(ctx: Ctx, shopId: number) {
   const s = getShop(ctx, shopId)!;
@@ -48,7 +46,8 @@ export function publicPayment(ctx: Ctx, p: PaymentRow) {
     action: action?.type === 'processing' ? { type: 'processing', until: p.processing_until } : action?.type === 'bank_confirm' ? { type: 'bank_confirm', until: action.until, bank: action.bank } : null,
     funding: p.funding,
     sbpBankUrl: ctx.cfg.bankPublicUrl ? `${ctx.cfg.bankPublicUrl}/sbp/pay?payment=${p.id}` : null,
-    method: method ? { type: method.type, title: method.title, crypto: method.crypto, plan: method.plan, sbp: method.type === 'sbp' ? { operationId: method.sbp_operation_id } : undefined } : null,
+    bobopayUrl: ctx.cfg.bankPublicUrl ? `${ctx.cfg.bankPublicUrl}/sbp/pay?payment=${p.id}&method=bobopay` : null,
+    method: method ? { type: method.type, title: method.title, phone: method.phone, sbp: method.type === 'sbp' ? { operationId: method.sbp_operation_id } : undefined } : null,
     methodType: p.method_type,
     cancellation: safeJson(p.cancellation, null),
     lastDecline: p.status === 'pending' ? lastDecline(ctx, p.id) : null,
@@ -63,19 +62,12 @@ function payable(ctx: Ctx, id: string): PaymentRow {
 }
 
 export function registerCheckoutRoutes(app: FastifyInstance, ctx: Ctx) {
-  /** SHA-256 of game card numbers: the page rejects anything else before it leaves the browser. */
+  /** SHA-256 of Bobobank card numbers: the page rejects anything else before it leaves the browser. */
   app.get('/api/checkout/cards', async (req) => {
     const fresh = (req.query as { fresh?: string }).fresh === '1';
     const bank = await bankCards(ctx, fresh);
-    const game = (ctx.db.prepare('SELECT pan FROM game_cards').all() as { pan: string }[]).map((c) => sha256(c.pan));
-    // Bobobank cards are listed by hash too: numbers outside both lists never leave the browser.
-    return { hashes: [...game, ...bank.hashes], bankBins: bank.bins };
+    return { hashes: bank.hashes, bankBins: bank.bins };
   });
-
-  /** Card numbers and their scripted outcomes, listed in the API docs. */
-  app.get('/api/public/cards', async () => ({
-    items: (ctx.db.prepare('SELECT pan, outcome, label FROM game_cards ORDER BY created_at, pan').all() as { pan: string; outcome: keyof typeof OUTCOMES; label: string }[]).map((c) => ({ ...c, title: OUTCOMES[c.outcome]?.title ?? c.outcome })),
-  }));
 
   app.get<{ Params: { id: string } }>('/api/checkout/payments/:id', async (req) => {
     const p = payable(ctx, req.params.id);
@@ -94,15 +86,30 @@ export function registerCheckoutRoutes(app: FastifyInstance, ctx: Ctx) {
     const body = cardBody.parse(req.body);
     const p = payable(ctx, req.params.id);
     const pan = body.pan.replace(/\D/g, '');
-    const result = !findGameCard(ctx.db, pan) && (await isBankCard(ctx, pan)) ? await payWithBankCard(ctx, p, body) : payWithCard(ctx, p, body);
+    assertMethod(p, 'bank_card');
+    if (!(await isBankCard(ctx, pan))) throw new ApiError(400, 'card_not_supported', 'Карта не поддерживается');
+    setEmail(ctx, p, body.email);
+    const result = await payWithBankCard(ctx, p, body);
     return { result, payment: publicPayment(ctx, loadPayment(ctx, p.id)!) };
   });
 
-  const asyncBody = z.object({ type: z.enum(['sbp', 'installments', 'crypto']), asset: z.enum(['BTC', 'USDT']).optional(), phone: z.string().max(30).optional(), email: z.string().max(200).optional() });
-  app.post<{ Params: { id: string } }>('/api/checkout/payments/:id/async', async (req) => {
-    const body = asyncBody.parse(req.body);
+  /** Status checks before the bank is asked: the order is still payable and the shop accepts the method. */
+  const assertMethod = (p: PaymentRow, type: 'bank_card' | 'bobopay') => {
+    if (p.status !== 'pending') throw new ApiError(400, 'invalid_state', 'Платёж уже не ожидает оплаты');
+    if (p.pending_action?.includes('bank_confirm')) throw new ApiError(400, 'invalid_state', 'Платёж ждёт подтверждения в приложении банка');
+    const shop = getShop(ctx, p.shop_id)!;
+    if (shop.status !== 'active') throw new ApiError(403, 'forbidden', 'Магазин временно не принимает платежи');
+    if (!shopMethods(shop).includes(type)) throw new ApiError(400, 'invalid_request', 'Этот способ оплаты недоступен');
+  };
+
+  /** Bobo Pay by phone: a request pops up in the customer's Bobobank app. */
+  app.post<{ Params: { id: string } }>('/api/checkout/payments/:id/bobopay', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z.object({ phone: z.string().max(30), email: z.string().max(200).optional() }).parse(req.body);
     const p = payable(ctx, req.params.id);
-    const result = startAsync(ctx, p, body);
+    assertMethod(p, 'bobopay');
+    if (body.phone.replace(/\D/g, '').length !== 11) throw new ApiError(400, 'invalid_request', 'Введите номер телефона полностью', 'phone');
+    setEmail(ctx, p, body.email);
+    const result = await requestBobopay(ctx, p, body.phone);
     return { result, payment: publicPayment(ctx, loadPayment(ctx, p.id)!) };
   });
 
@@ -184,11 +191,11 @@ export function registerCheckoutRoutes(app: FastifyInstance, ctx: Ctx) {
   const quittance = (p: PaymentRow) => {
     if (p.status !== 'succeeded') throw new ApiError(400, 'invalid_state', 'Квитанция доступна только для успешного платежа');
     const s = getShop(ctx, p.shop_id)!;
-    const m = safeJson<{ type: string; title?: string; card?: { card_type: string; last4: string }; authorization?: { rrn: string; auth_code: string }; sbp_operation_id?: string; crypto?: { tx_hash: string } }>(p.method, { type: '' });
+    const m = safeJson<{ type: string; title?: string; card?: { card_type: string; last4: string }; authorization?: { rrn: string; auth_code: string }; sbp_operation_id?: string }>(p.method, { type: '' });
     return {
       shopName: s.name, legalName: s.legal_name, inn: s.inn, amount: p.amount, fee: p.fee, currency: p.currency, description: p.description, status: p.status,
       method: m.card ? `${m.card.card_type} •• ${m.card.last4}` : m.title ?? METHOD_TITLE[m.type as 'sbp'] ?? m.type,
-      paymentId: p.id, operationId: m.sbp_operation_id ?? m.crypto?.tx_hash ?? `${p.shop_id}${String(p.captured_at)}`, rrn: m.authorization?.rrn ?? '', authCode: m.authorization?.auth_code ?? '', ts: p.captured_at ?? p.created_at, refunded: p.refunded,
+      paymentId: p.id, operationId: m.sbp_operation_id ?? `${p.shop_id}${String(p.captured_at)}`, rrn: m.authorization?.rrn ?? '', authCode: m.authorization?.auth_code ?? '', ts: p.captured_at ?? p.created_at, refunded: p.refunded,
     };
   };
 

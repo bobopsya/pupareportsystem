@@ -19,7 +19,7 @@ export function AccountPicker({ label, accounts, value, onChange, showAvailable 
           <span className="block text-xs text-muted">{label}</span>
           <span className="block truncate font-semibold">{cur ? `${cur.name} •• ${cur.number.slice(-4)}` : 'Выберите счёт'}</span>
         </span>
-        {cur && showAvailable && <span className="shrink-0 text-sm font-bold num">{money(cur.available, cur.currency)}</span>}
+        {cur && showAvailable && <span className="shrink-0 text-sm font-semibold num">{money(cur.available, cur.currency)}</span>}
         <ChevronDown className="size-4 shrink-0 text-muted" />
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title={label} size="sm">
@@ -31,7 +31,7 @@ export function AccountPicker({ label, accounts, value, onChange, showAvailable 
                 <span className="block truncate font-semibold">{a.name}</span>
                 <span className="block text-xs text-muted">•• {a.number.slice(-4)} · {a.currency}</span>
               </span>
-              <span className="text-sm font-bold num">{money(a.available, a.currency)}</span>
+              <span className="text-sm font-semibold num">{money(a.available, a.currency)}</span>
             </button>
           ))}
         </div>

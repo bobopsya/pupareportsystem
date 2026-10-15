@@ -252,7 +252,7 @@ export function apply(ctx: Ctx, userId: string, product: 'loan' | 'credit_card',
   const id = newId('app', 16);
   ctx.db
     .prepare('INSERT INTO applications(id, user_id, product, amount, term, status, factors, decide_at, created_at) VALUES(?,?,?,?,?,?,?,?,?)')
-    .run(id, userId, product, amount, product === 'loan' ? term : 0, 'processing', JSON.stringify({ network: extra.network ?? 'mir', design: extra.design ?? 'night' }), ctx.now() + SCORING_DELAY_MS, ctx.now());
+    .run(id, userId, product, amount, product === 'loan' ? term : 0, 'processing', JSON.stringify({ network: extra.network ?? 'mir', design: extra.design ?? 'black' }), ctx.now() + SCORING_DELAY_MS, ctx.now());
   return getApplication(ctx, id)!;
 }
 
@@ -321,7 +321,7 @@ export function acceptOffer(ctx: Ctx, userId: string, a: ApplicationRow) {
       creditLimit: a.offer_amount,
       params: { rate: a.offer_rate, graceDays: getProducts(ctx.db).creditCardGraceDays, debtSince: null, lastAccrual: ctx.now(), statementAt: ctx.now(), minDue: 0, minDueAt: null, overdue: false },
     });
-    resultId = issueCard(ctx, { userId, account: acc, network: extra.network ?? 'mir', kind: 'credit', form: 'virtual', tariff: user.tariff === 'prime' ? 'prime' : 'standard', design: extra.design ?? 'night', holder: user.name }).id;
+    resultId = issueCard(ctx, { userId, account: acc, network: extra.network ?? 'mir', kind: 'credit', form: 'virtual', tariff: user.tariff === 'prime' ? 'prime' : 'standard', design: extra.design ?? 'black', holder: user.name }).id;
   }
   ctx.db.prepare(`UPDATE applications SET status = 'issued', result_id = ? WHERE id = ?`).run(resultId, a.id);
   return resultId;

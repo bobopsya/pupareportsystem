@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { AccountPicker } from '../components/AccountPicker';
 import { BankCard } from '../components/BankCard';
 import { Logo, LogoMark } from '../components/Logo';
 import { Button, cx, useToast } from '../components/ui';
@@ -11,10 +12,20 @@ import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { money } from '../lib/format';
 import { useRefresh } from '../lib/hooks';
-import type { Confirmation } from '../lib/types';
+import type { Account, Confirmation } from '../lib/types';
+
+interface PayRequest {
+  id: string;
+  amount: number;
+  currency: string;
+  merchant: { name: string; site?: string };
+  description: string;
+  expiresAt: number;
+}
 
 interface Pulse {
   confirmations: Confirmation[];
+  requests: PayRequest[];
   unread: number;
   chatUnread: number;
 }
@@ -40,7 +51,7 @@ const TABS = [
 
 function Dot({ n }: { n: number }) {
   if (!n) return null;
-  return <span className="absolute -top-1 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-bad px-1 text-[11px] font-bold leading-[18px] text-white text-center num">{n > 9 ? '9+' : n}</span>;
+  return <span className="absolute -top-1 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-bad px-1 text-[11px] font-semibold leading-[18px] text-white text-center num">{n > 9 ? '9+' : n}</span>;
 }
 
 export default function Shell() {
@@ -65,10 +76,10 @@ export default function Shell() {
       <aside className="hidden lg:flex sticky top-0 h-dvh flex-col gap-1 border-r border-line bg-surface px-4 py-6">
         <NavLink to="/app" className="mb-6 px-2"><Logo /></NavLink>
         {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => cx('relative flex h-11 items-center gap-3 rounded-2xl px-3 text-[15px] font-semibold transition-colors', isActive ? 'bg-brand-soft text-brand-strong dark:text-brand' : 'text-muted hover:bg-sunken hover:text-fg')}>
+          <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => cx('relative flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors', isActive ? 'bg-brand-soft text-brand-strong dark:text-brand' : 'text-fg/80 hover:bg-sunken hover:text-fg')}>
             <n.icon className="size-5" />
             {n.label}
-            {n.to === '/app/chat' && !!pulse?.chatUnread && <span className="ml-auto min-w-5 rounded-full bg-bad px-1.5 text-center text-xs font-bold text-white">{pulse.chatUnread}</span>}
+            {n.to === '/app/chat' && !!pulse?.chatUnread && <span className="ml-auto min-w-5 rounded-full bg-bad px-1.5 text-center text-xs font-semibold text-white">{pulse.chatUnread}</span>}
           </NavLink>
         ))}
         {staff && (
@@ -78,7 +89,7 @@ export default function Shell() {
         )}
         <div className="mt-auto flex items-center gap-2 rounded-2xl bg-sunken p-2">
           <button type="button" onClick={() => nav('/app/profile')} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1 text-left hover:bg-hover">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand font-bold">{user?.name[0]}</span>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand font-semibold">{user?.name[0]}</span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold">{user?.name}</span>
               <span className="block text-xs text-muted">Профиль</span>
@@ -92,10 +103,10 @@ export default function Shell() {
 
       <div className="min-w-0">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 bg-bg/85 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-xl sm:px-6 lg:px-10">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 bg-bg px-4 pt-[env(safe-area-inset-top)] sm:px-6 lg:px-10">
           <button type="button" onClick={() => nav('/app/profile')} className="flex min-w-0 items-center gap-2.5 lg:hidden">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand text-lg font-bold">{user?.name[0]}</span>
-            <span className="truncate text-[15px] font-bold">{user?.name.split(' ')[0]}</span>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand text-on-brand text-lg font-semibold">{user?.name[0]}</span>
+            <span className="truncate text-[15px] font-semibold">{user?.name.split(' ')[0]}</span>
           </button>
           <span className="hidden lg:block text-sm text-muted">{greeting()}, {user?.name.split(' ')[0]}</span>
           <div className="flex items-center gap-1">
@@ -116,12 +127,12 @@ export default function Shell() {
       </div>
 
       {/* Mobile tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
         <div className="mx-auto grid max-w-lg grid-cols-5">
           {TABS.map((t) => (
-            <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => cx('flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-semibold', isActive ? 'text-brand' : 'text-faint')}>
+            <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => cx('flex h-[58px] flex-col items-center justify-center gap-1 text-[11px] font-medium', isActive ? 'text-brand' : 'text-muted')}>
               <span className="relative">
-                <t.icon className="size-6" strokeWidth={2} />
+                <t.icon className="size-6" strokeWidth={1.8} />
                 {t.to === '/app/chat' && <Dot n={pulse?.chatUnread ?? 0} />}
               </span>
               {t.label}
@@ -131,6 +142,7 @@ export default function Shell() {
       </nav>
 
       {confirm && <ConfirmPurchase key={confirm.id} c={confirm} />}
+      {!confirm && pulse?.requests?.[0] && <ConfirmRequest key={pulse.requests[0].id} r={pulse.requests[0]} />}
     </div>
   );
 }
@@ -167,7 +179,7 @@ function ConfirmPurchase({ c }: { c: Confirmation }) {
   const foreign = c.card && c.currency !== c.card.currency;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
-      <div role="dialog" aria-modal="true" aria-label="Подтверждение покупки" className="bb-sheet w-full max-w-md rounded-t-[28px] bg-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-pop sm:rounded-[28px]">
+      <div role="dialog" aria-modal="true" aria-label="Подтверждение покупки" className="bb-sheet w-full max-w-md rounded-t-[28px] bg-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-pop sm:rounded-2xl">
         <div className="flex items-center gap-3">
           <span className="relative flex size-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
             <span className="absolute inset-0 rounded-2xl bg-brand/30 bb-ring" />
@@ -175,10 +187,10 @@ function ConfirmPurchase({ c }: { c: Confirmation }) {
           </span>
           <div className="min-w-0">
             <div className="text-[13px] text-muted">Подтвердите покупку</div>
-            <div className="truncate text-lg font-bold">{c.merchant.name}</div>
+            <div className="truncate text-lg font-semibold">{c.merchant.name}</div>
           </div>
         </div>
-        <div className="mt-5 text-[34px] font-extrabold leading-none num">{money(c.amount, c.currency, { exact: c.amount % 100 !== 0 })}</div>
+        <div className="mt-5 text-[34px] font-semibold leading-none num">{money(c.amount, c.currency, { exact: c.amount % 100 !== 0 })}</div>
         {foreign && <div className="mt-1 text-sm text-muted">Спишем {money(c.accountAmount, c.card!.currency, { exact: true })} по курсу банка</div>}
         {c.card && (
           <div className="mt-4 flex items-center gap-3 rounded-2xl bg-sunken p-3">
@@ -199,10 +211,55 @@ function ConfirmPurchase({ c }: { c: Confirmation }) {
   );
 }
 
+/** Bobo Pay request sent from a GPAY checkout to this phone: pick an account and confirm. */
+function ConfirmRequest({ r }: { r: PayRequest }) {
+  const { data: home } = useQuery({ queryKey: ['home'], queryFn: () => api<{ accounts: Account[] }>('/home') });
+  const accounts = (home?.accounts ?? []).filter((a) => a.currency === r.currency && ['current', 'savings', 'business', 'credit_card', 'kids'].includes(a.kind));
+  const [from, setFrom] = useState('');
+  const [busy, setBusy] = useState<'yes' | 'no' | null>(null);
+  const toast = useToast();
+  const qc = useQueryClient();
+  const refresh = useRefresh();
+  useEffect(() => {
+    if (!from && accounts.length) setFrom(accounts[0].id);
+  }, [accounts, from]);
+  const answer = async (approve: boolean) => {
+    setBusy(approve ? 'yes' : 'no');
+    try {
+      await api(`/requests/${r.id}`, { body: { approve, accountId: approve ? from : undefined } });
+      toast(approve ? 'Оплачено через Bobo Pay' : 'Оплата отклонена', approve ? 'ok' : 'bad');
+    } catch (e) {
+      toast(errorText(e), 'bad');
+    } finally {
+      setBusy(null);
+      await qc.invalidateQueries({ queryKey: ['pulse'] });
+      refresh();
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
+      <div role="dialog" aria-modal="true" aria-label="Оплата Bobo Pay" className="bb-sheet w-full max-w-md rounded-t-[20px] bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-pop sm:rounded-2xl">
+        <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-line-strong sm:hidden" />
+        <div className="text-[13px] text-muted">Оплата через Bobo Pay</div>
+        <div className="text-lg font-semibold">{r.merchant.name}</div>
+        <div className="mt-3 text-[32px] font-semibold leading-none num">{money(r.amount, r.currency, { exact: r.amount % 100 !== 0 })}</div>
+        {r.description && <div className="mt-1 text-sm text-muted">{r.description}</div>}
+        <div className="mt-4">
+          <AccountPicker label="Списать со счёта" accounts={accounts} value={from} onChange={setFrom} />
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <Button size="lg" loading={busy === 'no'} disabled={!!busy} onClick={() => void answer(false)}>Отклонить</Button>
+          <Button size="lg" variant="primary" loading={busy === 'yes'} disabled={!!busy || !from} onClick={() => void answer(true)}>Оплатить</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-3 mt-7 flex items-center justify-between gap-3">
-      <h2 className="text-lg font-extrabold">{children}</h2>
+    <div className="mb-2 mt-6 flex items-center justify-between gap-3 px-1">
+      <h2 className="text-[17px] font-semibold">{children}</h2>
       {action}
     </div>
   );

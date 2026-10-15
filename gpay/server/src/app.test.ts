@@ -20,16 +20,46 @@ let ctx: Ctx;
 let app: FastifyInstance;
 let sent: { url: string; init: RequestInit }[];
 let hookStatus = 200;
+let calls: { method: string; url: string; body: unknown; key?: string }[];
+let authStatus: string;
+let authReply: Record<string, unknown>;
+let requestStatus: string;
+const BANK_PAN = '2204551234567891';
+const BANK_PAN2 = '2204559876543217';
 
 beforeEach(async () => {
   now = Date.UTC(2026, 9, 13, 9, 0, 0);
-  const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://pay.test', WEBHOOK_ALLOW_PRIVATE: '1' });
+  resetBankCache();
+  const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://pay.test', WEBHOOK_ALLOW_PRIVATE: '1', BANK_INTERNAL_URL: 'http://bank.internal', BANK_PUBLIC_URL: 'https://bank.test', BANK_GPAY_SECRET: 'shared' });
   ctx = createCtx(openDb(null), cfg, () => now);
   sent = [];
   hookStatus = 200;
   ctx.http = async (url, init) => {
     sent.push({ url, init });
     return new Response('ok', { status: hookStatus });
+  };
+  calls = [];
+  authStatus = 'pending';
+  authReply = { status: 'captured', authorization_id: 'auth_1' };
+  requestStatus = 'pending';
+  // A stand-in for Bobobank's internal API.
+  ctx.bankHttp = async (url, init) => {
+    const path = url.replace('http://bank.internal', '');
+    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ method: String(init.method), url: path, body, key: (init.headers as Record<string, string>)['idempotence-key'] });
+    if (path === '/internal/v1/cards') return Response.json({ hashes: [sha256(BANK_PAN), sha256(BANK_PAN2)], bins: ['220455'] });
+    if (path === '/internal/v1/authorize') {
+      if (body.pan === BANK_PAN2) return Response.json({ status: 'pending', authorization_id: 'auth_1', expires_at: now + 300_000 });
+      return Response.json(authReply);
+    }
+    if (path === '/internal/v1/authorizations/auth_1') return Response.json({ id: 'auth_1', status: authStatus, reason: authStatus === 'declined' ? 'declined_by_customer' : null });
+    if (path === '/internal/v1/requests') {
+      if (body.phone !== '79991234567') return Response.json({ error: 'Клиент с таким номером не найден' }, { status: 404 });
+      return Response.json({ id: 'req_1', status: 'pending', expires_at: now + 300_000 });
+    }
+    if (path === '/internal/v1/requests/req_1') return Response.json({ id: 'req_1', status: requestStatus });
+    if (path === '/internal/v1/links/claim') return Response.json({ account: { number: '40802810000001234567', name: 'ИП Петров', holder: 'ИП Петров', currency: 'RUB' } });
+    return Response.json({ status: 'succeeded' });
   };
   app = await buildApp(ctx);
 });
@@ -60,8 +90,8 @@ const pay = (id: string, body: object, path = 'card') => app.inject({ method: 'P
 
 describe('domain helpers', () => {
   it('validates card numbers and brands', () => {
-    expect(luhn('4111111111111111')).toBe(true);
-    expect(luhn('4111111111111112')).toBe(false);
+    expect(luhn(BANK_PAN)).toBe(true);
+    expect(luhn('2204551234567892')).toBe(false);
     expect(brandOf('2200000000000004')).toBe('mir');
     expect(brandOf('2221000000000009')).toBe('mastercard');
     expect(brandOf('6200000000000005')).toBe('unionpay');
@@ -113,15 +143,22 @@ describe('API v1', () => {
   });
 });
 
+const bankPost = (path: string, payload: object) => {
+  const raw = JSON.stringify(payload);
+  return app.inject({ method: 'POST', url: path, headers: { 'content-type': 'application/json', 'x-bank-signature': bankSign('shared', 'POST', path, raw, Math.floor(now / 1000)) }, payload: raw });
+};
+const paySbp = (id: string, method: 'sbp' | 'bobopay' = 'sbp') => bankPost(`/internal/bank/payments/${id}/${method}`, { operation_id: 'B123', payer: { name: 'Иван П.' } });
+
 describe('checkout', () => {
-  it('pays with a game card, registers a receipt and notifies the webhook', async () => {
+  it('pays with a Bobobank card, registers a receipt and notifies the webhook', async () => {
     const { secret, headers, shopId } = await merchant();
     await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/webhooks`, headers, payload: { url: 'https://hooks.example/gpay', events: ['payment.succeeded'] } });
     const p = (await newPayment(secret)).json();
-    const res = await pay(p.id, card('4111 1111 1111 1111'));
+    const res = await pay(p.id, card(BANK_PAN));
     expect(res.json().result.result).toBe('succeeded');
+    expect(calls.find((c) => c.url === '/internal/v1/authorize')!.body).toMatchObject({ pan: BANK_PAN, amount: 150000, currency: 'RUB', capture: true, merchant: { name: 'Кофейня', mcc: 5999 } });
     const got = (await api(secret, 'GET', `/payments/${p.id}`)).json();
-    expect(got).toMatchObject({ status: 'succeeded', paid: true, payment_method: { type: 'bank_card', card: { last4: '1111', card_type: 'Visa' } } });
+    expect(got).toMatchObject({ status: 'succeeded', paid: true, test: false, payment_method: { type: 'bank_card', card: { last4: '7891', card_type: 'МИР', issuer_name: 'Bobobank' } } });
     expect(got.income_amount.value).toBe('1458.00'); // 2.8 % fee
     const receipts = (await api(secret, 'GET', `/receipts?payment_id=${p.id}`)).json().items;
     expect(receipts).toHaveLength(1);
@@ -137,55 +174,114 @@ describe('checkout', () => {
     expect(JSON.parse(body)).toMatchObject({ event: 'payment.succeeded', object: { id: p.id } });
   });
 
-  it('rejects cards outside the game list without charging', async () => {
+  it('rejects cards that are not Bobobank cards without contacting the bank', async () => {
     const { secret } = await merchant();
     const p = (await newPayment(secret)).json();
-    const res = await pay(p.id, card('4242424242424242'));
+    const res = await pay(p.id, card('4111111111111111'));
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('card_not_supported');
-    const hashes = (await app.inject({ url: '/api/checkout/cards' })).json().hashes;
-    expect(hashes).toContain(sha256('4111111111111111'));
+    expect(calls.some((c) => c.url === '/internal/v1/authorize')).toBe(false);
+    const cards = (await app.inject({ url: '/api/checkout/cards' })).json();
+    expect(cards.hashes).toEqual([sha256(BANK_PAN), sha256(BANK_PAN2)]);
+    expect(cards.bankBins).toEqual(['220455']);
+    expect((await app.inject({ url: '/api/public/cards' })).statusCode).toBe(404);
   });
 
-  it('declines by card number and cancels after too many attempts', async () => {
+  it('shows the bank decline and cancels after too many attempts', async () => {
     const { secret } = await merchant();
     const p = (await newPayment(secret)).json();
-    const r1 = (await pay(p.id, card('4000000000009995'))).json();
+    authReply = { status: 'declined', reason: 'insufficient_funds', message: 'Недостаточно средств' };
+    const r1 = (await pay(p.id, card(BANK_PAN))).json();
     expect(r1.result).toMatchObject({ result: 'declined', reason: 'insufficient_funds', canceled: false });
     expect(r1.payment.lastDecline.reason).toBe('insufficient_funds');
-    for (let i = 0; i < 4; i++) await pay(p.id, card('4000000000000002'));
+    for (let i = 0; i < 4; i++) await pay(p.id, card(BANK_PAN));
     const got = (await api(secret, 'GET', `/payments/${p.id}`)).json();
     expect(got.status).toBe('canceled');
     expect(got.cancellation_details).toEqual({ party: 'gpay', reason: 'too_many_attempts' });
   });
 
-  it('confirms 3-D Secure cards with the bank after a few seconds', async () => {
+  it('waits for confirmation in the bank app', async () => {
     const { secret } = await merchant();
     const p = (await newPayment(secret)).json();
-    const r = (await pay(p.id, card('4000000000003220'))).json();
+    const r = (await pay(p.id, card(BANK_PAN2))).json();
     expect(r.result.result).toBe('processing');
-    expect(r.result.until - now).toBeGreaterThanOrEqual(3000);
-    expect(r.result.until - now).toBeLessThanOrEqual(5000);
-    expect(r.payment.action).toEqual({ type: 'processing', until: r.result.until });
-    now += 2_000;
+    expect(r.payment.action).toMatchObject({ type: 'bank_confirm', bank: 'Bobobank' });
+    await tickBank(ctx);
     expect((await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment.status).toBe('pending');
-    now += 3_100;
-    expect((await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment.status).toBe('succeeded');
+    authStatus = 'captured';
+    await tickBank(ctx);
     const got = (await api(secret, 'GET', `/payments/${p.id}`)).json();
+    expect(got.status).toBe('succeeded');
     expect(got.authorization_details.three_d_secure.applied).toBe(true);
   });
 
-  it('completes SBP after the processing delay', async () => {
+  it('shows a decline when the owner rejects the purchase in the app', async () => {
     const { secret } = await merchant();
     const p = (await newPayment(secret)).json();
-    expect((await pay(p.id, { type: 'sbp' }, 'async')).json().result.result).toBe('processing');
-    now += 5_000;
-    expect((await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment.status).toBe('pending');
-    now += 10_000;
-    expect((await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment.status).toBe('succeeded');
+    await pay(p.id, card(BANK_PAN2));
+    authStatus = 'declined';
+    await tickBank(ctx);
+    const pub = (await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment;
+    expect(pub).toMatchObject({ status: 'pending', action: null, lastDecline: { message: 'Покупка отклонена в приложении банка.' } });
+  });
+
+  it('accepts SBP payments made in the bank app over the signed internal API', async () => {
+    const { secret } = await merchant();
+    const p = (await newPayment(secret, { capture: false })).json();
+    const pub = (await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment;
+    expect(pub.bobopayUrl).toBe(`https://bank.test/sbp/pay?payment=${p.id}&method=bobopay`);
+    const path = `/internal/bank/payments/${p.id}/sbp`;
+    const unsigned = await app.inject({ method: 'POST', url: path, headers: { 'content-type': 'application/json' }, payload: '{}' });
+    expect(unsigned.statusCode).toBe(401);
+    const info = await app.inject({ url: `/internal/bank/payments/${p.id}`, headers: { 'x-bank-signature': bankSign('shared', 'GET', `/internal/bank/payments/${p.id}`, '', Math.floor(now / 1000)) } });
+    expect(info.json()).toMatchObject({ amount: 150000, sbp: true, bobopay: true, merchant: { name: 'Кофейня' } });
+    expect((await paySbp(p.id)).json().status).toBe('succeeded');
+    const paid = (await api(secret, 'GET', `/payments/${p.id}`)).json();
+    expect(paid).toMatchObject({ status: 'succeeded', test: false, payment_method: { type: 'sbp', title: 'СБП · Bobobank' } });
+    expect(paid.income_amount.value).toBe('1489.50'); // 0.7 %
+    expect((await paySbp(p.id)).statusCode).toBe(400);
+  });
+
+  it('accepts the Bobo Pay button and refunds through the bank', async () => {
+    const { secret } = await merchant();
+    const p = (await newPayment(secret)).json();
+    expect((await paySbp(p.id, 'bobopay')).json().status).toBe('succeeded');
+    const paid = (await api(secret, 'GET', `/payments/${p.id}`)).json();
+    expect(paid).toMatchObject({ status: 'succeeded', payment_method: { type: 'bobopay', title: 'Bobo Pay' } });
+    expect(paid.income_amount.value).toBe('1477.50'); // 1.5 %
+    const rf = await api(secret, 'POST', '/refunds', { payment_id: p.id, amount: { value: '100.00', currency: 'RUB' } }, 'rf-bp');
+    expect(rf.statusCode).toBe(200);
+    expect(calls.find((c) => c.url === `/internal/v1/sbp/${p.id}/refund`)!.body).toMatchObject({ amount: 10000 });
+  });
+
+  it('sends a Bobo Pay request by phone and completes when the customer approves it', async () => {
+    const { secret } = await merchant();
+    const p = (await newPayment(secret)).json();
+    const bad = await pay(p.id, { phone: '+7 900 000-00-00', email: 'buyer@example.com' }, 'bobopay');
+    expect(bad.statusCode).toBe(400);
+    expect(JSON.stringify(bad.json())).toContain('не найден');
+    const r = (await pay(p.id, { phone: '+7 999 123-45-67', email: 'buyer@example.com' }, 'bobopay')).json();
+    expect(r.result.result).toBe('processing');
+    expect(r.payment).toMatchObject({ methodType: 'bobopay', action: { type: 'bank_confirm' } });
+    expect(calls.findLast((c) => c.url === '/internal/v1/requests')!.body).toMatchObject({ phone: '79991234567', payment_id: p.id, amount: 150000, merchant: { name: 'Кофейня' } });
+    await tickBank(ctx);
+    expect((await api(secret, 'GET', `/payments/${p.id}`)).json().status).toBe('pending');
+    requestStatus = 'paid';
+    await tickBank(ctx);
     const got = (await api(secret, 'GET', `/payments/${p.id}`)).json();
-    expect(got.payment_method.type).toBe('sbp');
-    expect(got.income_amount.value).toBe('1489.50'); // 0.7 %
+    expect(got).toMatchObject({ status: 'succeeded', test: false, payment_method: { type: 'bobopay' } });
+    await api(secret, 'POST', '/refunds', { payment_id: p.id, amount: { value: '10.00', currency: 'RUB' } }, 'rf-req');
+    expect(calls.some((c) => c.url === `/internal/v1/sbp/${p.id}/refund`)).toBe(true);
+  });
+
+  it('lets the customer try again after declining a phone request', async () => {
+    const { secret } = await merchant();
+    const p = (await newPayment(secret)).json();
+    await pay(p.id, { phone: '79991234567', email: 'buyer@example.com' }, 'bobopay');
+    requestStatus = 'declined';
+    await tickBank(ctx);
+    const pub = (await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment;
+    expect(pub).toMatchObject({ status: 'pending', action: null, lastDecline: { message: 'Покупка отклонена в приложении банка.' } });
   });
 
   it('expires unpaid payments', async () => {
@@ -198,13 +294,17 @@ describe('checkout', () => {
 
   it('two-stage: partial capture then partial refund with a return receipt and PDF', async () => {
     const { secret } = await merchant();
+    authReply = { status: 'approved', authorization_id: 'auth_1' };
     const p = (await newPayment(secret, { capture: false })).json();
-    await pay(p.id, card('2200000000000004'));
+    await pay(p.id, card(BANK_PAN));
+    expect(calls.find((c) => c.url === '/internal/v1/authorize')!.body).toMatchObject({ capture: false });
     expect((await api(secret, 'GET', `/payments/${p.id}`)).json().status).toBe('waiting_for_capture');
     const cap = await api(secret, 'POST', `/payments/${p.id}/capture`, { amount: { value: '1000.00', currency: 'RUB' } }, 'cap1');
     expect(cap.json()).toMatchObject({ status: 'succeeded', amount: { value: '1000.00' } });
+    expect(calls.find((c) => c.url === '/internal/v1/authorizations/auth_1/capture')!.body).toMatchObject({ amount: 100000 });
     const rf = await api(secret, 'POST', '/refunds', { payment_id: p.id, amount: { value: '400.00', currency: 'RUB' } }, 'rf1');
     expect(rf.json()).toMatchObject({ status: 'succeeded', amount: { value: '400.00' } });
+    expect(calls.find((c) => c.url === '/internal/v1/authorizations/auth_1/refund')!.body).toMatchObject({ amount: 40000 });
     const tooMuch = await api(secret, 'POST', '/refunds', { payment_id: p.id, amount: { value: '700.00', currency: 'RUB' } }, 'rf2');
     expect(tooMuch.statusCode).toBe(400);
     const receipts = (await api(secret, 'GET', `/receipts?payment_id=${p.id}`)).json().items;
@@ -224,13 +324,21 @@ describe('checkout', () => {
     const start = (await app.inject({ method: 'POST', url: `/api/checkout/links/${slug}/pay`, headers: H, payload: {} })).json();
     const again = (await app.inject({ method: 'POST', url: `/api/checkout/links/${slug}/pay`, headers: H, payload: {} })).json();
     expect(again.paymentId).toBe(start.paymentId);
-    expect((await pay(start.paymentId, card('5555555555554444'))).json().result.result).toBe('succeeded');
+    expect((await pay(start.paymentId, card(BANK_PAN))).json().result.result).toBe('succeeded');
     const info = (await app.inject({ url: `/api/checkout/links/${slug}` })).json();
     expect(info.link.state).toBe('paid');
     const pmt = (await app.inject({ url: `/api/checkout/payments/${start.paymentId}` })).json().payment;
     expect(pmt.amount).toBe(90000);
     const rc = (await app.inject({ url: `/api/checkout/receipts/${pmt.receipts[0].id}` })).json().receipt;
     expect(rc.items[0]).toMatchObject({ name: 'Торт', quantity: 2, sum: 90000, vat: 'НДС 10%' });
+  });
+
+  it('refuses new payments when the bank is not connected', async () => {
+    const { secret } = await merchant();
+    ctx.cfg.bankSecret = '';
+    const res = await newPayment(secret);
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('bank_unavailable');
   });
 });
 
@@ -244,29 +352,37 @@ describe('cabinet', () => {
     expect((await app.inject({ method: 'POST', url: '/api/m/shops', headers: { cookie }, payload: {} })).statusCode).toBe(403); // no CSRF header
   });
 
-  it('reports analytics and pays out the balance', async () => {
+  it('reports analytics and pays out to the linked Bobobank account only', async () => {
     const { secret, headers, shopId } = await merchant();
     const p = (await newPayment(secret)).json();
-    await pay(p.id, card('4111111111111111'));
+    await pay(p.id, card(BANK_PAN));
     const an = (await app.inject({ url: `/api/m/shops/${shopId}/analytics?days=7`, headers })).json();
     expect(an.kpi).toMatchObject({ turnover: 150000, count: 1, conversion: 1 });
-    expect(an.balances.find((b: { currency: string }) => b.currency === 'RUB').available).toBe(145800);
-    const po = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '1000.00', currency: 'RUB', cardLast4: '1234' } });
-    expect(po.json().payout.status).toBe('pending');
-    const over = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '1000.00', currency: 'RUB', cardLast4: '1234' } });
+    const bal = (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json().balances.find((b: { currency: string }) => b.currency === 'RUB');
+    expect(bal).toMatchObject({ available: 145800, live: 145800, test: 0 });
+    const toCard = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '100.00', currency: 'RUB', destination: 'card', cardLast4: '1234' } });
+    expect(toCard.statusCode).toBe(400);
+    const v1Card = await api(secret, 'POST', '/payouts', { amount: { value: '100.00', currency: 'RUB' }, payout_destination: { type: 'bank_card', card_last4: '1234' } }, 'po-card');
+    expect(v1Card.statusCode).toBe(400);
+    const noAcc = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '100.00', currency: 'RUB', destination: 'bobobank' } });
+    expect(noAcc.statusCode).toBe(400);
+    const link = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/bank-link`, headers, payload: { code: '1234-5678' } });
+    expect(link.json().payoutAccount.number).toBe('40802810000001234567');
+    const po = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '1000.00', currency: 'RUB', destination: 'bobobank' } });
+    expect(po.json().payout.status).toBe('succeeded');
+    expect(calls.find((c) => c.url === '/internal/v1/credits')!.body).toMatchObject({ amount: 100000, destination: { type: 'account', number: '40802810000001234567' } });
+    const over = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '1000.00', currency: 'RUB', destination: 'bobobank' } });
     expect(over.statusCode).toBe(400);
-    now += 10_000;
-    tick(ctx);
-    const list = (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json();
-    expect(list.items[0].status).toBe('succeeded');
     const logs = (await app.inject({ url: `/api/m/shops/${shopId}/logs`, headers })).json().items;
     expect(logs.length).toBeGreaterThan(0);
   });
+
   it('refuses a refund the shop balance cannot cover', async () => {
     const { secret, headers, shopId } = await merchant();
     const p = (await newPayment(secret)).json();
-    await pay(p.id, card('4111111111111111'));
-    await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '1000.00', currency: 'RUB', cardLast4: '1234' } });
+    await pay(p.id, card(BANK_PAN));
+    await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/bank-link`, headers, payload: { code: '1234-5678' } });
+    await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '1000.00', currency: 'RUB', destination: 'bobobank' } });
     const rub = async () => (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json().balances.find((b: { currency: string }) => b.currency === 'RUB').available;
     expect(await rub()).toBe(45800);
     const full = await api(secret, 'POST', '/refunds', { payment_id: p.id }, 'rf-full');
@@ -282,7 +398,7 @@ describe('cabinet', () => {
 });
 
 describe('llms.txt', () => {
-  it('serves the AI-agent guide with real addresses, cards and fees', async () => {
+  it('serves the AI-agent guide with real addresses and fees', async () => {
     const index = await app.inject({ url: '/llms.txt' });
     expect(index.statusCode).toBe(200);
     expect(index.headers['content-type']).toContain('text/plain');
@@ -292,97 +408,9 @@ describe('llms.txt', () => {
     expect(full.body).not.toContain('{{');
     expect(full.body).toContain('https://pay.test/api/v1/payments');
     expect(full.body).toContain('Host: pay.test');
-    expect(full.body).toContain('`4111 1111 1111 1111`');
     expect(full.body).toContain('`payment.succeeded`');
     expect(full.body).toContain('(`sbp`) | 0,7%');
-  });
-});
-
-describe('Bobobank integration', () => {
-  const BANK_PAN = '2204551234567891';
-  let calls: { method: string; url: string; body: unknown; key?: string }[];
-  let authStatus: string;
-
-  beforeEach(async () => {
-    resetBankCache();
-    const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://pay.test', WEBHOOK_ALLOW_PRIVATE: '1', BANK_INTERNAL_URL: 'http://bank.internal', BANK_PUBLIC_URL: 'https://bank.test', BANK_GPAY_SECRET: 'shared' });
-    ctx = createCtx(openDb(null), cfg, () => now);
-    ctx.http = async () => new Response('ok');
-    calls = [];
-    authStatus = 'pending';
-    ctx.bankHttp = async (url, init) => {
-      const path = url.replace('http://bank.internal', '');
-      const body = init.body ? JSON.parse(String(init.body)) : undefined;
-      calls.push({ method: String(init.method), url: path, body, key: (init.headers as Record<string, string>)['idempotence-key'] });
-      if (path === '/internal/v1/cards') return Response.json({ hashes: [sha256(BANK_PAN)], bins: ['220455'] });
-      if (path === '/internal/v1/authorize') return Response.json({ status: 'pending', authorization_id: 'auth_1', expires_at: now + 300_000 });
-      if (path === '/internal/v1/authorizations/auth_1') return Response.json({ id: 'auth_1', status: authStatus, reason: authStatus === 'declined' ? 'declined_by_customer' : null });
-      if (path === '/internal/v1/links/claim') return Response.json({ account: { number: '40802810000001234567', name: 'ИП Петров', holder: 'ИП Петров', currency: 'RUB' } });
-      return Response.json({ status: 'succeeded' });
-    };
-    app = await buildApp(ctx);
-  });
-
-  it('pays with a Bobobank card after confirmation in the bank app, refunds and pays out bank money', async () => {
-    const { secret, headers, shopId } = await merchant();
-    const cards = (await app.inject({ url: '/api/checkout/cards' })).json();
-    expect(cards.hashes).toContain(sha256(BANK_PAN));
-    expect(cards.bankBins).toEqual(['220455']);
-
-    const p = (await newPayment(secret)).json();
-    const r = (await pay(p.id, card(BANK_PAN))).json();
-    expect(r.result.result).toBe('processing');
-    expect(r.payment.action).toMatchObject({ type: 'bank_confirm', bank: 'Bobobank' });
-    expect(calls.find((c) => c.url === '/internal/v1/authorize')!.body).toMatchObject({ pan: BANK_PAN, amount: 150000, currency: 'RUB', capture: true, merchant: { name: 'Кофейня', mcc: 5999 } });
-
-    authStatus = 'captured';
-    await tickBank(ctx);
-    const paid = (await api(secret, 'GET', `/payments/${p.id}`)).json();
-    expect(paid).toMatchObject({ status: 'succeeded', test: false, payment_method: { card: { issuer_name: 'Bobobank' } } });
-
-    let bal = (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json().balances.find((b: { currency: string }) => b.currency === 'RUB');
-    expect(bal).toMatchObject({ live: 145800, test: 0 });
-    // Bank money cannot leave to a fictional card, only to the linked Bobobank account.
-    const toCard = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '100.00', currency: 'RUB', destination: 'card', cardLast4: '1234' } });
-    expect(toCard.statusCode).toBe(400);
-    const noAcc = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '100.00', currency: 'RUB', destination: 'bobobank' } });
-    expect(noAcc.statusCode).toBe(400);
-    const link = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/bank-link`, headers, payload: { code: '1234-5678' } });
-    expect(link.json().payoutAccount.number).toBe('40802810000001234567');
-
-    const rf = await api(secret, 'POST', '/refunds', { payment_id: p.id, amount: { value: '500.00', currency: 'RUB' } }, 'rf-bank');
-    expect(rf.statusCode).toBe(200);
-    expect(calls.find((c) => c.url === '/internal/v1/authorizations/auth_1/refund')!.body).toMatchObject({ amount: 50000 });
-
-    const po = await app.inject({ method: 'POST', url: `/api/m/shops/${shopId}/payouts`, headers, payload: { amount: '958.00', currency: 'RUB', destination: 'bobobank' } });
-    expect(po.json().payout.status).toBe('succeeded');
-    expect(calls.find((c) => c.url === '/internal/v1/credits')!.body).toMatchObject({ amount: 95800, destination: { type: 'account', number: '40802810000001234567' } });
-    bal = (await app.inject({ url: `/api/m/shops/${shopId}/payouts`, headers })).json().balances.find((b: { currency: string }) => b.currency === 'RUB');
-    expect(bal.live).toBe(0);
-  });
-
-  it('shows a decline when the owner rejects the purchase in the app', async () => {
-    const { secret } = await merchant();
-    const p = (await newPayment(secret)).json();
-    await pay(p.id, card(BANK_PAN));
-    authStatus = 'declined';
-    await tickBank(ctx);
-    const pub = (await app.inject({ url: `/api/checkout/payments/${p.id}` })).json().payment;
-    expect(pub).toMatchObject({ status: 'pending', action: null, lastDecline: { message: 'Покупка отклонена в приложении банка.' } });
-  });
-
-  it('accepts SBP payments made in the bank app over the signed internal API', async () => {
-    const { secret } = await merchant();
-    const p = (await newPayment(secret, { capture: false })).json();
-    const path = `/internal/bank/payments/${p.id}/sbp`;
-    const raw = JSON.stringify({ operation_id: 'B123', payer: { name: 'Иван П.' } });
-    const unsigned = await app.inject({ method: 'POST', url: path, headers: { 'content-type': 'application/json' }, payload: raw });
-    expect(unsigned.statusCode).toBe(401);
-    const info = await app.inject({ url: `/internal/bank/payments/${p.id}`, headers: { 'x-bank-signature': bankSign('shared', 'GET', `/internal/bank/payments/${p.id}`, '', Math.floor(now / 1000)) } });
-    expect(info.json()).toMatchObject({ amount: 150000, sbp: true, merchant: { name: 'Кофейня' } });
-    const ok = await app.inject({ method: 'POST', url: path, headers: { 'content-type': 'application/json', 'x-bank-signature': bankSign('shared', 'POST', path, raw, Math.floor(now / 1000)) }, payload: raw });
-    expect(ok.json().status).toBe('succeeded');
-    const paid = (await api(secret, 'GET', `/payments/${p.id}`)).json();
-    expect(paid).toMatchObject({ status: 'succeeded', test: false, payment_method: { type: 'sbp', title: 'СБП · Bobobank' } });
+    expect(full.body).toContain('(`bobopay`) | 1,5%');
+    expect(full.body).not.toContain('4111');
   });
 });

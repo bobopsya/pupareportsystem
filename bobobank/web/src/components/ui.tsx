@@ -18,7 +18,7 @@ const VARIANT: Record<Variant, string> = {
   danger: 'bg-bad-soft text-bad hover:brightness-95',
   dark: 'bg-ink text-on-ink hover:bg-ink-hover',
 };
-const SIZE = { sm: 'h-9 px-4 text-sm rounded-xl', md: 'h-12 px-5 text-[15px] rounded-2xl', lg: 'h-14 px-6 text-base rounded-2xl' };
+const SIZE = { sm: 'h-9 px-3.5 text-sm rounded-[10px]', md: 'h-12 px-5 text-[15px] rounded-xl', lg: 'h-[52px] px-6 text-base rounded-xl' };
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: keyof typeof SIZE; loading?: boolean; icon?: ReactNode };
 
@@ -47,7 +47,7 @@ export function IconButton({ label, className, children, ...rest }: ButtonHTMLAt
 
 // ---------- Form controls ----------
 const FieldId = createContext<string | undefined>(undefined);
-const control = 'w-full rounded-2xl border-[1.5px] border-transparent bg-sunken px-4 text-base text-fg placeholder:text-faint transition-colors hover:bg-hover focus:outline-none focus:bg-surface focus:border-brand disabled:opacity-60 aria-invalid:border-bad aria-invalid:bg-bad-soft';
+const control = 'w-full rounded-xl border-[1.5px] border-transparent bg-sunken px-4 text-base text-fg placeholder:text-faint transition-colors hover:bg-hover focus:outline-none focus:bg-surface focus:border-brand disabled:opacity-60 aria-invalid:border-bad aria-invalid:bg-bad-soft';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { mono?: boolean; invalid?: boolean }>(function Input({ className, mono, invalid, id, ...rest }, ref) {
   const fid = useContext(FieldId);
@@ -113,7 +113,7 @@ export function Checkbox({ checked, onChange, label }: { checked: boolean; onCha
 
 // ---------- Surfaces ----------
 export function Card({ className, children, pad = true, id }: { className?: string; children: ReactNode; pad?: boolean; id?: string }) {
-  return <div id={id} className={cx('scroll-mt-20 rounded-[28px] bg-surface shadow-card', pad && 'p-5 sm:p-6', className)}>{children}</div>;
+  return <div id={id} className={cx('scroll-mt-20 rounded-2xl bg-surface', pad && 'p-4 sm:p-5', className)}>{children}</div>;
 }
 
 export function CardHeader({ title, sub, actions, icon }: { title: ReactNode; sub?: ReactNode; actions?: ReactNode; icon?: ReactNode }) {
@@ -135,7 +135,7 @@ export function PageHeader({ title, sub, actions }: { title: ReactNode; sub?: Re
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
       <div className="min-w-0">
-        <h1 className="text-[26px] sm:text-[32px] leading-tight font-extrabold">{title}</h1>
+        <h1 className="text-2xl sm:text-[28px] leading-tight font-semibold">{title}</h1>
         {sub && <p className="text-[15px] text-muted mt-1.5">{sub}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 max-w-full min-w-0">{actions}</div>}
@@ -251,9 +251,10 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" className={cx('w-full max-h-[92dvh] flex flex-col rounded-t-[28px] sm:rounded-[28px] bg-surface shadow-pop bb-sheet', size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg')}>
-        <div className="flex items-center justify-between gap-3 px-5 sm:px-6 pt-5 sm:pt-6 pb-4">
-          <h2 className="text-xl font-bold">{title}</h2>
+      <div ref={ref} role="dialog" aria-modal="true" className={cx('w-full max-h-[92dvh] flex flex-col rounded-t-[20px] sm:rounded-2xl bg-surface shadow-pop bb-sheet', size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg')}>
+        <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong sm:hidden" aria-hidden="true" />
+        <div className="flex items-center justify-between gap-3 px-5 sm:px-6 pt-3 sm:pt-6 pb-4">
+          <h2 className="text-lg font-semibold">{title}</h2>
           <IconButton label="Закрыть" onClick={onClose}>
             <X className="size-4" />
           </IconButton>
@@ -284,7 +285,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {createPortal(
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] inset-x-4 z-[60] flex flex-col items-center gap-2 pointer-events-none" aria-live="polite">
           {items.map((t) => (
-            <div key={t.id} className="bb-fade flex items-center gap-2 rounded-2xl bg-ink text-on-ink px-4 py-3 text-sm font-medium shadow-pop">
+            <div key={t.id} className="bb-fade flex items-center gap-2 rounded-xl bg-ink text-on-ink px-4 py-3 text-sm font-medium shadow-pop">
               {t.tone === 'ok' ? <Check className="size-4 text-brand" /> : <X className="size-4 text-bad" />}
               {t.text}
             </div>
@@ -299,7 +300,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 // ---------- Segmented control ----------
 export function Segmented<T extends string>({ value, onChange, options, className }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode }[]; className?: string }) {
   return (
-    <div role="tablist" className={cx('inline-flex max-w-full overflow-x-auto [scrollbar-width:none] rounded-2xl bg-sunken p-1', className)}>
+    <div role="tablist" className={cx('inline-flex max-w-full overflow-x-auto [scrollbar-width:none] rounded-xl bg-sunken p-0.5', className)}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -307,7 +308,7 @@ export function Segmented<T extends string>({ value, onChange, options, classNam
           role="tab"
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cx('h-9 px-3 sm:px-4 rounded-xl text-sm font-semibold transition-colors whitespace-nowrap shrink-0', value === o.value ? 'bg-surface text-fg shadow-[0_1px_2px_rgb(0_0_0/0.06)]' : 'text-muted hover:text-fg')}
+          className={cx('h-9 px-3 sm:px-4 rounded-[10px] text-sm font-medium transition-colors whitespace-nowrap shrink-0', value === o.value ? 'bg-surface text-fg shadow-[0_1px_2px_rgb(0_0_0/0.06)]' : 'text-muted hover:text-fg')}
         >
           {o.label}
         </button>

@@ -59,10 +59,10 @@ export default function Exchange() {
       <div className="grid grid-cols-2 gap-3">
         {fx.board.map((r) => (
           <Card key={r.currency} className="!p-4">
-            <div className="flex items-center gap-2 font-bold">{r.currency === 'USD' ? <DollarSign className="size-5 text-brand" /> : <Euro className="size-5 text-brand" />}{r.currency}</div>
+            <div className="flex items-center gap-2 font-semibold">{r.currency === 'USD' ? <DollarSign className="size-5 text-brand" /> : <Euro className="size-5 text-brand" />}{r.currency}</div>
             <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
-              <span className="text-muted">Покупка</span><span className="text-right font-bold num">{r.buy.toFixed(2)}</span>
-              <span className="text-muted">Продажа</span><span className="text-right font-bold num">{r.sell.toFixed(2)}</span>
+              <span className="text-muted">Покупка</span><span className="text-right font-semibold num">{r.buy.toFixed(2)}</span>
+              <span className="text-muted">Продажа</span><span className="text-right font-semibold num">{r.sell.toFixed(2)}</span>
               <span className="text-muted">ЦБ</span><span className="text-right num">{r.cb.toFixed(2)}</span>
             </div>
           </Card>
@@ -80,7 +80,7 @@ export default function Exchange() {
           <button type="button" aria-label="Поменять местами" onClick={() => (setFrom(to), setTo(from))} className="mx-auto inline-flex size-10 items-center justify-center rounded-full bg-sunken hover:bg-hover"><ArrowDownUp className="size-5" /></button>
           <AccountPicker label="Покупаю" accounts={accounts.filter((a) => a.id !== from)} value={to} onChange={setTo} />
           <Field label={`Сумма в ${src?.currency ?? ''}`}>
-            <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-[22px] font-extrabold num" placeholder="0" />
+            <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-[22px] font-semibold num" placeholder="0" />
           </Field>
           <div className="min-h-6 text-sm text-muted">{quote && dst ? <>Получите <b className="text-fg num">{money(quote.result, dst.currency, { exact: true })}</b></> : src && dst && src.currency === dst.currency ? 'Выберите счета в разных валютах' : ''}</div>
           {error && <ErrorNote>{error}</ErrorNote>}

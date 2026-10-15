@@ -60,7 +60,7 @@ export default function Savings() {
       {mine.length > 0 && (
         <Card pad={false} className="mb-2 divide-y divide-line overflow-hidden">
           {mine.map((a) => (
-            <Row key={a.id} onClick={() => nav(`/app/accounts/${a.id}`)} icon={<CategoryIcon category="savings" />} title={a.name} sub={`${String(a.params.rate)}%${typeof a.params.endsAt === 'number' ? ` · до ${longDate(a.params.endsAt)}` : ' · снимайте когда угодно'}`} right={<span className="font-bold num">{money(a.balance, a.currency)}</span>} />
+            <Row key={a.id} onClick={() => nav(`/app/accounts/${a.id}`)} icon={<CategoryIcon category="savings" />} title={a.name} sub={`${String(a.params.rate)}%${typeof a.params.endsAt === 'number' ? ` · до ${longDate(a.params.endsAt)}` : ' · снимайте когда угодно'}`} right={<span className="font-semibold num">{money(a.balance, a.currency)}</span>} />
           ))}
         </Card>
       )}
@@ -70,19 +70,19 @@ export default function Savings() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {p.products.deposits.map((d) => (
             <button key={d.months} type="button" onClick={() => setMonths(d.months)} className={cx('rounded-2xl border-2 px-3 py-3 text-left', months === d.months ? 'border-brand bg-brand-soft' : 'border-transparent bg-sunken')}>
-              <div className="text-xl font-extrabold">{d.rate}%</div>
+              <div className="text-xl font-semibold">{d.rate}%</div>
               <div className="text-xs text-muted">{d.months} мес.</div>
             </button>
           ))}
         </div>
         <Field label="Сумма вклада" hint="От 10 000 ₽">
-          <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-[20px] font-extrabold num" />
+          <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-[20px] font-semibold num" />
         </Field>
         <div className="flex items-center gap-3 rounded-2xl bg-brand-soft p-4">
           <TrendingUp className="size-6 shrink-0 text-brand" />
           <div>
             <div className="text-sm text-muted">Доход за {plan.months} мес. с ежедневной капитализацией</div>
-            <div className="text-xl font-extrabold text-brand-strong dark:text-brand num">+{money(income)}</div>
+            <div className="text-xl font-semibold text-brand-strong dark:text-brand num">+{money(income)}</div>
           </div>
         </div>
         <AccountPicker label="Списать со счёта" accounts={rub} value={from} onChange={setFrom} />
@@ -97,7 +97,7 @@ export default function Savings() {
           <Card className="flex items-center gap-4">
             <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[#fff4dc] text-[#b8650a]"><PiggyBank className="size-6" /></span>
             <div className="min-w-0 flex-1">
-              <div className="font-bold">{p.products.savingsRate}% на остаток</div>
+              <div className="font-semibold">{p.products.savingsRate}% на остаток</div>
               <div className="text-sm text-muted">Пополняйте и снимайте без ограничений</div>
             </div>
             <Button variant="primary" onClick={() => void api<{ account: Account }>('/accounts', { body: { kind: 'savings', currency: 'RUB' } }).then((r) => (refresh(), nav(`/app/accounts/${r.account.id}`)), (e) => toast(errorText(e), 'bad'))}>Открыть</Button>

@@ -72,18 +72,7 @@ jobs:
       - name: Build
         run: npm --prefix gpay/web run build && npm --prefix gpay/server run build
 
-      - name: End-to-end (Playwright)
-        run: |
-          npx playwright install --with-deps chromium
-          export DATA_DIR="$RUNNER_TEMP/gpay" GPAY_DB_KEY=$(openssl rand -hex 32) COOKIE_SECURE=0 \
-                 WEB_DIST="$PWD/gpay/web/dist" HOST=127.0.0.1 PORT=8081 PUBLIC_URL=http://127.0.0.1:8081
-          node gpay/server/dist/index.js > "$RUNNER_TEMP/gpay.log" 2>&1 &
-          for _ in $(seq 30); do curl -fs http://127.0.0.1:8081/api/health && break; sleep 1; done
-          npx playwright test -c gpay/playwright.config.ts
-
-      - name: Server log
-        if: failure()
-        run: cat "$RUNNER_TEMP/gpay.log" || true
+      # GPAY accepts only Bobobank money, so its end-to-end tests run in the bobobank job with both servers.
 
   bobobank:
     runs-on: ubuntu-latest
@@ -114,7 +103,7 @@ jobs:
           npm --prefix bobobank/web run build && npm --prefix bobobank/server run build
           npm --prefix gpay/web run build && npm --prefix gpay/server run build
 
-      - name: End-to-end with GPAY (Playwright)
+      - name: End-to-end, Bobobank and GPAY (Playwright)
         run: |
           npx playwright install --with-deps chromium
           SECRET=$(openssl rand -hex 32)
@@ -126,7 +115,9 @@ jobs:
             node bobobank/server/dist/index.js > "$RUNNER_TEMP/bank.log" 2>&1 &
           for _ in $(seq 30); do curl -fs http://127.0.0.1:8082/api/health && curl -fs http://127.0.0.1:8081/api/health && break; sleep 1; done
           PW=$(DATA_DIR="$RUNNER_TEMP/bank" node bobobank/server/dist/cli.js create-admin 79990000001 "Админ" | awk '/Пароль/ {print $2}')
-          BANK_ADMIN_PHONE=79990000001 BANK_ADMIN_PASSWORD=$PW npx playwright test -c bobobank/playwright.config.ts
+          export BANK_ADMIN_PHONE=79990000001 BANK_ADMIN_PASSWORD=$PW
+          npx playwright test -c bobobank/playwright.config.ts
+          BASE_URL=http://localhost:8081 BANK_URL=http://localhost:8082 npx playwright test -c gpay/playwright.config.ts
 
       - name: Server logs
         if: failure()

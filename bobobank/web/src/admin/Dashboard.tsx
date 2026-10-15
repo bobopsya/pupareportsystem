@@ -40,14 +40,14 @@ export function Dashboard() {
       <PageHeader title="Сводка" sub="Состояние банка в реальном времени" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {kpi.map(([k, v, sub, on]) => (
-          <button key={k} type="button" disabled={!on} onClick={on} className="rounded-[24px] bg-surface p-5 text-left shadow-card enabled:hover:bg-sunken">
+          <button key={k} type="button" disabled={!on} onClick={on} className="rounded-2xl bg-surface p-5 text-left shadow-card enabled:hover:bg-sunken">
             <div className="text-sm text-muted">{k}</div>
-            <div className="mt-1 text-[24px] font-extrabold num">{v}</div>
+            <div className="mt-1 text-[24px] font-semibold num">{v}</div>
             {sub && <div className="text-xs text-faint">{sub}</div>}
           </button>
         ))}
       </div>
-      <h2 className="mb-3 mt-8 text-lg font-extrabold">Счета банка</h2>
+      <h2 className="mb-3 mt-8 text-lg font-semibold">Счета банка</h2>
       <Card pad={false} className="overflow-hidden">
         <div className="divide-y divide-line">
           {data.system.filter((s) => s.balance !== 0).map((s) => (

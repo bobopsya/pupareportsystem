@@ -34,24 +34,20 @@ export default function Landing() {
 
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 pt-6 sm:px-6 sm:pt-10">
-        <div className="relative overflow-hidden rounded-[32px] bg-[linear-gradient(135deg,#18c26f_0%,#0c9a5a_45%,#066c45_100%)] px-6 py-10 text-white sm:px-12 sm:py-14">
-          <svg className="pointer-events-none absolute -right-24 -top-24 h-[140%] opacity-[0.12]" viewBox="0 0 64 64" aria-hidden="true">
-            <circle cx="30" cy="38" r="9.5" fill="none" stroke="#fff" strokeWidth="7" />
-            <circle cx="44" cy="38" r="9.5" fill="none" stroke="#fff" strokeWidth="7" />
-          </svg>
+        <div className="relative overflow-hidden rounded-3xl bg-[#21A038] px-6 py-10 text-white sm:px-12 sm:py-14">
           <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold"><Zap className="size-4" />Карта за 1 минуту, без визита в офис</span>
-              <h1 className="mt-4 text-[38px] font-extrabold leading-[1.05] sm:text-[56px]">Банк, который<br />всегда с собой</h1>
+              <h1 className="mt-4 text-[38px] font-semibold leading-[1.05] sm:text-[56px]">Банк, который<br />всегда с собой</h1>
               <p className="mt-4 max-w-md text-lg text-white/85">Карты МИР, Visa, Mastercard и UnionPay, переводы по номеру телефона, вклады до 18% и кешбэк Бобобонусами за каждую покупку.</p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Button size="lg" className="!bg-white !text-[#066c45] hover:!bg-white/90" onClick={go}>{user ? 'Перейти в приложение' : 'Оформить карту'}</Button>
+                <Button size="lg" className="!bg-white !text-[#17802c] hover:!bg-white/90" onClick={go}>{user ? 'Перейти в приложение' : 'Оформить карту'}</Button>
                 {!user && <Button size="lg" className="!bg-white/15 !text-white hover:!bg-white/25" onClick={() => nav('/login')}>У меня уже есть карта</Button>}
               </div>
             </div>
             <div className="relative mx-auto h-[230px] w-full max-w-[420px] origin-top scale-[0.82] min-[400px]:scale-90 sm:h-[300px] sm:scale-100">
-              <div className="absolute left-0 top-6 -rotate-[10deg]"><BankCard card={demo('night', 'visa', '4417')} /></div>
-              <div className="absolute right-0 top-0 rotate-[8deg]"><BankCard card={demo('gold', 'mastercard', '9001', 'debit', 'prime')} /></div>
+              <div className="absolute left-0 top-6 -rotate-[10deg]"><BankCard card={demo('black', 'visa', '4417')} /></div>
+              <div className="absolute right-0 top-0 rotate-[8deg]"><BankCard card={demo('prime', 'mastercard', '9001', 'debit', 'prime')} /></div>
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2"><BankCard card={demo('green', 'mir', '2026')} /></div>
             </div>
           </div>
@@ -60,7 +56,7 @@ export default function Landing() {
 
       {/* Products */}
       <section id="cards" className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <h2 className="text-[30px] font-extrabold sm:text-[40px]">Всё для денег — в одном приложении</h2>
+        <h2 className="text-[30px] font-semibold sm:text-[40px]">Всё для денег — в одном приложении</h2>
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Product icon={<Smartphone className="size-6" />} title="Дебетовая карта" text="Бесплатно навсегда. Выпуск виртуальной — сразу после регистрации." tone="bg-surface" />
           <Product id="credits" icon={<Landmark className="size-6" />} title="Кредитная карта" text="120 дней без процентов на покупки, решение за минуту." tone="bg-[#e7efff] dark:bg-[#151d33]" />
@@ -76,40 +72,40 @@ export default function Landing() {
 
       {/* Prime */}
       <section className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="grid grid-cols-1 items-center gap-8 overflow-hidden rounded-[32px] bg-[linear-gradient(135deg,#1a1f1c,#0b0e0c)] p-6 text-white sm:p-12 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-center gap-8 overflow-hidden rounded-3xl bg-[#1C1C1E] p-6 text-white sm:p-12 lg:grid-cols-2">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-[#f3d78a]/15 px-3 py-1 text-sm font-semibold text-[#f3d78a]"><Crown className="size-4" />Bobo Prime</span>
-            <h2 className="mt-4 text-[30px] font-extrabold leading-tight sm:text-[40px]">Кешбэк до 7% и переводы без комиссии</h2>
+            <h2 className="mt-4 text-[30px] font-semibold leading-tight sm:text-[40px]">Кешбэк до 7% и переводы без комиссии</h2>
             <p className="mt-3 text-white/70">1,5% на всё, 7% в трёх любимых категориях, переводы до 1 млн ₽ в месяц бесплатно и золотая карта. 399 ₽ в месяц.</p>
             <Button size="lg" className="mt-6 !bg-[#f3d78a] !text-[#2a1d05]" onClick={go}>Подключить Prime</Button>
           </div>
-          <div className="flex justify-center"><BankCard card={demo('gold', 'visa', '7777', 'debit', 'prime')} size="lg" /></div>
+          <div className="flex justify-center"><BankCard card={demo('prime', 'visa', '7777', 'debit', 'prime')} size="lg" /></div>
         </div>
       </section>
 
       {/* Business + GPAY */}
       <section id="business" className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-[32px] bg-surface p-6 shadow-card sm:p-10">
+          <div className="rounded-3xl bg-surface p-6 sm:p-10">
             <Briefcase className="size-8 text-brand" />
-            <h2 className="mt-4 text-[26px] font-extrabold sm:text-[32px]">Счёт для ИП и ООО</h2>
+            <h2 className="mt-4 text-[26px] font-semibold sm:text-[32px]">Счёт для ИП и ООО</h2>
             <p className="mt-2 text-muted">Открытие онлайн за минуту, бизнес-карта, реквизиты и выписки в PDF.</p>
           </div>
-          <div className="rounded-[32px] bg-[#111] p-6 text-white sm:p-10">
+          <div className="rounded-3xl bg-[#111] p-6 text-white sm:p-10">
             <Store className="size-8" />
-            <h2 className="mt-4 text-[26px] font-extrabold sm:text-[32px]">Принимайте оплату через GPAY</h2>
+            <h2 className="mt-4 text-[26px] font-semibold sm:text-[32px]">Принимайте оплату через GPAY</h2>
             <p className="mt-2 text-white/70">Подключите магазин к платёжному сервису GPAY — выручка будет приходить на счёт в Bobobank, а клиенты Bobobank платят в один клик через СБП.</p>
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
-        <div className="flex flex-col items-start justify-between gap-6 rounded-[32px] bg-brand p-6 text-on-brand sm:flex-row sm:items-center sm:p-10">
+        <div className="flex flex-col items-start justify-between gap-6 rounded-3xl bg-brand p-6 text-on-brand sm:flex-row sm:items-center sm:p-10">
           <div>
-            <h2 className="text-[26px] font-extrabold sm:text-[32px]">Станьте клиентом за 1 минуту</h2>
+            <h2 className="text-[26px] font-semibold sm:text-[32px]">Станьте клиентом за 1 минуту</h2>
             <p className="mt-1 opacity-85">Нужен только номер телефона</p>
           </div>
-          <Button size="lg" className="!bg-white !text-[#066c45]" icon={<ArrowRight className="size-5" />} onClick={go}>{user ? 'Открыть банк' : 'Оформить'}</Button>
+          <Button size="lg" className="!bg-white !text-[#17802c]" icon={<ArrowRight className="size-5" />} onClick={go}>{user ? 'Открыть банк' : 'Оформить'}</Button>
         </div>
       </section>
 
@@ -131,9 +127,9 @@ export default function Landing() {
 
 function Product({ icon, title, text, tone, id }: { icon: ReactNode; title: string; text: string; tone: string; id?: string }) {
   return (
-    <div id={id} className={`scroll-mt-24 rounded-[28px] p-6 shadow-card ${tone}`}>
+    <div id={id} className={`scroll-mt-24 rounded-2xl p-6 ${tone}`}>
       <span className="flex size-12 items-center justify-center rounded-2xl bg-brand text-on-brand">{icon}</span>
-      <h3 className="mt-5 text-xl font-extrabold">{title}</h3>
+      <h3 className="mt-5 text-xl font-semibold">{title}</h3>
       <p className="mt-1.5 text-muted">{text}</p>
     </div>
   );

@@ -41,7 +41,7 @@ export function SettingsPage() {
       {err && <div className="mb-4"><ErrorNote>{err}</ErrorNote></div>}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="flex flex-col gap-4">
-          <h2 className="font-extrabold">Курсы валют (₽ за единицу)</h2>
+          <h2 className="font-semibold">Курсы валют (₽ за единицу)</h2>
           <div className="grid grid-cols-3 gap-3">
             <Field label="USD"><Input inputMode="decimal" value={String(form.fx.USD)} onChange={(e) => setForm({ ...form, fx: { ...form.fx, USD: num(e.target.value) } })} /></Field>
             <Field label="EUR"><Input inputMode="decimal" value={String(form.fx.EUR)} onChange={(e) => setForm({ ...form, fx: { ...form.fx, EUR: num(e.target.value) } })} /></Field>
@@ -49,7 +49,7 @@ export function SettingsPage() {
           </div>
         </Card>
         <Card className="flex flex-col gap-4">
-          <h2 className="font-extrabold">Вклады</h2>
+          <h2 className="font-semibold">Вклады</h2>
           <Field label="Накопительный счёт, % годовых">{pct('savingsRate')}</Field>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {p.deposits.map((d, i) => (
@@ -60,7 +60,7 @@ export function SettingsPage() {
           </div>
         </Card>
         <Card className="flex flex-col gap-4">
-          <h2 className="font-extrabold">Кредиты</h2>
+          <h2 className="font-semibold">Кредиты</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label="Ставка, %">{pct('loanRate')}</Field>
             <Field label="Минимум, ₽">{rub('loanMin')}</Field>
@@ -77,7 +77,7 @@ export function SettingsPage() {
           </div>
         </Card>
         <Card className="flex flex-col gap-4">
-          <h2 className="font-extrabold">Скоринг</h2>
+          <h2 className="font-semibold">Скоринг</h2>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Автоодобрение от" hint="Баллы 300–900">{pct('scoreApprove')}</Field>
             <Field label="Автоотказ ниже">{pct('scoreReject')}</Field>

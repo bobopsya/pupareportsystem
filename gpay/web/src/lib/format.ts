@@ -61,4 +61,4 @@ export const REASONS: Record<string, string> = {
   too_many_attempts: 'Много неудачных попыток',
 };
 
-export const METHOD_TITLE: Record<string, string> = { bank_card: 'Карта', sbp: 'СБП', installments: 'Частями', crypto: 'Крипта' };
+export const METHOD_TITLE: Record<string, string> = { bank_card: 'Карта', sbp: 'СБП', bobopay: 'Bobo Pay', installments: 'Частями', crypto: 'Крипта' };

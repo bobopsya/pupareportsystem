@@ -33,7 +33,7 @@ export default function Analytics() {
     <Screen title="Расходы" back={null}>
       <div className="mb-4 flex items-center justify-between">
         <button type="button" aria-label="Предыдущий месяц" onClick={() => setMonth(shift(month, -1))} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-sunken"><ChevronLeft className="size-5" /></button>
-        <div className="text-lg font-extrabold">{monthTitle(month)}</div>
+        <div className="text-lg font-semibold">{monthTitle(month)}</div>
         <button type="button" aria-label="Следующий месяц" disabled={current} onClick={() => setMonth(shift(month, 1))} className="inline-flex size-10 items-center justify-center rounded-full hover:bg-sunken disabled:opacity-30"><ChevronRight className="size-5" /></button>
       </div>
       {error && <ErrorNote>{errorText(error)}</ErrorNote>}
@@ -48,7 +48,7 @@ export default function Analytics() {
               center={(h) => (
                 <>
                   <span className="text-xs text-muted">{h === null ? 'Траты' : data.categories[h].title}</span>
-                  <span className="text-[22px] font-extrabold num">{money(h === null ? data.spent : data.categories[h].total)}</span>
+                  <span className="text-[22px] font-semibold num">{money(h === null ? data.spent : data.categories[h].total)}</span>
                 </>
               )}
             />
@@ -67,7 +67,7 @@ export default function Analytics() {
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between gap-2">
                       <span className="truncate font-semibold">{c.title}</span>
-                      <span className="font-bold num">{money(c.total)}</span>
+                      <span className="font-semibold num">{money(c.total)}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-sunken">
                       <div className="h-full rounded-full" style={{ width: `${(c.total / data.spent) * 100}%`, background: CATEGORY_STYLE[c.category]?.color }} />
@@ -94,7 +94,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
   return (
     <div className="rounded-2xl bg-sunken px-2 py-3">
       <div className="text-xs text-muted">{label}</div>
-      <div className={`mt-0.5 truncate font-bold num ${tone ?? ''}`}>{value}</div>
+      <div className={`mt-0.5 truncate font-semibold num ${tone ?? ''}`}>{value}</div>
     </div>
   );
 }

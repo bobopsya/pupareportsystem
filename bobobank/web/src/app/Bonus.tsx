@@ -48,20 +48,20 @@ export default function Bonus() {
   };
   return (
     <Screen title="Бобобонусы">
-      <Card className="relative overflow-hidden bg-gradient-to-br from-[#ffcf5c] via-[#f6a723] to-[#e57e12] !text-[#3d2300]">
+      <Card className="relative overflow-hidden !bg-[#FFB800] !text-[#2b1d00]">
         <Gift className="absolute -right-4 -bottom-6 size-36 opacity-15" />
         <div className="text-sm font-semibold opacity-80">Баланс</div>
-        <div className="text-[40px] font-extrabold leading-tight num">{bonus(data.balance)}</div>
+        <div className="text-[40px] font-semibold leading-tight num">{bonus(data.balance)}</div>
         <div className="text-sm font-medium opacity-80">1 бонус = 1 ₽ · за месяц начислено {bonus(data.accruedThisMonth)} из {bonus(data.cap)}</div>
         <Button className="mt-4 !bg-white/90 !text-[#3d2300] hover:!bg-white" disabled={data.balance < 10_000} onClick={() => setRedeem(true)}>Обменять на рубли</Button>
       </Card>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <Card className="!p-4"><div className="text-xs text-muted">На все покупки</div><div className="text-2xl font-extrabold">{data.base}%</div></Card>
-        <Card className="!p-4"><div className="text-xs text-muted">В выбранных категориях</div><div className="text-2xl font-extrabold text-brand">{data.raised}%</div></Card>
+        <Card className="!p-4"><div className="text-xs text-muted">На все покупки</div><div className="text-2xl font-semibold">{data.base}%</div></Card>
+        <Card className="!p-4"><div className="text-xs text-muted">В выбранных категориях</div><div className="text-2xl font-semibold text-brand">{data.raised}%</div></Card>
       </div>
       {data.tariff !== 'prime' && (
-        <button type="button" onClick={() => nav('/app/profile#prime')} className="mt-3 flex w-full items-center gap-3 rounded-[24px] bg-[#f3e6c2] p-4 text-left text-[#5c4410] dark:bg-[#2b2412] dark:text-[#e6c56b]">
+        <button type="button" onClick={() => nav('/app/profile#prime')} className="mt-3 flex w-full items-center gap-3 rounded-2xl bg-[#f3e6c2] p-4 text-left text-[#5c4410] dark:bg-[#2b2412] dark:text-[#e6c56b]">
           <Crown className="size-6 shrink-0" />
           <span className="text-sm"><b>С Bobo Prime</b> — 1,5% на всё и 7% в любимых категориях</span>
         </button>
@@ -94,7 +94,7 @@ export default function Bonus() {
           <div key={l.id} className="flex items-center gap-3 px-4 py-3">
             <CategoryIcon category={l.category ?? 'bonus'} size="sm" />
             <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{l.title}</div><div className="text-xs text-muted">{dateTime(l.createdAt)}</div></div>
-            <div className={cx('font-bold num', l.amount > 0 ? 'text-warn' : 'text-muted')}>{l.amount > 0 ? '+' : '−'}{bonus(Math.abs(l.amount))}</div>
+            <div className={cx('font-semibold num', l.amount > 0 ? 'text-warn' : 'text-muted')}>{l.amount > 0 ? '+' : '−'}{bonus(Math.abs(l.amount))}</div>
           </div>
         )) : <div className="px-5 py-8 text-center text-sm text-muted">Платите картой Bobobank — бонусы появятся здесь</div>}
       </Card>

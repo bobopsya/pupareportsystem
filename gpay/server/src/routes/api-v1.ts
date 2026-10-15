@@ -282,9 +282,7 @@ export function registerApiV1(app: FastifyInstance, ctx: Ctx) {
         const dest = obj(b.payout_destination);
         // Bobobank money goes to the account linked in the shop settings.
         if (dest.type === 'bobobank') return serializePayout(await payoutToBank(ctx, shopOf(req), amount, currency));
-        const card = String(dest.card_last4 ?? '').replace(/\D/g, '').slice(-4);
-        if (card.length !== 4) throw new ApiError(400, 'invalid_request', 'payout_destination.card_last4: последние 4 цифры карты', 'payout_destination');
-        return serializePayout(createPayout(ctx, shopOf(req), amount, currency, { type: 'bank_card', card_last4: card }));
+        throw new ApiError(400, 'invalid_request', 'payout_destination.type: выплаты возможны только на счёт в Bobobank — "bobobank"', 'payout_destination');
       }),
     );
 

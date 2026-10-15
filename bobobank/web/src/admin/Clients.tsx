@@ -36,7 +36,7 @@ export function Clients() {
         <Card pad={false} className="overflow-hidden">
           {data.items.map((u) => (
             <button key={u.id} type="button" onClick={() => nav(`/admin/clients/${u.id}`)} className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0 hover:bg-sunken/70">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-bold text-brand">{u.name[0]}</span>
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand">{u.name[0]}</span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-1.5 font-semibold">
                   <span className="truncate">{u.name}</span>
@@ -47,7 +47,7 @@ export function Clients() {
                 </span>
                 <span className="block text-sm text-muted num">{u.phone}</span>
               </span>
-              <span className="shrink-0 font-bold num">{money(u.rub)}</span>
+              <span className="shrink-0 font-semibold num">{money(u.rub)}</span>
             </button>
           ))}
           {!data.items.length && <div className="px-5 py-10 text-center text-muted">Никого не нашли</div>}
@@ -108,7 +108,7 @@ export function ClientDetail() {
 
       {data.restrictions.some((r) => !r.lifted_at) && (
         <Card className="mb-4 !bg-bad-soft">
-          <div className="mb-2 font-bold text-bad">Действующие ограничения</div>
+          <div className="mb-2 font-semibold text-bad">Действующие ограничения</div>
           {data.restrictions.filter((r) => !r.lifted_at).map((r) => (
             <div key={r.id} className="flex flex-col gap-2 border-t border-bad/15 py-2 sm:flex-row sm:items-center">
               <div className="min-w-0 flex-1 text-sm">
@@ -121,17 +121,17 @@ export function ClientDetail() {
         </Card>
       )}
 
-      <h2 className="mb-3 text-lg font-extrabold">Счета</h2>
+      <h2 className="mb-3 text-lg font-semibold">Счета</h2>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {data.accounts.map((a) => (
           <Card key={a.id} className={cx('!p-4', a.status === 'closed' && 'opacity-50')}>
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate font-bold">{a.name}</div>
+                <div className="truncate font-semibold">{a.name}</div>
                 <div className="text-xs text-muted num">{ACCOUNT_KIND_TITLE[a.kind]} · {formatAccount(a.number)}</div>
               </div>
               <div className="text-right">
-                <div className="font-extrabold num">{money(a.balance, a.currency, { exact: true })}</div>
+                <div className="font-semibold num">{money(a.balance, a.currency, { exact: true })}</div>
                 {(a.held > 0 || a.arrested > 0 || a.creditLimit > 0) && <div className="text-xs text-muted">{a.creditLimit ? `лимит ${money(a.creditLimit)} · ` : ''}{a.held ? `холд ${money(a.held, a.currency)} ` : ''}{a.arrested ? `арест ${money(a.arrested, a.currency)}` : ''}</div>}
               </div>
             </div>
@@ -145,7 +145,7 @@ export function ClientDetail() {
         ))}
       </div>
 
-      <h2 className="mb-3 mt-8 text-lg font-extrabold">Карты</h2>
+      <h2 className="mb-3 mt-8 text-lg font-semibold">Карты</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {data.cards.map((c) => (
           <div key={c.id} className="flex flex-col gap-2">
@@ -164,7 +164,7 @@ export function ClientDetail() {
 
       {(data.loans.length > 0 || data.applications.length > 0) && (
         <>
-          <h2 className="mb-3 mt-8 text-lg font-extrabold">Кредитная история</h2>
+          <h2 className="mb-3 mt-8 text-lg font-semibold">Кредитная история</h2>
           <Card pad={false} className="divide-y divide-line overflow-hidden text-sm">
             {data.loans.map((l) => (
               <div key={l.id} className="flex justify-between gap-3 px-4 py-3"><span>Кредит {money(l.principal)} · {l.rate}% · {l.term} мес.</span><Badge tone={l.status === 'overdue' ? 'bad' : l.status === 'closed' ? 'neutral' : 'brand'}>{l.status === 'overdue' ? 'просрочка' : l.status === 'closed' ? 'закрыт' : 'активен'}</Badge></div>
@@ -176,12 +176,12 @@ export function ClientDetail() {
         </>
       )}
 
-      <h2 className="mb-3 mt-8 text-lg font-extrabold">Последние операции</h2>
+      <h2 className="mb-3 mt-8 text-lg font-semibold">Последние операции</h2>
       <Card pad={false} className="overflow-hidden">
         {data.entries.map((e) => (
           <div key={e.id} className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 text-sm last:border-0">
             <div className="min-w-0"><div className="truncate font-semibold">{e.title}</div><div className="truncate text-xs text-muted">{e.subtitle} · {e.accountName} · {dateTime(e.createdAt)}</div></div>
-            <span className={cx('shrink-0 font-bold num', e.amount > 0 && 'text-ok')}>{money(e.amount, e.currency, { sign: true, exact: true })}</span>
+            <span className={cx('shrink-0 font-semibold num', e.amount > 0 && 'text-ok')}>{money(e.amount, e.currency, { sign: true, exact: true })}</span>
           </div>
         ))}
         {!data.entries.length && <div className="px-5 py-8 text-center text-muted">Операций нет</div>}
@@ -230,7 +230,7 @@ function AdjustModal({ acc, onClose, onDone }: { acc: Account; onClose: () => vo
         <div className="grid grid-cols-2 gap-2">
           {(['credit', 'debit'] as const).map((d) => <button key={d} type="button" onClick={() => setDir(d)} className={cx('h-11 rounded-2xl font-semibold', dir === d ? (d === 'credit' ? 'bg-brand text-on-brand' : 'bg-bad text-white') : 'bg-sunken')}>{d === 'credit' ? 'Начислить' : 'Списать'}</button>)}
         </div>
-        <Field label={`Сумма, ${acc.currency}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-xl font-extrabold num" /></Field>
+        <Field label={`Сумма, ${acc.currency}`}><Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-xl font-semibold num" /></Field>
         <Field label="Название операции" hint="Так операция появится в истории клиента"><Input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
         <Field label="Комментарий"><Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Необязательно" /></Field>
         {dir === 'debit' && <Checkbox checked={force} onChange={setForce} label="Списать даже при нехватке средств или ограничениях" />}

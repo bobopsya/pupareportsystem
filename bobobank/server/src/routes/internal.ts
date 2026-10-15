@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { HttpError, type Ctx } from '../context.js';
 import { authorize, capture, cardHashes, getAuthorization, refund, serializeAuthorization, voidAuthorization } from '../domain/acquiring.js';
 import { categoryOfMcc } from '../domain/bank.js';
+import { createRequest, getRequest } from '../domain/orders.js';
 import { BINS, findCardByPan } from '../domain/cards.js';
 import { convertCustomer, fxLegs, getFx } from '../domain/fx.js';
 import { getAccount, notify, post, systemAccount, type AccountRow } from '../domain/ledger.js';
@@ -104,13 +105,35 @@ export function registerInternalRoutes(app: FastifyInstance, ctx: Ctx) {
     return { id: r.id, refunded: r.refunded };
   }));
 
-  // Refund of an order the customer paid by SBP from the app: back to the same account.
+  // Bobo Pay by phone: GPAY asks the customer to confirm the order in the app.
+  app.post('/internal/v1/requests', idempotent((req) => {
+    const b = z
+      .object({
+        phone: z.string().max(30),
+        payment_id: z.string().max(64),
+        amount: minor,
+        currency: z.enum(CURRENCIES),
+        description: z.string().max(200).default(''),
+        merchant: z.object({ name: z.string().max(120), shop_id: z.number().int(), mcc: z.number().int().optional(), inn: z.string().max(12).optional(), site: z.string().max(200).optional() }),
+      })
+      .parse(req.body);
+    const r = createRequest(ctx, { phone: b.phone, paymentId: b.payment_id, amount: b.amount, currency: b.currency, merchant: b.merchant, description: b.description });
+    return { id: r.id, status: r.status, expires_at: r.expires_at };
+  }));
+
+  app.get('/internal/v1/requests/:id', async (req) => {
+    const r = getRequest(ctx, (req.params as { id: string }).id);
+    if (!r) throw new HttpError(404, 'Запрос не найден');
+    return { id: r.id, status: r.expires_at <= ctx.now() && r.status === 'pending' ? 'expired' : r.status };
+  });
+
+  // Refund of an order the customer paid from the app (SBP or Bobo Pay): back to the same account.
   app.post('/internal/v1/sbp/:paymentId/refund', idempotent((req) => {
     const { amount, refund_id } = z.object({ amount: minor, refund_id: z.string().max(64) }).parse(req.body);
     const sp = db.prepare(`SELECT * FROM sbp_payments WHERE external_id = ? AND status = 'succeeded'`).get((req.params as { paymentId: string }).paymentId) as
       | { id: string; user_id: string; account_id: string; amount: number; currency: string; merchant: string; refunded?: number }
       | undefined;
-    if (!sp) throw new HttpError(404, 'Оплата СБП не найдена');
+    if (!sp) throw new HttpError(404, 'Оплата из приложения банка не найдена');
     const done = (db.prepare(`SELECT COALESCE(SUM(json_extract(meta, '$.amount')), 0) s FROM transactions WHERE kind = 'sbp_refund' AND json_extract(meta, '$.paymentId') = ?`).get(sp.id) as { s: number }).s;
     if (done + amount > sp.amount) throw new HttpError(400, 'Сумма возврата больше суммы оплаты');
     let acc = getAccount(ctx, sp.account_id)!;
@@ -122,7 +145,7 @@ export function registerInternalRoutes(app: FastifyInstance, ctx: Ctx) {
       meta: { paymentId: sp.id, refundId: refund_id, amount },
       legs: [
         { account: systemAccount(ctx, 'gpay', sp.currency), amount: -amount },
-        { account: acc, amount, title: m.name, subtitle: 'Возврат оплаты СБП', category: categoryOfMcc(m.mcc) },
+        { account: acc, amount, title: m.name, subtitle: 'Возврат оплаты', category: categoryOfMcc(m.mcc) },
       ],
     });
     notify(ctx, sp.user_id, 'refund', `Возврат ${humanMoney(amount, sp.currency)}`, `${m.name} вернул деньги`);

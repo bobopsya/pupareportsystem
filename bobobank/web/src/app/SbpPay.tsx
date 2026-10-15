@@ -25,6 +25,8 @@ interface P {
 export default function SbpPay() {
   const [params] = useSearchParams();
   const id = params.get('payment') ?? '';
+  const method = params.get('method') === 'bobopay' ? 'bobopay' : 'sbp';
+  const via = method === 'bobopay' ? 'Bobo Pay' : 'СБП';
   const nav = useNavigate();
   const refresh = useRefresh();
   const { data: home } = useHome();
@@ -40,7 +42,7 @@ export default function SbpPay() {
 
   const wrap = (children: ReactNode) => (
     <div className="mx-auto min-h-dvh max-w-md px-4 pb-10 pt-[max(1.25rem,env(safe-area-inset-top))]">
-      <div className="mb-6 flex items-center justify-between"><Logo compact /><SbpLogo className="h-8 w-12 border border-line" /></div>
+      <div className="mb-6 flex items-center justify-between"><Logo compact />{method === 'sbp' ? <SbpLogo className="h-8 w-12 border border-line" /> : <span className="rounded-lg bg-brand px-2.5 py-1 text-sm font-semibold text-on-brand">Bobo Pay</span>}</div>
       {children}
     </div>
   );
@@ -50,9 +52,9 @@ export default function SbpPay() {
   if (done) {
     return wrap(
       <Success
-        title="Оплачено через СБП"
+        title={`Оплачено через ${via}`}
         amount={money(data.amount, data.currency, { exact: true })}
-        lines={[['Получатель', data.merchant.name], ['Назначение', data.description || 'Оплата заказа'], ['Через', 'Система быстрых платежей']]}
+        lines={[['Получатель', data.merchant.name], ['Назначение', data.description || 'Оплата заказа'], ['Через', method === 'sbp' ? 'Система быстрых платежей' : 'Bobo Pay']]}
         entryId={done.entryId}
         onDone={() => (done.returnUrl ? (window.location.href = done.returnUrl) : nav('/app', { replace: true }))}
       />,
@@ -62,7 +64,7 @@ export default function SbpPay() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api<{ entryId: number; returnUrl: string | null }>(`/sbp/${id}/pay`, { body: { accountId: from } });
+      const r = await api<{ entryId: number; returnUrl: string | null }>(`/sbp/${id}/pay`, { body: { accountId: from, method } });
       refresh();
       setDone(r);
     } catch (e) {
@@ -76,9 +78,9 @@ export default function SbpPay() {
     <>
       <Card className="text-center">
         <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sunken"><Store className="size-7" /></span>
-        <div className="mt-3 text-lg font-bold">{data.merchant.name}</div>
+        <div className="mt-3 text-lg font-semibold">{data.merchant.name}</div>
         {data.merchant.site && <div className="text-sm text-muted">{data.merchant.site}</div>}
-        <div className="mt-3 text-[38px] font-extrabold leading-none num">{money(data.amount, data.currency, { exact: data.amount % 100 !== 0 })}</div>
+        <div className="mt-3 text-[38px] font-semibold leading-none num">{money(data.amount, data.currency, { exact: data.amount % 100 !== 0 })}</div>
         {data.description && <div className="mt-2 text-sm text-muted">{data.description}</div>}
       </Card>
       {payable ? (

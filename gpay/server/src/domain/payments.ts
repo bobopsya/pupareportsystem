@@ -1,9 +1,7 @@
 import { ApiError, type Ctx } from '../context.js';
 import { iso, newId, randomDigits, randomString, safeJson } from '../util.js';
 import { bankEnabled, bankRequest } from './bank.js';
-import { BRAND_TITLE, brandOf, findGameCard, luhn, OUTCOMES, type Outcome } from './cards.js';
 import { feeFor, METHODS, shopFees, type MethodType } from './fees.js';
-import { cryptoAmount, getRates } from './fx.js';
 import { formatAmount, isCurrency, LIMITS, money } from './money.js';
 import { parseReceiptRequest, registerReceipt } from './receipts.js';
 import { enqueue } from './webhooks.js';
@@ -71,10 +69,6 @@ export const PAYMENT_TTL_MS = 60 * 60 * 1000;
 /** Two-stage payments are cancelled automatically if not captured in time. */
 export const CAPTURE_TTL_MS = 7 * 24 * 3600 * 1000;
 export const MAX_ATTEMPTS = 5;
-/** Simulated processing time of asynchronous methods. */
-export const PROCESSING_MS: Record<Exclude<MethodType, 'bank_card'>, number> = { sbp: 9_000, installments: 11_000, crypto: 14_000 };
-/** How long the issuer "takes" to confirm a card that requires 3-D Secure. */
-export const BANK_CHECK_MS = { min: 3_000, max: 5_000 };
 
 export const getShop = (ctx: Ctx, id: number) => ctx.db.prepare('SELECT * FROM shops WHERE id = ?').get(id) as ShopRow | undefined;
 export const getPaymentRow = (ctx: Ctx, id: string) => ctx.db.prepare('SELECT * FROM payments WHERE id = ?').get(id) as PaymentRow | undefined;
@@ -101,6 +95,7 @@ export interface CreatePaymentInput {
 
 export function createPayment(ctx: Ctx, shop: ShopRow, input: CreatePaymentInput): PaymentRow {
   if (shop.status !== 'active') throw new ApiError(403, 'forbidden', 'Магазин заблокирован, приём платежей приостановлен');
+  if (!bankEnabled(ctx)) throw new ApiError(503, 'bank_unavailable', 'Приём платежей временно недоступен: нет связи с Bobobank');
   if (!isCurrency(input.currency)) throw new ApiError(400, 'invalid_request', 'Валюта: RUB, USD или EUR', 'amount.currency');
   const lim = LIMITS[input.currency];
   if (input.amount < lim.min || input.amount > lim.max) {
@@ -197,7 +192,7 @@ export function authorize(ctx: Ctx, p: PaymentRow, method: Record<string, unknow
 
 export function cancelPayment(ctx: Ctx, p: PaymentRow, party: 'merchant' | 'payment_network' | 'issuer' | 'gpay', reason: string) {
   // A Bobobank hold (or an unanswered confirmation) is released right away.
-  if (p.bank_auth_id && bankEnabled(ctx)) void bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/void`, {}, `void:${p.id}`).catch(() => {});
+  if (p.bank_auth_id?.startsWith('auth_') && bankEnabled(ctx)) void bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/void`, {}, `void:${p.id}`).catch(() => {});
   ctx.db
     .prepare(`UPDATE payments SET status = 'canceled', paid = 0, fee = 0, pending_action = NULL, processing_until = NULL, cancellation = ? WHERE id = ?`)
     .run(JSON.stringify({ party, reason }), p.id);
@@ -209,13 +204,7 @@ export function cancelPayment(ctx: Ctx, p: PaymentRow, party: 'merchant' | 'paym
 export function settle(ctx: Ctx, p: PaymentRow): PaymentRow {
   const now = ctx.now();
   if (p.status === 'pending' && p.processing_until && now >= p.processing_until) {
-    const method = safeJson<Record<string, unknown>>(p.method, {});
-    if (method.type === 'bank_card') addEvent(ctx, p.id, '3ds_passed', { method: method.title });
-    if (method.type === 'crypto') {
-      const crypto = method.crypto as Record<string, unknown>;
-      method.crypto = { ...crypto, tx_hash: randomString(64, '0123456789abcdef'), confirmations: crypto.asset === 'BTC' ? 3 : 20 };
-    }
-    authorize(ctx, p, method);
+    authorize(ctx, p, safeJson<Record<string, unknown>>(p.method, {}));
   } else if (p.status === 'pending' && now >= p.expires_at) {
     cancelPayment(ctx, p, 'gpay', 'expired_on_confirmation');
   } else if (p.status === 'waiting_for_capture' && p.capture_deadline && now >= p.capture_deadline) {
@@ -238,7 +227,7 @@ function assertPayable(ctx: Ctx, p: PaymentRow, type: MethodType) {
   if (!shopMethods(shop).includes(type)) throw new ApiError(400, 'invalid_request', 'Этот способ оплаты недоступен');
 }
 
-function setEmail(ctx: Ctx, p: PaymentRow, email?: string) {
+export function setEmail(ctx: Ctx, p: PaymentRow, email?: string) {
   if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 200) ctx.db.prepare('UPDATE payments SET customer_email = ? WHERE id = ?').run(email, p.id);
 }
 
@@ -269,79 +258,11 @@ export interface CardInput {
   email?: string;
 }
 
-export function payWithCard(ctx: Ctx, p: PaymentRow, card: CardInput): PayResult {
-  assertPayable(ctx, p, 'bank_card');
-  const pan = card.pan.replace(/\D/g, '');
-  const brand = brandOf(pan);
-  const game = luhn(pan) && brand ? findGameCard(ctx.db, pan) : undefined;
-  if (!game || !brand) throw new ApiError(400, 'card_not_supported', 'Карта не поддерживается');
-  if (!/^\d{3}$/.test(card.csc)) throw new ApiError(400, 'invalid_request', 'Неверный CVC', 'csc');
-  setEmail(ctx, p, card.email);
-  const last4 = pan.slice(-4);
-  const method = {
-    type: 'bank_card',
-    id: newId('pm', 20),
-    saved: false,
-    title: `${BRAND_TITLE[brand]} •• ${last4}`,
-    card: { first6: pan.slice(0, 6), last4, expiry_month: String(card.expMonth).padStart(2, '0'), expiry_year: String(card.expYear), card_type: BRAND_TITLE[brand], issuer_country: 'RU', issuer_name: 'GPAY Bank' },
-  };
-  const now = new Date(ctx.now());
-  const expired = card.expYear < now.getUTCFullYear() || (card.expYear === now.getUTCFullYear() && card.expMonth < now.getUTCMonth() + 1);
-  const outcome: Outcome = expired ? 'card_expired' : game.outcome;
-  addEvent(ctx, p.id, 'attempt', { method: method.title });
-
-  if (outcome === 'success') {
-    authorize(ctx, p, method);
-    return resultOf(ctx, p.id);
-  }
-  if (outcome === 'three_ds') {
-    // The issuer confirms the purchase on its side (3-D Secure) — the buyer just waits a few seconds.
-    const until = ctx.now() + BANK_CHECK_MS.min + Math.floor(Math.random() * (BANK_CHECK_MS.max - BANK_CHECK_MS.min));
-    ctx.db
-      .prepare('UPDATE payments SET method_type = ?, method = ?, processing_until = ?, pending_action = ? WHERE id = ?')
-      .run('bank_card', JSON.stringify({ ...method, three_d_secure: true }), until, JSON.stringify({ type: 'processing' }), p.id);
-    addEvent(ctx, p.id, '3ds_required', { method: method.title });
-    return { result: 'processing', until };
-  }
-  const o = OUTCOMES[outcome];
-  return decline(ctx, p, outcome, o.message, method.title);
-}
-
-export interface AsyncInput {
-  type: 'sbp' | 'installments' | 'crypto';
-  asset?: 'BTC' | 'USDT';
-  phone?: string;
-  email?: string;
-}
-
-/** SBP / installments / crypto: the buyer "pays" elsewhere and the payment completes after a short delay. */
-export function startAsync(ctx: Ctx, p: PaymentRow, input: AsyncInput): PayResult {
-  assertPayable(ctx, p, input.type);
-  setEmail(ctx, p, input.email);
-  let method: Record<string, unknown>;
-  if (input.type === 'sbp') {
-    method = { type: 'sbp', id: newId('pm', 20), saved: false, title: 'СБП', sbp_operation_id: `A${randomString(31, '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')}`, payer_bank_details: { bank_id: `100000000${randomDigits(3)}`, bic: `0445${randomDigits(5)}` } };
-  } else if (input.type === 'installments') {
-    const digits = (input.phone ?? '').replace(/\D/g, '');
-    if (digits.length !== 11) throw new ApiError(400, 'invalid_request', 'Укажите номер телефона', 'phone');
-    const part = Math.ceil(p.amount / 4);
-    method = { type: 'installments', id: newId('pm', 20), saved: false, title: 'Оплата частями · 4 платежа', plan: { parts: 4, period_days: 14, part_amount: money(part, p.currency) }, phone: `+7 *** ***-${digits.slice(-4, -2)}-${digits.slice(-2)}` };
-  } else {
-    const asset = input.asset === 'BTC' ? 'BTC' : 'USDT';
-    const address = asset === 'BTC' ? `bc1q${randomString(38, '023456789acdefghjklmnpqrstuvwxyz')}` : `T${randomString(33, '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')}`;
-    method = { type: 'crypto', id: newId('pm', 20), saved: false, title: asset === 'BTC' ? 'Bitcoin' : 'USDT · TRC-20', crypto: { asset, network: asset === 'BTC' ? 'bitcoin' : 'tron', address, amount: cryptoAmount(getRates(ctx.db), p.amount, p.currency, asset), tx_hash: null } };
-  }
-  const until = ctx.now() + PROCESSING_MS[input.type];
-  ctx.db.prepare('UPDATE payments SET method_type = ?, method = ?, processing_until = ?, pending_action = ? WHERE id = ?').run(input.type, JSON.stringify(method), until, JSON.stringify({ type: 'processing' }), p.id);
-  addEvent(ctx, p.id, 'processing', { method: method.title });
-  return { result: 'processing', until };
-}
-
-/** Buyer went back from the SBP/crypto screen to choose another method. */
+/** Buyer went back from the bank confirmation screen to choose another method. */
 export function abortAsync(ctx: Ctx, p: PaymentRow) {
   const bankWait = safeJson<{ type?: string } | null>(p.pending_action, null)?.type === 'bank_confirm';
   if (p.status !== 'pending' || (!p.processing_until && !bankWait)) return;
-  if (bankWait && p.bank_auth_id && bankEnabled(ctx)) void bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/void`, {}, `void:${p.bank_auth_id}`).catch(() => {});
+  if (bankWait && p.bank_auth_id?.startsWith('auth_') && bankEnabled(ctx)) void bankRequest(ctx, 'POST', `/internal/v1/authorizations/${p.bank_auth_id}/void`, {}, `void:${p.bank_auth_id}`).catch(() => {});
   ctx.db.prepare('UPDATE payments SET method_type = NULL, method = NULL, processing_until = NULL, pending_action = NULL, bank_auth_id = NULL WHERE id = ?').run(p.id);
   addEvent(ctx, p.id, 'method_reset', {});
 }

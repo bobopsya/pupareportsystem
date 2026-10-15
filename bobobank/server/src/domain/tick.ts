@@ -1,6 +1,7 @@
 import type { Ctx } from '../context.js';
 import { tickCredit } from './credit.js';
 import { releaseHold } from './ledger.js';
+import { expireRequests } from './orders.js';
 
 /** Time-driven work, every 2 seconds: expired purchase confirmations and holds, interest, loans, tariffs. */
 export function tick(ctx: Ctx) {
@@ -14,5 +15,6 @@ export function tick(ctx: Ctx) {
   ctx.db.prepare(`UPDATE holds SET status = 'expired' WHERE status = 'active' AND expires_at <= ?`).run(now);
   ctx.db.prepare('DELETE FROM idempotency WHERE created_at < ?').run(now - 24 * 3600_000);
   ctx.db.prepare('DELETE FROM phone_codes WHERE expires_at < ?').run(now - 3600_000);
+  expireRequests(ctx);
   tickCredit(ctx);
 }

@@ -9,7 +9,7 @@ export interface PublicShop {
   active: boolean;
 }
 
-export type MethodType = 'bank_card' | 'sbp' | 'installments' | 'crypto';
+export type MethodType = 'bank_card' | 'sbp' | 'bobopay';
 
 export interface PublicPayment {
   id: string;
@@ -28,12 +28,13 @@ export interface PublicPayment {
   action: { type: 'processing'; until: number } | { type: 'bank_confirm'; until: number; bank: string } | null;
   /** Bobobank page that pays this order by SBP (encoded in the QR code), when the bank is connected. */
   sbpBankUrl: string | null;
+  /** Bobobank page that pays this order with Bobo Pay. */
+  bobopayUrl: string | null;
   funding: 'bank' | 'test';
   method: {
     type: MethodType;
     title: string;
-    crypto?: { asset: 'BTC' | 'USDT'; network: string; address: string; amount: string; tx_hash: string | null; confirmations?: number };
-    plan?: { parts: number; period_days: number; part_amount: { value: string; currency: string } };
+    phone?: string;
     sbp?: { operationId: string };
   } | null;
   methodType: MethodType | null;

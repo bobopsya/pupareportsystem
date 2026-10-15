@@ -1,21 +1,19 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CreditCard, Plus, Search, ShieldHalf, Trash2 } from 'lucide-react';
+import { ArrowLeft, Search, ShieldHalf } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { ShopAvatar } from '../checkout/Checkout';
 import { Logo } from '../components/Logo';
-import { PayLogo } from '../components/PaymentLogos';
 import { PaymentStatus } from '../components/Status';
-import { Badge, Button, Card, CardHeader, ErrorNote, Field, IconButton, Input, Loading, Modal, Segmented, Select, useToast } from '../components/ui';
+import { Badge, Button, Card, CardHeader, ErrorNote, Field, Input, Loading, Modal, Segmented, Select, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { brandOf } from '../lib/cards';
 import { dateTime, dateTimeSec, METHOD_TITLE, money } from '../lib/format';
 import { Kpi } from '../merchant/Overview';
 import { MethodCell } from '../merchant/PaymentsTable';
 import type { PaymentRowT, Shop } from '../merchant/types';
 
-type Tab = 'shops' | 'users' | 'payments' | 'settings' | 'cards' | 'audit';
+type Tab = 'shops' | 'users' | 'payments' | 'settings' | 'audit';
 
 export default function Admin() {
   const { user, ready } = useAuth();
@@ -46,7 +44,6 @@ export default function Admin() {
               { value: 'users', label: 'Пользователи' },
               { value: 'payments', label: 'Платежи' },
               { value: 'settings', label: 'Курсы и комиссии' },
-              { value: 'cards', label: 'Карты' },
               { value: 'audit', label: 'Журнал' },
             ]}
           />
@@ -55,7 +52,6 @@ export default function Admin() {
         {tab === 'users' && <Users />}
         {tab === 'payments' && <AllPayments />}
         {tab === 'settings' && <RatesFees />}
-        {tab === 'cards' && <Cards />}
         {tab === 'audit' && <Audit />}
       </main>
     </div>
@@ -320,69 +316,6 @@ function RatesFees() {
       </Card>
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
-  );
-}
-
-function Cards() {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const { data } = useQuery({ queryKey: ['admin-cards'], queryFn: () => api<{ items: { pan: string; outcome: string; label: string }[]; outcomes: Record<string, string> }>('/admin/cards') });
-  const [adding, setAdding] = useState(false);
-  const [pan, setPan] = useState('');
-  const [outcome, setOutcome] = useState('success');
-  const [label, setLabel] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  if (!data) return <Loading />;
-  const brand = (p: string) => brandOf(p);
-  return (
-    <Card pad={false}>
-      <div className="p-5 flex flex-wrap items-start justify-between gap-3">
-        <CardHeader title="Карты банка-эмитента" sub="Только эти номера принимаются к оплате. Результат операции определяется номером карты." icon={<CreditCard className="size-4" />} />
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>Добавить карту</Button>
-      </div>
-      <ul className="divide-y divide-line border-t border-line">
-        {data.items.map((c) => {
-          const b = brand(c.pan);
-          return (
-            <li key={c.pan} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-              {b && b !== 'amex' && b !== 'jcb' && <PayLogo name={b} />}
-              <span className="font-mono w-48">{c.pan.replace(/(\d{4})(?=\d)/g, '$1 ')}</span>
-              <Badge tone={c.outcome === 'success' ? 'ok' : c.outcome === 'three_ds' ? 'info' : 'bad'}>{data.outcomes[c.outcome]}</Badge>
-              <span className="flex-1 text-muted truncate hidden sm:block">{c.label}</span>
-              <IconButton label="Удалить" onClick={async () => {
-                if (!confirm(`Удалить карту ${c.pan}?`)) return;
-                await api(`/admin/cards/${c.pan}`, { method: 'DELETE' });
-                void qc.invalidateQueries({ queryKey: ['admin-cards'] });
-              }}><Trash2 className="size-4" /></IconButton>
-            </li>
-          );
-        })}
-      </ul>
-      <Modal open={adding} onClose={() => setAdding(false)} title="Новая карта" footer={<><Button onClick={() => setAdding(false)}>Отмена</Button><Button variant="primary" onClick={async () => {
-        try {
-          await api('/admin/cards', { body: { pan, outcome, label } });
-          setAdding(false);
-          setPan('');
-          setLabel('');
-          setError(null);
-          void qc.invalidateQueries({ queryKey: ['admin-cards'] });
-          toast('Карта добавлена');
-        } catch (e) {
-          setError(errorText(e));
-        }
-      }}>Добавить</Button></>}>
-        <div className="flex flex-col gap-4">
-          <Field label="Номер карты" hint="16 цифр, должен проходить проверку Луна"><Input value={pan} onChange={(e) => setPan(e.target.value.replace(/\D/g, '').slice(0, 16))} mono inputMode="numeric" /></Field>
-          <Field label="Результат операции">
-            <Select value={outcome} onChange={(e) => setOutcome(e.target.value)}>
-              {Object.entries(data.outcomes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </Select>
-          </Field>
-          <Field label="Подпись"><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Карта игрока Алексей" /></Field>
-          {error && <ErrorNote>{error}</ErrorNote>}
-        </div>
-      </Modal>
-    </Card>
   );
 }
 

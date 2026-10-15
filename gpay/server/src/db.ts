@@ -253,6 +253,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE shops ADD COLUMN payout_account TEXT;
   CREATE INDEX payments_bank_auth ON payments(bank_auth_id) WHERE bank_auth_id IS NOT NULL;
   `,
+  `
+  -- Only Bobobank money is accepted: game cards, installments and crypto are gone.
+  UPDATE shops SET methods = '["bank_card","sbp","bobopay"]';
+  DELETE FROM game_cards;
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

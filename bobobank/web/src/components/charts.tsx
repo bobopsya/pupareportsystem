@@ -52,7 +52,7 @@ export function MonthBars({ data, format, active, onPick }: { data: { label: str
         const on = d.key === active;
         return (
           <button key={d.key} type="button" onClick={() => onPick?.(d.key)} className="group flex min-w-0 flex-1 flex-col items-center gap-1.5">
-            <span className={cx('text-[11px] num truncate max-w-full', on ? 'text-fg font-bold' : 'text-faint')}>{d.value ? format(d.value) : ''}</span>
+            <span className={cx('text-[11px] num truncate max-w-full', on ? 'text-fg font-semibold' : 'text-faint')}>{d.value ? format(d.value) : ''}</span>
             <span className="flex h-24 w-full items-end">
               <span className={cx('w-full rounded-lg transition-colors', on ? 'bg-brand' : 'bg-sunken group-hover:bg-hover')} style={{ height: `${Math.max(4, (d.value / max) * 100)}%` }} />
             </span>

@@ -1,6 +1,7 @@
 import { ArrowRight, Check, Lock } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { BoboMark } from '../checkout/AsyncMethods';
 import { Logo } from '../components/Logo';
 import { CardLogos, PayLogo } from '../components/PaymentLogos';
 import { QR } from '../components/QR';
@@ -42,7 +43,7 @@ export default function Landing() {
         <section className="rounded-[40px] bg-sunken mt-2 px-6 sm:px-14 pt-12 sm:pt-16 pb-0 grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-10 overflow-hidden">
           <div className="pb-12 sm:pb-16 self-center">
             <h1 className="text-[40px] sm:text-[60px] leading-[1.04] font-bold tracking-[-0.035em]">Приём онлайн-платежей для&nbsp;бизнеса</h1>
-            <p className="mt-6 text-lg sm:text-xl text-muted max-w-[520px]">Эквайринг, онлайн-касса и ссылки на оплату в одном договоре. Карты, СБП, оплата частями и криптовалюта.</p>
+            <p className="mt-6 text-lg sm:text-xl text-muted max-w-[520px]">Эквайринг, онлайн-касса и ссылки на оплату в одном договоре. Карты Bobobank, СБП и Bobo Pay — оплата в один клик.</p>
             <div className="mt-9 flex flex-col sm:flex-row gap-3">
               <Link to={cta}><Button variant="primary" size="lg" className="w-full sm:w-auto">Подключить GPAY</Button></Link>
               <Link to="/docs"><Button size="lg" className="w-full sm:w-auto !bg-surface hover:!bg-hover">Документация API</Button></Link>
@@ -75,7 +76,7 @@ export default function Landing() {
           <h2 className="text-[32px] sm:text-[44px] font-bold tracking-[-0.03em] leading-tight max-w-[760px]">Всё, чтобы принимать оплату на сайте, в приложении и офлайн</h2>
           <Feature
             title="Платёжная форма, которой доверяют"
-            text="Карты МИР, Visa, Mastercard и UnionPay, СБП, оплата частями и криптовалюта. 3-D Secure, понятные ошибки и повторная попытка в один клик."
+            text="Карты Bobobank МИР, Visa, Mastercard и UnionPay, СБП и Bobo Pay. Подтверждение в приложении банка, понятные ошибки и повторная попытка в один клик."
             points={['Адаптивная страница оплаты', 'Виджет поверх вашего сайта', 'Возврат покупателя в магазин']}
             art={<FormArt />}
           />
@@ -126,10 +127,9 @@ export default function Landing() {
           <p className="mt-3 text-lg text-muted">Без абонентской платы. Платите только за успешные платежи.</p>
           <div className="mt-10 rounded-3xl border border-line overflow-hidden">
             {[
-              ['Банковские карты', 'МИР, Visa, Mastercard, UnionPay', '2,8%'],
-              ['СБП', 'Оплата по QR-коду из приложения банка', '0,7%'],
-              ['Оплата частями', '4 платежа для покупателя, деньги магазину сразу', '4,9%'],
-              ['Криптовалюта', 'USDT (TRC-20) и Bitcoin', '1,5%'],
+              ['Карты Bobobank', 'МИР, Visa, Mastercard, UnionPay', '2,8%'],
+              ['СБП', 'QR-код открывает заказ в приложении Bobobank', '0,7%'],
+              ['Bobo Pay', 'Кнопка оплаты в Bobobank или запрос на телефон', '1,5%'],
             ].map(([t, d, p]) => (
               <div key={t} className="flex items-center justify-between gap-6 px-6 sm:px-8 py-6 border-b border-line last:border-0">
                 <div>
@@ -221,7 +221,7 @@ function PhoneMock() {
         <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-sunken p-1 text-[13px] font-medium text-center">
           <span className="rounded-[10px] bg-surface py-1.5">Карта</span>
           <span className="py-1.5 text-muted">СБП</span>
-          <span className="py-1.5 text-muted">Частями</span>
+          <span className="py-1.5 text-muted">Bobo Pay</span>
         </div>
         <div className="mt-3 rounded-xl bg-sunken">
           <div className="h-12 px-4 flex items-center justify-between text-[15px] tabular-nums">2200 1234 5678 9012 <PayLogo name="mir" /></div>
@@ -244,8 +244,7 @@ function FormArt() {
         {[
           ['Банковская карта', <CardLogos key="c" />],
           ['СБП', <PayLogo key="s" name="sbp" />],
-          ['Оплата частями', <span key="p" className="text-sm text-muted">4 × 2 475 ₽</span>],
-          ['Криптовалюта', <span key="k" className="inline-flex gap-1"><PayLogo name="tether" /><PayLogo name="bitcoin" /></span>],
+          ['Bobo Pay', <BoboMark key="b" className="size-6" />],
         ].map(([t, r], i) => (
           <div key={String(t)} className={cx('flex items-center justify-between gap-3 rounded-xl px-4 h-14', i === 0 ? 'border-[1.5px] border-fg' : 'bg-sunken')}>
             <span className="font-medium text-[15px]">{t}</span>

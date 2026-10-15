@@ -61,12 +61,24 @@ export type Recipient =
   | { type: 'card'; pan: string }
   | { type: 'account'; number: string; bik: string; name: string; inn?: string; purpose?: string };
 
+/** Who the money went to, stored with the transaction: recent recipients and favourites are built from it. */
+export interface RecipientRef {
+  type: 'phone' | 'card' | 'account' | 'own';
+  name: string;
+  phone?: string;
+  cardId?: string;
+  last4?: string;
+  number?: string;
+  bik?: string;
+}
+
 export interface ResolvedRecipient {
   /** Bobobank account that receives the money, or null for other banks. */
   account: AccountRow | null;
   user: UserRow | null;
   display: string;
   subtitle: string;
+  ref?: RecipientRef;
 }
 
 export function resolveRecipient(ctx: Ctx, r: Recipient, currency: string): ResolvedRecipient {
@@ -79,7 +91,7 @@ export function resolveRecipient(ctx: Ctx, r: Recipient, currency: string): Reso
       ? mainAccount(ctx, u.id)
       : (ctx.db.prepare(`SELECT * FROM accounts WHERE user_id = ? AND kind = 'current' AND currency = ? AND status = 'open' ORDER BY created_at LIMIT 1`).get(u.id, currency) as AccountRow | undefined);
     if (!acc) throw new HttpError(400, `У получателя нет счёта в ${currency}`);
-    return { account: acc, user: u, display: shortName(u.name), subtitle: `Перевод по номеру ${formatPhone(phone)}` };
+    return { account: acc, user: u, display: shortName(u.name), subtitle: `Перевод по номеру ${formatPhone(phone)}`, ref: { type: 'phone', name: shortName(u.name), phone } };
   }
   if (r.type === 'card') {
     const pan = r.pan.replace(/\D/g, '');
@@ -87,7 +99,7 @@ export function resolveRecipient(ctx: Ctx, r: Recipient, currency: string): Reso
     if (!card || card.status === 'closed') throw new HttpError(404, 'Карта не найдена. Переводы по номеру карты доступны на карты Bobobank.');
     const acc = getAccount(ctx, card.account_id)!;
     const u = getUserSafe(ctx, card.user_id);
-    return { account: acc, user: u, display: shortName(u.name), subtitle: `Перевод на карту •• ${card.last4}` };
+    return { account: acc, user: u, display: shortName(u.name), subtitle: `Перевод на карту •• ${card.last4}`, ref: { type: 'card', name: shortName(u.name), cardId: card.id, last4: card.last4 } };
   }
   const number = r.number.replace(/\s/g, '');
   if (!/^\d{9}$/.test(r.bik)) throw new HttpError(400, 'БИК — 9 цифр');
@@ -96,9 +108,9 @@ export function resolveRecipient(ctx: Ctx, r: Recipient, currency: string): Reso
     const acc = ctx.db.prepare(`SELECT * FROM accounts WHERE number = ? AND user_id IS NOT NULL`).get(number) as AccountRow | undefined;
     if (!acc || acc.status !== 'open') throw new HttpError(404, 'Счёт получателя не найден в Bobobank');
     const u = getUserSafe(ctx, acc.user_id!);
-    return { account: acc, user: u, display: r.name || shortName(u.name), subtitle: r.purpose || `Перевод на счёт ${number.slice(0, 5)}…${number.slice(-4)}` };
+    return { account: acc, user: u, display: r.name || shortName(u.name), subtitle: r.purpose || `Перевод на счёт ${number.slice(0, 5)}…${number.slice(-4)}`, ref: { type: 'account', name: r.name || shortName(u.name), number, bik: r.bik } };
   }
-  return { account: null, user: null, display: r.name, subtitle: r.purpose || `Перевод в другой банк, БИК ${r.bik}` };
+  return { account: null, user: null, display: r.name, subtitle: r.purpose || `Перевод в другой банк, БИК ${r.bik}`, ref: { type: 'account', name: r.name, number, bik: r.bik } };
 }
 
 function getUserSafe(ctx: Ctx, id: string) {
@@ -123,7 +135,7 @@ export function transfer(ctx: Ctx, sender: UserRow, from: AccountRow, to: Resolv
     { account: target, amount: credited, title: own ? 'Между своими счетами' : shortName(sender.name), subtitle: comment || (own ? `Со счёта •• ${from.number.slice(-4)}` : 'Входящий перевод'), category: own ? 'transfers' : 'income' },
   ];
   if (fee) legs.push({ account: systemAccount(ctx, 'fees', from.currency), amount: fee });
-  const txId = post(ctx, { kind: own ? 'own_transfer' : 'transfer', description: `Перевод ${senderTitle}`, initiatorId: sender.id, meta: { comment, fee, to: to.display }, legs });
+  const txId = post(ctx, { kind: own ? 'own_transfer' : 'transfer', description: `Перевод ${senderTitle}`, initiatorId: sender.id, meta: { comment, fee, to: to.display, recipient: own ? undefined : to.ref }, legs });
   if (to.user && !own) notify(ctx, to.user.id, 'income', `+${humanMoney(credited, target.currency)}`, `${shortName(sender.name)}: ${comment || 'перевод'}`, { txId });
   return { txId, fee };
 }

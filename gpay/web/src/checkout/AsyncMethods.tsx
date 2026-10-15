@@ -1,55 +1,23 @@
-import { ArrowLeft, BellRing, Check, ExternalLink, Landmark, Loader2, Smartphone } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { PayLogo, SbpMark } from '../components/PaymentLogos';
+import { ArrowLeft, BellRing, ExternalLink, Loader2, Smartphone } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { SbpMark } from '../components/PaymentLogos';
 import { QR } from '../components/QR';
-import { Button, CopyButton, cx, Field, Input, Segmented } from '../components/ui';
+import { Button, Field, Input } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { money } from '../lib/format';
 import type { CheckoutData, PayResult, PublicPayment } from './types';
 
 type Done = (r: PayResult, p: PublicPayment) => void;
 
-async function start(id: string, body: object) {
-  return api<{ result: PayResult; payment: PublicPayment }>(`/checkout/payments/${id}/async`, { body });
-}
-
-/** 0→1 progress of the simulated processing window. */
-function useProgress(until: number | null, total: number) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (!until) return;
-    const t = setInterval(() => setNow(Date.now()), 200);
-    return () => clearInterval(t);
-  }, [until]);
-  if (!until) return 0;
-  return Math.min(1, Math.max(0, 1 - (until - now) / total));
-}
-
-function Steps({ steps, progress }: { steps: string[]; progress: number }) {
-  const active = Math.min(steps.length - 1, Math.floor(progress * steps.length));
+/** Bobobank's mark: two rings, white on green. */
+export function BoboMark({ className }: { className?: string }) {
   return (
-    <ol className="flex flex-col gap-3 text-[15px]">
-      {steps.map((s, i) => (
-        <li key={s} className={cx('flex items-center gap-2.5 transition-colors', i <= active ? 'text-fg' : 'text-faint')}>
-          {i < active ? (
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-ink text-on-ink"><Check className="size-3" strokeWidth={3} /></span>
-          ) : i === active ? (
-            <span className="size-5 shrink-0 rounded-full border-2 border-fg border-t-transparent animate-spin" aria-hidden="true" />
-          ) : (
-            <span className="size-5 shrink-0 rounded-full border-2 border-line-strong" />
-          )}
-          {s}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Bar({ progress }: { progress: number }) {
-  return (
-    <div className="h-1.5 rounded-full bg-sunken overflow-hidden">
-      <div className="h-full rounded-full bg-ink transition-[width] duration-200" style={{ width: `${Math.round(progress * 100)}%` }} />
-    </div>
+    <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
+      <rect width="64" height="64" rx="16" fill="#21A038" />
+      <rect x="15" y="12" width="7" height="34" rx="3.5" fill="#fff" />
+      <circle cx="30" cy="38" r="9.5" fill="none" stroke="#fff" strokeWidth="7" />
+      <circle cx="44" cy="38" r="9.5" fill="none" stroke="#fff" strokeOpacity="0.55" strokeWidth="7" />
+    </svg>
   );
 }
 
@@ -65,277 +33,83 @@ function BackLink({ id, onBack }: { id: string; onBack: (p: PublicPayment) => vo
   );
 }
 
-// ---------- SBP ----------
-
-/** QR code that opens the order in Bobobank; the page polls until the bank pays it. */
-function BobobankSbp({ payment, url, onUpdate }: { payment: PublicPayment; url: string; onUpdate: (p: PublicPayment) => void }) {
+/** Keeps the page in sync while the buyer pays in the Bobobank app in another tab or on the phone. */
+function usePollPaid(id: string, onUpdate: (p: PublicPayment) => void) {
   useEffect(() => {
     const t = setInterval(async () => {
       try {
-        const r = await api<{ payment: PublicPayment }>(`/checkout/payments/${payment.id}`);
+        const r = await api<{ payment: PublicPayment }>(`/checkout/payments/${id}`);
         if (r.payment.status !== 'pending') onUpdate(r.payment);
       } catch {
         /* keep polling */
       }
     }, 2000);
     return () => clearInterval(t);
-  }, [payment.id, onUpdate]);
+  }, [id, onUpdate]);
+}
+
+// ---------- SBP: the QR code opens the order in Bobobank ----------
+export function SbpPanel({ data, onBack }: { data: CheckoutData; onBack: (p: PublicPayment) => void }) {
+  const p = data.payment;
+  usePollPaid(p.id, onBack);
+  if (!p.sbpBankUrl || p.currency !== 'RUB') return <p className="text-sm text-muted">Оплата через СБП доступна только в рублях.</p>;
   return (
     <div className="flex flex-col items-center gap-4 rounded-2xl border border-line p-5 text-center sm:flex-row sm:text-left">
       <div className="relative shrink-0 rounded-2xl bg-white p-3 ring-1 ring-line">
-        <QR text={url} className="size-36" dark="#0b3d26" />
-        <span className="absolute left-1/2 top-1/2 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg bg-white shadow-card"><SbpMark className="size-6" /></span>
+        <QR text={p.sbpBankUrl} className="size-40" dark="#0b3d26" />
+        <span className="absolute left-1/2 top-1/2 flex size-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg bg-white shadow-card"><SbpMark className="size-7" /></span>
       </div>
       <div className="flex min-w-0 flex-col gap-2">
-        <div className="font-semibold">Оплатить в Bobobank</div>
-        <p className="text-sm text-muted">Наведите камеру телефона на код — откроется приложение Bobobank. Подтвердите оплату {money(payment.amount, payment.currency)}, и страница обновится сама.</p>
-        <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 self-center rounded-xl bg-[#0fa760] px-4 text-[15px] font-medium text-white hover:bg-[#0c9455] sm:self-start">
+        <div className="font-semibold">Отсканируйте QR-код камерой телефона</div>
+        <p className="text-sm text-muted">Откроется приложение Bobobank — подтвердите оплату {money(p.amount, p.currency)}. Страница обновится сама.</p>
+        <a href={p.sbpBankUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 self-center rounded-xl bg-[#21A038] px-4 text-[15px] font-medium text-white hover:bg-[#1c8f32] sm:self-start">
           Открыть Bobobank <ExternalLink className="size-4" />
         </a>
       </div>
     </div>
   );
 }
-export function SbpPanel({ data, email, emailOk, onResult, onBack }: { data: CheckoutData; email: string; emailOk: boolean; onResult: Done; onBack: (p: PublicPayment) => void }) {
+
+// ---------- Bobo Pay: a button into the bank, or a request to the buyer's phone ----------
+export function BobopayPanel({ data, email, emailOk, onResult, onBack }: { data: CheckoutData; email: string; emailOk: boolean; onResult: Done; onBack: (p: PublicPayment) => void }) {
   const p = data.payment;
-  const processing = p.action?.type === 'processing' && p.methodType === 'sbp' ? p.action.until : null;
-  const progress = useProgress(processing, 9000);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (processing) {
-    return (
-      <div className="flex flex-col items-center text-center gap-4 gp-fade-up">
-        <div className="relative rounded-3xl bg-white p-5 ring-1 ring-line">
-          <QR text={`${location.origin}/pay/${p.id}?sbp=${p.method?.sbp?.operationId ?? ''}`} className="size-44 sm:size-48" dark="#1d1d1b" />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex size-11 items-center justify-center rounded-xl bg-white shadow-card">
-            <SbpMark className="size-7" />
-          </span>
-        </div>
-        <div>
-          <div className="font-semibold">Отсканируйте QR-код</div>
-          <p className="text-sm text-muted mt-1 max-w-xs">Камерой телефона или в приложении вашего банка, затем подтвердите перевод {money(p.amount, p.currency)}</p>
-        </div>
-        <div className="w-full max-w-xs flex flex-col gap-3">
-          <Bar progress={progress} />
-          <div className="flex items-center justify-center gap-2 text-sm text-muted">
-            <Loader2 className="size-3.5 animate-spin" /> {progress < 0.55 ? 'Ожидаем оплату в приложении банка…' : 'Банк подтверждает перевод…'}
-          </div>
-        </div>
-        <div className="text-[13px] text-faint tabular-nums">ID операции СБП: {p.method?.sbp?.operationId}</div>
-        <BackLink id={p.id} onBack={onBack} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      {p.sbpBankUrl && p.currency === 'RUB' && <BobobankSbp payment={p} url={p.sbpBankUrl} onUpdate={onBack} />}
-      {p.sbpBankUrl && p.currency === 'RUB' && <div className="flex items-center gap-3 text-xs text-faint"><span className="h-px flex-1 bg-line" />или в приложении другого банка<span className="h-px flex-1 bg-line" /></div>}
-      <div className="flex items-start gap-3 rounded-2xl bg-sunken p-5">
-        <Smartphone className="size-5 mt-0.5 shrink-0" />
-        <p className="text-[15px] text-muted">
-          Оплата через Систему быстрых платежей без ввода данных карты. Покажем QR-код — отсканируйте его в приложении любого банка-участника СБП. Комиссия для покупателя — 0 ₽.
-        </p>
-      </div>
-      {error && <p className="text-[13px] text-bad">{error}</p>}
-      <Button
-        variant="primary"
-        size="lg"
-        className="w-full"
-        loading={busy}
-        icon={<span className="flex size-6 items-center justify-center rounded-md bg-white"><SbpMark className="size-4" /></span>}
-        onClick={async () => {
-          if (!emailOk) return setError('Проверьте email для чека');
-          setBusy(true);
-          setError(null);
-          try {
-            const r = await start(p.id, { type: 'sbp', email: email || undefined });
-            onResult(r.result, r.payment);
-          } catch (e) {
-            setError(errorText(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Оплатить через СБП
-      </Button>
-    </div>
-  );
-}
-
-// ---------- Installments ----------
-export function InstallmentsPanel({ data, email, emailOk, onResult, onBack }: { data: CheckoutData; email: string; emailOk: boolean; onResult: Done; onBack: (p: PublicPayment) => void }) {
-  const p = data.payment;
-  const processing = p.action?.type === 'processing' && p.methodType === 'installments' ? p.action.until : null;
-  const progress = useProgress(processing, 11000);
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const part = Math.ceil(p.amount / 4);
-  const day = 24 * 3600 * 1000;
-  const fmt = (ts: number) => new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(ts).replace('.', '');
-
-  const schedule = (
-    <div className="grid grid-cols-4 gap-2">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className={cx('rounded-2xl border-[1.5px] px-2 py-3 text-center', i === 0 ? 'border-fg bg-surface' : 'border-transparent bg-sunken')}>
-          <div className="mx-auto mb-1.5 size-6 rounded-full border-2 border-fg" style={{ background: `conic-gradient(var(--color-fg) ${(i + 1) * 25}%, transparent 0)` }} />
-          <div className="text-[13px] font-semibold">{money(i === 3 ? p.amount - part * 3 : part, p.currency)}</div>
-          <div className="text-[11px] text-muted">{i === 0 ? 'сегодня' : fmt(Date.now() + i * 14 * day)}</div>
-        </div>
-      ))}
-    </div>
-  );
-
-  if (processing) {
-    return (
-      <div className="flex flex-col gap-5 gp-fade-up">
-        {schedule}
-        <Bar progress={progress} />
-        <Steps steps={['Проверяем данные', 'Принимаем решение', 'Списываем первый платёж']} progress={progress} />
-        <BackLink id={p.id} onBack={onBack} />
-      </div>
-    );
-  }
-
+  usePollPaid(p.id, onBack);
   const digits = phone.replace(/\D/g, '');
-  const fmtPhone = (d: string) => {
-    const x = d.replace(/^[78]/, '').slice(0, 10);
-    const parts = [x.slice(0, 3), x.slice(3, 6), x.slice(6, 8), x.slice(8, 10)];
-    return `+7${parts[0] ? ` (${parts[0]}` : ''}${parts[0].length === 3 ? ')' : ''}${parts[1] ? ` ${parts[1]}` : ''}${parts[2] ? `-${parts[2]}` : ''}${parts[3] ? `-${parts[3]}` : ''}`;
+  const request = async () => {
+    if (!emailOk) return setError('Проверьте email для чека');
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api<{ result: PayResult; payment: PublicPayment }>(`/checkout/payments/${p.id}/bobopay`, { body: { phone: digits, email: email || undefined } });
+      onResult(r.result, r.payment);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   };
-
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <div className="text-[15px] font-semibold">4 платежа без переплаты</div>
-        <p className="text-sm text-muted mt-0.5">Сегодня — 25%, остальное раз в две недели. Без процентов и комиссий.</p>
-      </div>
-      {schedule}
-      <Field label="Номер телефона" error={error}>
-        <Input inputMode="tel" autoComplete="tel" placeholder="+7 (900) 000-00-00" value={phone ? fmtPhone(phone.replace(/\D/g, '')) : ''} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} />
+      {p.bobopayUrl && (
+        <a href={p.bobopayUrl} className="flex h-14 items-center justify-center gap-2.5 rounded-xl bg-[#21A038] text-[17px] font-semibold text-white hover:bg-[#1c8f32]">
+          <BoboMark className="size-7" /> Bobo Pay
+        </a>
+      )}
+      <div className="flex items-center gap-3 text-xs text-faint"><span className="h-px flex-1 bg-line" />или запрос в приложение по номеру<span className="h-px flex-1 bg-line" /></div>
+      <Field label="Номер телефона в Bobobank" error={error}>
+        <Input inputMode="tel" autoComplete="tel" placeholder="+7 900 000-00-00" value={phone} onChange={(e) => setPhone(e.target.value)} />
       </Field>
-      <Button
-        variant="primary"
-        size="lg"
-        className="w-full"
-        loading={busy}
-        onClick={async () => {
-          const d = digits.replace(/^[78]/, '');
-          if (d.length !== 10) return setError('Введите номер телефона полностью');
-          if (!emailOk) return setError('Проверьте email для чека');
-          setBusy(true);
-          setError(null);
-          try {
-            const r = await start(p.id, { type: 'installments', phone: `7${d}`, email: email || undefined });
-            onResult(r.result, r.payment);
-          } catch (e) {
-            setError(errorText(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Оформить и оплатить {money(part, p.currency)}
+      <Button variant="secondary" size="lg" loading={busy} disabled={digits.length < 10} icon={<Smartphone className="size-5" />} onClick={() => void request()}>
+        Отправить запрос в приложение
       </Button>
     </div>
   );
 }
 
-// ---------- Crypto ----------
-export function CryptoPanel({ data, email, emailOk, onResult, onBack }: { data: CheckoutData; email: string; emailOk: boolean; onResult: Done; onBack: (p: PublicPayment) => void }) {
-  const p = data.payment;
-  const processing = p.action?.type === 'processing' && p.methodType === 'crypto' ? p.action.until : null;
-  const progress = useProgress(processing, 14000);
-  const [asset, setAsset] = useState<'USDT' | 'BTC'>('USDT');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const rubPer = p.currency === 'RUB' ? 1 : data.rates[p.currency as 'USD'];
-  const approx = (a: 'USDT' | 'BTC') => {
-    const v = ((p.amount / 100) * rubPer) / data.rates[a];
-    return a === 'BTC' ? v.toFixed(8) : (Math.ceil(v * 100) / 100).toFixed(2);
-  };
-
-  if (processing && p.method?.crypto) {
-    const c = p.method.crypto;
-    const need = c.asset === 'BTC' ? 3 : 20;
-    const conf = Math.max(0, Math.floor((progress - 0.35) / 0.65 * need));
-    return (
-      <div className="flex flex-col gap-4 gp-fade-up">
-        <div className="flex gap-4 items-center">
-          <div className="rounded-2xl bg-white p-3 ring-1 ring-line shrink-0">
-            <QR text={c.asset === 'BTC' ? `bitcoin:${c.address}?amount=${c.amount}` : c.address} className="size-28" />
-          </div>
-          <div className="min-w-0 flex flex-col gap-2">
-            <div className="text-sm text-muted">Отправьте ровно</div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg font-semibold tabular-nums">{c.amount} {c.asset}</span>
-              <CopyButton text={c.amount} label="Скопировать сумму" />
-            </div>
-            <div className="text-xs text-muted">Сеть: {c.asset === 'BTC' ? 'Bitcoin' : 'TRON (TRC-20)'}</div>
-          </div>
-        </div>
-        <div>
-          <div className="text-sm text-muted mb-1.5">Адрес кошелька</div>
-          <div className="flex items-center gap-1 rounded-xl bg-sunken pl-4 pr-1.5 h-12">
-            <span className="flex-1 truncate font-mono text-[12px]">{c.address}</span>
-            <CopyButton text={c.address} label="Скопировать адрес" />
-          </div>
-        </div>
-        <Bar progress={progress} />
-        <Steps steps={['Ожидаем транзакцию', `Подтверждения сети: ${Math.min(conf, need)}/${need}`, 'Зачисляем платёж']} progress={progress} />
-        <p className="text-[11px] text-faint">Курс зафиксирован на 15 минут. Отправка другой суммы или в другой сети приведёт к потере средств.</p>
-        <BackLink id={p.id} onBack={onBack} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Segmented
-        value={asset}
-        onChange={setAsset}
-        className="w-full [&>button]:flex-1"
-        options={[
-          { value: 'USDT', label: <span className="inline-flex items-center gap-1.5"><PayLogo name="tether" className="!w-5 !h-5 !border-0 !bg-transparent" />USDT · TRC-20</span> },
-          { value: 'BTC', label: <span className="inline-flex items-center gap-1.5"><PayLogo name="bitcoin" className="!w-5 !h-5 !border-0 !bg-transparent" />Bitcoin</span> },
-        ]}
-      />
-      <div className="rounded-2xl bg-sunken px-5 py-4 flex items-center justify-between">
-        <span className="text-sm text-muted">К оплате</span>
-        <span className="font-semibold tabular-nums">≈ {approx(asset)} {asset}</span>
-      </div>
-      {error && <p className="text-[13px] text-bad">{error}</p>}
-      <Button
-        variant="primary"
-        size="lg"
-        className="w-full"
-        loading={busy}
-        onClick={async () => {
-          if (!emailOk) return setError('Проверьте email для чека');
-          setBusy(true);
-          setError(null);
-          try {
-            const r = await start(p.id, { type: 'crypto', asset, email: email || undefined });
-            onResult(r.result, r.payment);
-          } catch (e) {
-            setError(errorText(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Получить адрес для оплаты
-      </Button>
-    </div>
-  );
-}
-
-// ---------- Card confirmation with the issuing bank ----------
-/** Shown while the issuer confirms a card payment (3-D Secure runs on the bank side, nothing to type). */
-/** Bobobank card: the owner confirms the purchase in the bank app; the page waits and polls. */
+/** The buyer confirms in the Bobobank app (card purchase or Bobo Pay request); the page waits and polls. */
 export function BankConfirm({ data, onBack }: { data: CheckoutData; onBack: (p: PublicPayment) => void }) {
   const p = data.payment;
   const until = p.action?.type === 'bank_confirm' ? p.action.until : Date.now();
@@ -345,43 +119,23 @@ export function BankConfirm({ data, onBack }: { data: CheckoutData; onBack: (p: 
     return () => clearInterval(t);
   }, []);
   const left = Math.max(0, Math.round((until - now) / 1000));
+  const viaPhone = p.methodType === 'bobopay';
   return (
     <div className="flex flex-col items-center text-center gap-5 py-4 gp-fade-up">
-      <div className="relative flex size-16 items-center justify-center rounded-full bg-[#e2f6eb] text-[#0a8a4e]">
-        <span className="absolute inset-0 rounded-full bg-[#0fa760]/25 animate-ping" />
+      <div className="relative flex size-16 items-center justify-center rounded-full bg-[#e6f5e9] text-[#17802c]">
+        <span className="absolute inset-0 rounded-full bg-[#21A038]/25 animate-ping" />
         <BellRing className="relative size-7" />
       </div>
       <div>
-        <div className="text-xl font-bold">Подтвердите покупку в приложении {p.action?.type === 'bank_confirm' ? p.action.bank : 'банка'}</div>
-        <p className="mt-1 text-[15px] text-muted max-w-sm">Мы отправили запрос на {money(p.amount, p.currency)} по карте {p.method?.title}. Откройте приложение банка и нажмите «Подтвердить».</p>
+        <div className="text-xl font-bold">{viaPhone ? 'Подтвердите оплату в приложении Bobobank' : 'Подтвердите покупку в приложении Bobobank'}</div>
+        <p className="mt-1 text-[15px] text-muted max-w-sm">
+          {viaPhone ? `Мы отправили запрос на ${money(p.amount, p.currency)} на номер ${p.method?.phone ?? ''}.` : `Мы отправили запрос на ${money(p.amount, p.currency)} по карте ${p.method?.title}.`} Откройте Bobobank и нажмите «Подтвердить».
+        </p>
       </div>
       <div className="flex items-center gap-2 text-sm text-muted tabular-nums">
         <Loader2 className="size-3.5 animate-spin" /> Ждём подтверждения · {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
       </div>
       <BackLink id={p.id} onBack={onBack} />
-    </div>
-  );
-}
-
-export function BankCheck({ data }: { data: CheckoutData }) {
-  const p = data.payment;
-  const until = p.action?.type === 'processing' ? p.action.until : null;
-  const startedAt = useRef(Date.now());
-  const progress = useProgress(until, Math.max(1000, (until ?? 0) - startedAt.current));
-  return (
-    <div className="flex flex-col items-center text-center gap-5 py-4 gp-fade-up">
-      <div className="relative flex size-16 items-center justify-center rounded-full bg-sunken">
-        <Landmark className="size-7" />
-        <Loader2 className="absolute -inset-1 size-[72px] animate-spin text-fg/15" strokeWidth={1} />
-      </div>
-      <div>
-        <div className="text-xl font-bold">Связываемся с банком</div>
-        <p className="mt-1 text-[15px] text-muted max-w-xs">{p.method?.title ?? 'Карта'} · {money(p.amount, p.currency)}. Не закрывайте страницу, это займёт несколько секунд.</p>
-      </div>
-      <div className="w-full max-w-sm flex flex-col gap-4 text-left">
-        <Bar progress={progress} />
-        <Steps steps={['Соединение с банком-эмитентом', 'Банк подтверждает платёж', 'Списание средств']} progress={progress} />
-      </div>
     </div>
   );
 }

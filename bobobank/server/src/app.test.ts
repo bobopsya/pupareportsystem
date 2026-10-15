@@ -25,8 +25,8 @@ beforeEach(async () => {
   gpayStatus = 200;
   ctx.http = async (url, init) => {
     gpayCalls.push({ url, body: String(init.body ?? '') });
-    if (url.includes('/internal/bank/payments/') && !url.endsWith('/sbp')) {
-      return Response.json({ id: 'pay_test123456', status: 'pending', amount: 129000, currency: 'RUB', description: 'Заказ', merchant: { name: 'Кофейня', mcc: 5814, shop_id: 412038 }, sbp: true });
+    if (url.includes('/internal/bank/payments/') && !/\/(sbp|bobopay)$/.test(url)) {
+      return Response.json({ id: 'pay_test123456', status: 'pending', amount: 129000, currency: 'RUB', description: 'Заказ', merchant: { name: 'Кофейня', mcc: 5814, shop_id: 412038 }, sbp: true, bobopay: true });
     }
     return Response.json(gpayStatus === 200 ? { status: 'succeeded' } : { error: 'Платёж уже оплачен' }, { status: gpayStatus });
   };
@@ -107,6 +107,26 @@ describe('money', () => {
     const over = await app.inject({ method: 'POST', url: '/api/transfers', headers: a.headers, payload: { fromAccountId: a.main.id, recipient: { type: 'phone', phone: '+79004445566' }, amount: '100000.00' } });
     expect(over.statusCode).toBe(400);
     expect(over.json().code).toBe('insufficient_funds');
+    assertLedger();
+  });
+
+  it('remembers recipients even when the transfer had a message, and keeps favourites', async () => {
+    const adminH = await admin();
+    const a = await client();
+    const b = await client('+7 900 444-55-66', 'Мария Смирнова');
+    await credit(adminH, a.main.id, '5000.00');
+    await app.inject({ method: 'POST', url: '/api/transfers', headers: a.headers, payload: { fromAccountId: a.main.id, recipient: { type: 'phone', phone: '+79004445566' }, amount: '100.00', comment: 'За обед' } });
+    await app.inject({ method: 'POST', url: '/api/transfers', headers: a.headers, payload: { fromAccountId: a.main.id, recipient: { type: 'card_id', cardId: b.card.id }, amount: '50.00' } });
+    const recent = (await app.inject({ url: '/api/transfers/recent', headers: a.headers })).json().items;
+    expect(recent).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Мария С.', type: 'phone', phone: '79004445566' }),
+      expect.objectContaining({ name: 'Мария С.', type: 'card', cardId: b.card.id }),
+    ]));
+    const fav = await app.inject({ method: 'POST', url: '/api/favorites', headers: a.headers, payload: { title: 'Маша', type: 'phone', value: '8 900 444-55-66', amount: '300.00' } });
+    expect(fav.json().favorite).toMatchObject({ title: 'Маша', value: '79004445566', amount: 30000 });
+    const list = (await app.inject({ url: '/api/favorites', headers: a.headers })).json().items;
+    expect(list).toHaveLength(1);
+    expect((await app.inject({ method: 'DELETE', url: `/api/favorites/${list[0].id}`, headers: a.headers })).statusCode).toBe(200);
     assertLedger();
   });
 
@@ -223,6 +243,54 @@ describe('GPAY integration', () => {
     expect(payout.json().status).toBe('succeeded');
     const acc = (await app.inject({ url: `/api/accounts/${biz.id}`, headers: a.headers })).json();
     expect(acc.account.balance).toBe(100_000);
+    assertLedger();
+  });
+  it('pays with the Bobo Pay button and refunds to the same account', async () => {
+    const adminH = await admin();
+    const a = await client();
+    await credit(adminH, a.main.id, '5000.00');
+    const pay = await app.inject({ method: 'POST', url: '/api/sbp/pay_test123456/pay', headers: a.headers, payload: { accountId: a.main.id, method: 'bobopay' } });
+    expect(pay.statusCode).toBe(200);
+    expect(gpayCalls.at(-1)!.url).toBe('http://gpay.internal/internal/bank/payments/pay_test123456/bobopay');
+    const rf = await internal('POST', '/internal/v1/sbp/pay_test123456/refund', { amount: 29_000, refund_id: 'rf_1' }, { key: 'rf_1' });
+    expect(rf.statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/home', headers: a.headers })).json().accounts[0].balance).toBe(500_000 - 129_000 + 29_000);
+    const over = await internal('POST', '/internal/v1/sbp/pay_test123456/refund', { amount: 200_000, refund_id: 'rf_2' }, { key: 'rf_2' });
+    expect(over.statusCode).toBe(400);
+    assertLedger();
+  });
+
+  it('asks the customer to approve a Bobo Pay request by phone, and declines or expires it', async () => {
+    const adminH = await admin();
+    const a = await client();
+    await credit(adminH, a.main.id, '5000.00');
+    const body = { phone: '+7 900 111-22-33', payment_id: 'pay_test123456', amount: 129_000, currency: 'RUB', description: 'Заказ', merchant: { name: 'Кофейня', shop_id: 412038, mcc: 5814 } };
+    const unknown = await internal('POST', '/internal/v1/requests', { ...body, phone: '+7 900 000-00-00' }, { key: 'r0' });
+    expect(unknown.statusCode).toBe(404);
+    const req = (await internal('POST', '/internal/v1/requests', body, { key: 'r1' })).json();
+    expect(req).toMatchObject({ status: 'pending' });
+    expect(req.id).toMatch(/^req_/);
+    const pulse = (await app.inject({ url: '/api/pulse', headers: a.headers })).json();
+    expect(pulse.requests).toEqual([expect.objectContaining({ id: req.id, amount: 129_000 })]);
+    const other = await client('+7 900 444-55-66', 'Пётр Сидоров');
+    expect((await app.inject({ method: 'POST', url: `/api/requests/${req.id}`, headers: other.headers, payload: { approve: true, accountId: other.main.id } })).statusCode).toBe(404);
+    const ok = await app.inject({ method: 'POST', url: `/api/requests/${req.id}`, headers: a.headers, payload: { approve: true, accountId: a.main.id } });
+    expect(ok.json()).toEqual({ status: 'paid' });
+    expect((await internal('GET', `/internal/v1/requests/${req.id}`)).json().status).toBe('paid');
+    expect((await app.inject({ url: '/api/home', headers: a.headers })).json().accounts[0].balance).toBe(500_000 - 129_000);
+    expect((await app.inject({ method: 'POST', url: `/api/requests/${req.id}`, headers: a.headers, payload: { approve: true, accountId: a.main.id } })).statusCode).toBe(400);
+    // The paid order can be refunded the same way as SBP.
+    expect((await internal('POST', '/internal/v1/sbp/pay_test123456/refund', { amount: 129_000, refund_id: 'rf_r' }, { key: 'rf_r' })).statusCode).toBe(200);
+
+    const r2 = (await internal('POST', '/internal/v1/requests', { ...body, payment_id: 'pay_other1' }, { key: 'r2' })).json();
+    expect((await app.inject({ method: 'POST', url: `/api/requests/${r2.id}`, headers: a.headers, payload: { approve: false } })).json()).toEqual({ status: 'declined' });
+    expect((await internal('GET', `/internal/v1/requests/${r2.id}`)).json().status).toBe('declined');
+
+    const r3 = (await internal('POST', '/internal/v1/requests', { ...body, payment_id: 'pay_other2' }, { key: 'r3' })).json();
+    travel(6 * 60_000);
+    expect((await internal('GET', `/internal/v1/requests/${r3.id}`)).json().status).toBe('expired');
+    expect((await app.inject({ method: 'POST', url: `/api/requests/${r3.id}`, headers: a.headers, payload: { approve: true, accountId: a.main.id } })).statusCode).toBe(400);
+    expect((await app.inject({ url: '/api/pulse', headers: a.headers })).json().requests).toEqual([]);
     assertLedger();
   });
 });

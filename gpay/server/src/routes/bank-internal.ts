@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, type Ctx } from '../context.js';
-import { sbpInfo, sbpPaidByBank } from '../domain/bankpay.js';
+import { paidByBank, sbpInfo } from '../domain/bankpay.js';
 import { loadPayment } from '../domain/payments.js';
 import { SIGNATURE_HEADER, verify } from '../domain/signing.js';
 
@@ -30,9 +30,12 @@ export function registerBankInternalRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.get<{ Params: { id: string } }>('/internal/bank/payments/:id', async (req) => sbpInfo(ctx, payment(req.params.id)));
 
-  app.post<{ Params: { id: string } }>('/internal/bank/payments/:id/sbp', async (req) => {
-    const b = z.object({ operation_id: z.string().max(40), payer: z.object({ name: z.string().max(80).optional(), phone: z.string().max(30).optional() }).optional() }).parse(req.body);
-    const p = sbpPaidByBank(ctx, payment(req.params.id), { operationId: b.operation_id, payer: b.payer });
-    return { status: p.status };
-  });
+  const paidBody = z.object({ operation_id: z.string().max(40), payer: z.object({ name: z.string().max(80).optional(), phone: z.string().max(30).optional() }).optional() });
+  for (const method of ['sbp', 'bobopay'] as const) {
+    app.post<{ Params: { id: string } }>(`/internal/bank/payments/:id/${method}`, async (req) => {
+      const b = paidBody.parse(req.body);
+      const p = paidByBank(ctx, payment(req.params.id), method, { operationId: b.operation_id, payer: b.payer });
+      return { status: p.status };
+    });
+  }
 }

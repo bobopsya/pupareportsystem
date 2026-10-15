@@ -118,7 +118,7 @@ function GettingStarted({ shopId }: { shopId: number }) {
     <Card className="!p-0 overflow-hidden">
       <div className="px-6 pt-6 pb-5">
         <h2 className="text-[15px] font-semibold">Магазин готов принимать платежи</h2>
-        <p className="text-[13px] text-muted mt-0.5">Карты Visa, Mastercard, МИР, UnionPay, СБП, оплата частями и криптовалюта уже подключены.</p>
+        <p className="text-[13px] text-muted mt-0.5">Карты Bobobank, СБП и Bobo Pay уже подключены.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-line border-t border-line">
         {steps.map((s) => (

@@ -1,12 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftRight, Building2, CreditCard, QrCode, Repeat, ScanLine, Smartphone } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Initials } from '../components/CategoryIcon';
+import { Favorites } from '../components/Favorites';
 import { SbpMark } from '../components/PaymentLogos';
 import { Row, Screen } from '../components/Screen';
 import { Button, Card, ErrorNote, Input } from '../components/ui';
-import { api } from '../lib/api';
 import { SectionTitle } from './Shell';
 
 /** Pulls a GPAY payment id out of a pasted QR link (bank /sbp/pay?payment=…, GPAY /pay/… or a bare id). */
@@ -21,7 +19,6 @@ export default function Payments() {
   const [params] = useSearchParams();
   const from = params.get('from');
   const q = from ? `?from=${from}` : '';
-  const { data: recent } = useQuery({ queryKey: ['recent'], queryFn: () => api<{ items: { name: string; subtitle: string; phone: string | null }[] }>('/transfers/recent') });
   const [link, setLink] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const openLink = () => {
@@ -31,16 +28,7 @@ export default function Payments() {
   };
   return (
     <Screen title="Платежи и переводы" back={null}>
-      {!!recent?.items.length && (
-        <div className="no-scrollbar -mx-4 mb-2 flex gap-3 overflow-x-auto px-4 pb-2">
-          {recent.items.map((r) => (
-            <button key={r.name} type="button" onClick={() => nav(`/app/transfer/phone${r.phone ? `?phone=${encodeURIComponent(r.phone)}` : ''}`)} className="flex w-[72px] shrink-0 flex-col items-center gap-1.5 text-center">
-              <Initials name={r.name} className="size-14 text-lg" />
-              <span className="w-full truncate text-xs font-semibold">{r.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="mb-3"><Favorites /></div>
       <Card pad={false} className="divide-y divide-line overflow-hidden">
         <Row icon={<Ico><Smartphone className="size-5" /></Ico>} title="По номеру телефона" sub="Клиенту Bobobank — мгновенно" onClick={() => nav(`/app/transfer/phone${q}`)} right={<SbpMark className="h-6 w-6" />} />
         <Row icon={<Ico><CreditCard className="size-5" /></Ico>} title="По номеру карты" sub="На карту Bobobank" onClick={() => nav(`/app/transfer/card${q}`)} />
@@ -54,7 +42,7 @@ export default function Payments() {
         <div className="flex items-start gap-3">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand"><QrCode className="size-6" /></span>
           <div className="min-w-0">
-            <div className="font-bold">Оплатить покупку через СБП</div>
+            <div className="font-semibold">Оплатить покупку через СБП</div>
             <p className="text-sm text-muted">Наведите камеру телефона на QR-код на странице оплаты GPAY — откроется Bobobank. Или вставьте ссылку из кода.</p>
           </div>
         </div>

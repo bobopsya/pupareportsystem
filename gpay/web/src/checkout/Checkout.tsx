@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronDown, Clock, CreditCard, Lock, Receipt, RotateCcw, ShieldCheck, SplitSquareHorizontal, Wallet, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Clock, CreditCard, Lock, Receipt, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Logo, LogoMark } from '../components/Logo';
@@ -6,15 +6,14 @@ import { CardLogos, PayLogo, SbpMark } from '../components/PaymentLogos';
 import { Button, cx, Field, Input, Loading } from '../components/ui';
 import { api, ApiError, errorText } from '../lib/api';
 import { dateTime, money, REASONS } from '../lib/format';
-import { BankCheck, BankConfirm, CryptoPanel, InstallmentsPanel, SbpPanel } from './AsyncMethods';
+import { BankConfirm, BoboMark, BobopayPanel, SbpPanel } from './AsyncMethods';
 import { CardForm } from './CardForm';
 import { notifyParent, type CheckoutData, type MethodType, type PayResult, type PublicPayment, type PublicShop } from './types';
 
 const METHOD_TABS: { type: MethodType; label: string; icon: ReactNode }[] = [
   { type: 'bank_card', label: 'Карта', icon: <CreditCard className="size-[18px]" /> },
   { type: 'sbp', label: 'СБП', icon: <SbpMark className="size-[18px]" /> },
-  { type: 'installments', label: 'Частями', icon: <SplitSquareHorizontal className="size-[18px]" /> },
-  { type: 'crypto', label: 'Крипта', icon: <Wallet className="size-[18px]" /> },
+  { type: 'bobopay', label: 'Bobo Pay', icon: <BoboMark className="size-[18px]" /> },
 ];
 
 const emailValid = (e: string) => !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -134,7 +133,7 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
         {!lockMethod && methods.length > 1 && (
           <div>
             <div className="text-sm text-muted mb-2">Способ оплаты</div>
-            <div role="tablist" className="grid grid-cols-4 gap-1 rounded-[14px] bg-sunken p-1">
+            <div role="tablist" className="grid gap-1 rounded-[14px] bg-sunken p-1" style={{ gridTemplateColumns: `repeat(${methods.length}, minmax(0, 1fr))` }}>
               {methods.map((m) => (
                 <button
                   key={m.type}
@@ -155,11 +154,10 @@ function Checkout({ data, setData, embed, reload }: { data: CheckoutData; setDat
           </div>
         )}
         <div key={lockMethod ?? method} className="gp-fade-up">
-          {lockMethod === 'bank_card' && (p.action?.type === 'bank_confirm' ? <BankConfirm data={data} onBack={setPayment} /> : <BankCheck data={data} />)}
+          {lockMethod && p.action?.type === 'bank_confirm' && <BankConfirm data={data} onBack={setPayment} />}
           {!lockMethod && method === 'bank_card' && <CardForm data={data} email={email} emailOk={emailOk} onResult={(r, pay) => { setEmailTouched(true); onResult(r, pay); }} />}
-          {(lockMethod ?? method) === 'sbp' && <SbpPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
-          {(lockMethod ?? method) === 'installments' && <InstallmentsPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
-          {(lockMethod ?? method) === 'crypto' && <CryptoPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
+          {!lockMethod && method === 'sbp' && <SbpPanel data={data} onBack={setPayment} />}
+          {!lockMethod && method === 'bobopay' && <BobopayPanel data={data} email={email} emailOk={emailOk} onResult={onResult} onBack={setPayment} />}
         </div>
       </div>
     );

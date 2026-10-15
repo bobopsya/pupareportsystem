@@ -1,4 +1,5 @@
-import { CreditCard, SplitSquareHorizontal, Wallet } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
+import { BoboMark } from '../checkout/AsyncMethods';
 import { useNavigate } from 'react-router-dom';
 import { PayLogo, SbpMark } from '../components/PaymentLogos';
 import { PaymentStatus } from '../components/Status';
@@ -14,8 +15,7 @@ export function MethodCell({ p }: { p: Pick<PaymentRowT, 'methodType' | 'methodT
     p.methodType === 'bank_card' && p.cardBrand ? <PayLogo name={CARD_LOGO[p.cardBrand] ?? 'visa'} className="!h-5 !w-8" /> :
     p.methodType === 'bank_card' ? <CreditCard className="size-4 text-muted" /> :
     p.methodType === 'sbp' ? <span className="flex h-5 w-8 items-center justify-center rounded-[5px] border border-[#e5e7ef] bg-white"><SbpMark className="size-3.5" /></span> :
-    p.methodType === 'installments' ? <span className="flex h-5 w-8 items-center justify-center rounded-[5px] bg-sunken"><SplitSquareHorizontal className="size-3.5 text-muted" /></span> :
-    <span className="flex h-5 w-8 items-center justify-center rounded-[5px] bg-sunken"><Wallet className="size-3.5 text-muted" /></span>;
+    <BoboMark className="h-5 w-5" />;
   return (
     <span className="inline-flex items-center gap-2 min-w-0">
       {icon}

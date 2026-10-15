@@ -1,11 +1,12 @@
-import { BadgeCheck, Info } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { BadgeCheck, Info, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AccountPicker } from '../components/AccountPicker';
 import { Initials } from '../components/CategoryIcon';
 import { Screen } from '../components/Screen';
 import { Success } from '../components/Success';
-import { Button, Card, ErrorNote, Field, Input, Loading, Spinner } from '../components/ui';
+import { Button, Card, ErrorNote, Field, Input, Loading, Spinner, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { formatPan, formatPhoneInput, money, phoneDigits, toAmount } from '../lib/format';
 import { useHome, useMeta, useRefresh } from '../lib/hooks';
@@ -35,9 +36,11 @@ export default function Transfer() {
   const [from, setFrom] = useState(params.get('from') ?? '');
   const [phone, setPhone] = useState(params.get('phone') ? formatPhoneInput(params.get('phone')!) : '');
   const [pan, setPan] = useState('');
+  // A saved card recipient comes as a card id: the number itself never reaches the browser.
+  const [savedCard, setSavedCard] = useState<{ id: string; name: string } | null>(params.get('card') ? { id: params.get('card')!, name: params.get('name') ?? '' } : null);
   const [to, setTo] = useState(params.get('to') ?? '');
-  const [req, setReq] = useState({ number: '', bik: '', name: '', inn: '', purpose: '' });
-  const [amount, setAmount] = useState('');
+  const [req, setReq] = useState({ number: params.get('number') ?? '', bik: params.get('bik') ?? '', name: params.get('name') ?? '', inn: '', purpose: '' });
+  const [amount, setAmount] = useState(params.get('amount') ?? '');
   const [comment, setComment] = useState('');
   const [quote, setQuote] = useState<Quote | null>(null);
   const [qErr, setQErr] = useState<string | null>(null);
@@ -55,10 +58,10 @@ export default function Transfer() {
 
   const recipient = useMemo(() => {
     if (type === 'phone') return phoneDigits(phone).length === 11 ? { type, phone } : null;
-    if (type === 'card') return phoneDigits(pan).length >= 16 ? { type, pan: phoneDigits(pan) } : null;
+    if (type === 'card') return savedCard ? { type: 'card_id' as const, cardId: savedCard.id } : phoneDigits(pan).length >= 16 ? { type, pan: phoneDigits(pan) } : null;
     if (type === 'own') return to ? { type, accountId: to } : null;
     return req.number.replace(/\D/g, '').length === 20 && req.bik.length === 9 && req.name.trim().length > 1 ? { type, number: req.number.replace(/\D/g, ''), bik: req.bik, name: req.name, inn: req.inn || undefined, purpose: req.purpose || undefined } : null;
-  }, [type, phone, pan, to, req]);
+  }, [type, phone, pan, to, req, savedCard]);
   const amt = toAmount(amount);
 
   // Recipient check (name, bank) and fee, like "Мария С. · Bobobank" before sending.
@@ -111,6 +114,7 @@ export default function Transfer() {
         ]}
         entryId={done.entryId}
         onDone={() => nav('/app', { replace: true })}
+        extra={type !== 'own' && recipient ? <SaveFavorite title={quote?.display ?? done.to} recipient={recipient} amount={amt} /> : undefined}
       />
     );
   }
@@ -127,7 +131,14 @@ export default function Transfer() {
         )}
         {type === 'card' && (
           <Field label="Номер карты Bobobank">
-            <Input inputMode="numeric" autoComplete="off" value={pan} onChange={(e) => setPan(formatPan(e.target.value))} placeholder="0000 0000 0000 0000" className="num" />
+            {savedCard ? (
+              <div className="flex h-13 items-center justify-between rounded-xl bg-sunken px-4">
+                <span className="font-medium">{savedCard.name || 'Сохранённая карта'}</span>
+                <button type="button" className="text-sm font-medium text-brand" onClick={() => setSavedCard(null)}>Другая карта</button>
+              </div>
+            ) : (
+              <Input inputMode="numeric" autoComplete="off" value={pan} onChange={(e) => setPan(formatPan(e.target.value))} placeholder="0000 0000 0000 0000" className="num" />
+            )}
           </Field>
         )}
         {type === 'own' && <AccountPicker label="Куда" accounts={home.accounts.filter((a) => a.id !== from && ['current', 'savings', 'business', 'credit_card', 'kids'].includes(a.kind))} value={to} onChange={setTo} />}
@@ -152,7 +163,7 @@ export default function Transfer() {
             <div className="flex items-center gap-3 rounded-2xl bg-brand-soft px-3 py-2.5">
               <Initials name={quote.display} className="size-10 text-sm" />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-bold">{quote.display}</div>
+                <div className="truncate font-semibold">{quote.display}</div>
                 <div className="flex items-center gap-1 text-xs text-muted">{quote.bank === 'Bobobank' && <BadgeCheck className="size-3.5 text-brand" />}{quote.bank}</div>
               </div>
             </div>
@@ -162,8 +173,8 @@ export default function Transfer() {
 
         <Field label="Сумма" error={insufficient ? 'Недостаточно средств' : null}>
           <div className="relative">
-            <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,\s]/g, ''))} placeholder="0" className="pr-12 text-[22px] font-extrabold num" invalid={!!insufficient} />
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xl font-bold text-muted">{cur === 'RUB' ? '₽' : cur === 'USD' ? '$' : '€'}</span>
+            <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,\s]/g, ''))} placeholder="0" className="pr-12 text-[22px] font-semibold num" invalid={!!insufficient} />
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xl font-semibold text-muted">{cur === 'RUB' ? '₽' : cur === 'USD' ? '$' : '€'}</span>
           </div>
         </Field>
         {type !== 'own' && type !== 'account' && (
@@ -182,5 +193,44 @@ export default function Transfer() {
         </Button>
       </Card>
     </Screen>
+  );
+}
+
+type R = { type: string; phone?: string; pan?: string; cardId?: string; number?: string; bik?: string };
+
+/** "В избранное" on the success screen: the recipient and amount come back in one tap next time. */
+function SaveFavorite({ title, recipient, amount }: { title: string; recipient: R; amount: string | null }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const body =
+    recipient.type === 'phone' ? { type: 'phone', value: recipient.phone }
+    : recipient.type === 'card_id' ? { type: 'card', value: recipient.cardId }
+    : recipient.type === 'account' ? { type: 'account', value: recipient.number, bik: recipient.bik }
+    : null;
+  if (!body) return null;
+  return (
+    <button
+      type="button"
+      disabled={saved || busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await api('/favorites', { body: { ...body, title, amount: amount ?? undefined } });
+          await qc.invalidateQueries({ queryKey: ['favorites'] });
+          setSaved(true);
+          toast('Добавлено в избранное');
+        } catch (e) {
+          toast(errorText(e), 'bad');
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className="mt-4 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-[15px] font-medium disabled:opacity-70"
+    >
+      <Star className="size-4 text-[#FFB800]" fill={saved ? '#FFB800' : 'none'} />
+      {saved ? 'В избранном' : 'Добавить в избранное'}
+    </button>
   );
 }

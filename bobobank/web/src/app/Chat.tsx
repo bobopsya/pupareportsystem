@@ -45,7 +45,7 @@ export default function Chat() {
         {!data.messages.length && (
           <div className="flex flex-col items-center py-10 text-center">
             <LogoMark className="size-14" />
-            <div className="mt-3 text-lg font-bold">Чем можем помочь?</div>
+            <div className="mt-3 text-lg font-semibold">Чем можем помочь?</div>
             <p className="text-sm text-muted">Напишите вопрос — специалист ответит здесь же.</p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {QUICK.map((q) => <button key={q} type="button" onClick={() => void send(q)} className="rounded-full bg-surface px-3.5 py-2 text-sm font-semibold shadow-card hover:bg-sunken">{q}</button>)}

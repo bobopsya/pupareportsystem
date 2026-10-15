@@ -1,11 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Bot, FileText, Menu, Play, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { CardLogos, PayLogo } from '../components/PaymentLogos';
 import { Badge, Button, CopyButton, cx, Input, Kbd, Select, Textarea } from '../components/ui';
-import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
 const ORIGIN = typeof location !== 'undefined' ? location.origin : 'https://pay.example';
@@ -25,7 +23,7 @@ const SECTIONS = [
   { id: 'payouts', title: 'Выплаты' },
   { id: 'webhooks', title: 'Вебхуки' },
   { id: 'widget', title: 'Виджет оплаты' },
-  { id: 'cards', title: 'Карты и сценарии' },
+  { id: 'cards', title: 'Как проверить оплату' },
   { id: 'errors', title: 'Ошибки' },
   { id: 'sandbox', title: 'Песочница' },
 ];
@@ -183,7 +181,7 @@ ${ORIGIN}/llms-full.txt
 3. Страница возврата return_url, которая показывает статус заказа.
 
 Ключи бери из переменных окружения GPAY_SECRET_KEY и GPAY_WEBHOOK_SECRET, в код их не вписывай.
-Проверь оплату картой 4111 1111 1111 1111 и отказ картой 4000 0000 0000 9995.`;
+Проверь оплату картой Bobobank (деньги на счёт начисляет администратор банка).`;
 
 const PAYMENT_EXAMPLE = {
   amount: { value: '1290.00', currency: 'RUB' },
@@ -273,7 +271,6 @@ export default function Docs() {
   const { user } = useAuth();
   const [nav, setNav] = useState(false);
   const [active, setActive] = useState('start');
-  const { data: cards } = useQuery({ queryKey: ['public-cards'], queryFn: () => api<{ items: { pan: string; outcome: string; label: string; title: string }[] }>('/public/cards') });
 
   useEffect(() => {
     document.title = 'Документация API — GPAY';
@@ -367,7 +364,7 @@ export default function Docs() {
                 <P>Ключ даёт полный доступ к магазину. Не используйте его в браузере или мобильном приложении. Скомпрометированный ключ отзовите в кабинете — он перестанет работать мгновенно.</P>
               </>
             }
-            right={<Code title="Проверка ключа">{`curl ${BASE}/me \\\n  -u 412038:sk_live_…\n\n{\n  "account_id": "412038",\n  "name": "Кофейня «Зерно»",\n  "status": "enabled",\n  "fiscalization_enabled": true,\n  "payment_methods": ["bank_card", "sbp", "installments", "crypto"]\n}`}</Code>}
+            right={<Code title="Проверка ключа">{`curl ${BASE}/me \\\n  -u 412038:sk_live_…\n\n{\n  "account_id": "412038",\n  "name": "Кофейня «Зерно»",\n  "status": "enabled",\n  "fiscalization_enabled": true,\n  "payment_methods": ["bank_card", "sbp", "bobopay"]\n}`}</Code>}
           />
 
           <H2 id="idempotency">Идемпотентность</H2>
@@ -386,7 +383,7 @@ export default function Docs() {
             left={
               <>
                 <Endpoint method="POST" path="/payments" />
-                <P>Создаёт платёж. Ответ содержит ссылку на страницу оплаты GPAY, где покупатель выберет способ: карта, СБП, оплата частями или криптовалюта.</P>
+                <P>Создаёт платёж. Ответ содержит ссылку на страницу оплаты GPAY, где покупатель выберет способ: карта Bobobank, СБП или Bobo Pay.</P>
                 <Params
                   rows={[
                     ['amount', 'object', 'Сумма: value — строка с двумя знаками после точки, currency — RUB, USD или EUR.'],
@@ -559,24 +556,15 @@ export default function Docs() {
 <gpay-button payment-id="pay_4bX9qLmT2sR7vKc1Nw8YhPzE"></gpay-button>`}</Code>}
           />
 
-          <H2 id="cards">Карты и сценарии</H2>
-          <P>Банк-эмитент GPAY Bank обслуживает следующие карты. Срок действия — любая будущая дата, CVC — любые три цифры. Для карт с 3-D Secure банк подтверждает платёж сам за 3–5 секунд — покупателю ничего вводить не нужно. Карты других банков к оплате не принимаются.</P>
-          <div className="mt-4 rounded-xl border border-line overflow-hidden bg-surface">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-faint border-b border-line"><th className="font-medium py-2.5 px-4">Номер карты</th><th className="font-medium py-2.5 px-4">Результат</th><th className="font-medium py-2.5 px-4 hidden sm:table-cell">Описание</th></tr></thead>
-              <tbody>
-                {cards?.items.map((c) => (
-                  <tr key={c.pan} className="border-b border-line last:border-0">
-                    <td className="py-2.5 px-4 font-mono whitespace-nowrap"><span className="inline-flex items-center gap-1">{c.pan.replace(/(\d{4})(?=\d)/g, '$1 ')}<CopyButton text={c.pan} /></span></td>
-                    <td className="py-2.5 px-4"><Badge tone={c.outcome === 'success' ? 'ok' : c.outcome === 'three_ds' ? 'info' : 'bad'}>{c.title}</Badge></td>
-                    <td className="py-2.5 px-4 text-muted hidden sm:table-cell">{c.label}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <P>СБП, оплата частями и криптовалюта подтверждаются автоматически через 9–14 секунд после того, как покупатель начал оплату.</P>
-
+          <H2 id="cards">Как проверить оплату</H2>
+          <P>GPAY принимает только деньги игрового банка Bobobank — тестовых карт нет. Чтобы проверить интеграцию, зарегистрируйтесь в Bobobank (виртуальная карта МИР выпускается сразу) и попросите администратора банка начислить деньги на счёт.</P>
+          <Params
+            rows={[
+              ['bank_card', 'карта', 'Карта Bobobank. Покупатель подтверждает покупку в приложении банка; отказы — с понятной причиной (нет денег, карта заморожена, лимит, неверный CVC).'],
+              ['sbp', 'QR', 'QR-код на странице оплаты открывает заказ в приложении Bobobank, оплата проходит сразу.'],
+              ['bobopay', 'кнопка', 'Bobo Pay: кнопка ведёт в Bobobank, или покупатель вводит номер телефона и подтверждает запрос в приложении.'],
+            ]}
+          />
           <H2 id="errors">Ошибки</H2>
           <Two
             left={

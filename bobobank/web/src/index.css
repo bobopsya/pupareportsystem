@@ -1,76 +1,105 @@
-@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/inter';
 @import 'tailwindcss';
 
-/* Light by default, dark follows the system. Green brand, white cards on a soft grey-green plane. */
+/* Flat, calm banking style: white tiles on a light grey plane, one green, no gradients or shadows. */
 @theme static {
-  --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
 
-  --color-bg: #f2f5f3;
+  --color-bg: #f2f3f5;
   --color-surface: #ffffff;
-  --color-sunken: #eef1ef;
-  --color-hover: #e6eae8;
-  --color-line: #e3e8e5;
-  --color-line-strong: #c9d1cc;
-  --color-fg: #101513;
-  --color-muted: #66706b;
-  --color-faint: #98a19c;
+  --color-sunken: #f2f3f5;
+  --color-hover: #e9eaed;
+  --color-line: #e8e9ec;
+  --color-line-strong: #d2d4d9;
+  --color-fg: #1f1f22;
+  --color-muted: #7d7f85;
+  --color-faint: #a5a7ad;
 
-  --color-brand: #0fa760;
-  --color-brand-hover: #0c9455;
-  --color-brand-strong: #087a47;
-  --color-brand-soft: #e2f6eb;
+  --color-brand: #21a038;
+  --color-brand-hover: #1c8f32;
+  --color-brand-strong: #17802c;
+  --color-brand-soft: #e6f5e9;
   --color-on-brand: #ffffff;
-  --color-ink: #101513;
-  --color-ink-hover: #29302c;
+  --color-ink: #1f1f22;
+  --color-ink-hover: #36363b;
   --color-on-ink: #ffffff;
 
-  --color-ok: #0f9a58;
-  --color-ok-soft: #e2f6eb;
-  --color-warn: #b8650a;
-  --color-warn-soft: #fcf0e0;
-  --color-bad: #dc2f3c;
-  --color-bad-soft: #fdecee;
-  --color-info: #2563d6;
-  --color-info-soft: #e8effc;
+  --color-ok: #21a038;
+  --color-ok-soft: #e6f5e9;
+  --color-warn: #c46a00;
+  --color-warn-soft: #fff3e0;
+  --color-bad: #e5332a;
+  --color-bad-soft: #fdecea;
+  --color-info: #1e6fd9;
+  --color-info-soft: #e8f0fc;
 
-  --shadow-card: 0 1px 2px rgb(16 21 19 / 0.04), 0 4px 16px -8px rgb(16 21 19 / 0.08);
-  --shadow-pop: 0 24px 56px -16px rgb(16 21 19 / 0.25), 0 2px 8px rgb(16 21 19 / 0.06);
+  --shadow-card: none;
+  --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 0.22);
 }
 
+/* Dark theme: pure black plane and graphite tiles. Follows the system unless the user picked a theme. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0d110f;
-    --color-surface: #161b18;
-    --color-sunken: #1d231f;
-    --color-hover: #252c28;
-    --color-line: #262d29;
-    --color-line-strong: #36403a;
-    --color-fg: #eef2f0;
-    --color-muted: #9aa49f;
-    --color-faint: #6c7671;
-
-    --color-brand: #2fcf7a;
-    --color-brand-hover: #45d98a;
-    --color-brand-strong: #6be3a1;
-    --color-brand-soft: #12261b;
-    --color-on-brand: #06140c;
-    --color-ink: #eef2f0;
-    --color-ink-hover: #d6dcd8;
-    --color-on-ink: #101513;
-
-    --color-ok: #45d98a;
-    --color-ok-soft: #12261b;
-    --color-warn: #eaa65a;
-    --color-warn-soft: #2c2113;
-    --color-bad: #ff7782;
-    --color-bad-soft: #2e1519;
-    --color-info: #82a8ff;
-    --color-info-soft: #151d33;
-
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-pop: 0 24px 56px -16px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4);
+  :root:not([data-theme='light']) {
+    --color-bg: #000000;
+    --color-surface: #1c1c1e;
+    --color-sunken: #2c2c2e;
+    --color-hover: #3a3a3c;
+    --color-line: #2c2c2e;
+    --color-line-strong: #48484a;
+    --color-fg: #f5f5f7;
+    --color-muted: #98989f;
+    --color-faint: #6e6e73;
+    --color-brand: #2dbe4f;
+    --color-brand-hover: #3ccb5d;
+    --color-brand-strong: #5bd876;
+    --color-brand-soft: #14301b;
+    --color-on-brand: #ffffff;
+    --color-ink: #f5f5f7;
+    --color-ink-hover: #d9d9de;
+    --color-on-ink: #1c1c1e;
+    --color-ok: #2dbe4f;
+    --color-ok-soft: #14301b;
+    --color-warn: #ffa94d;
+    --color-warn-soft: #33240f;
+    --color-bad: #ff6961;
+    --color-bad-soft: #3a1614;
+    --color-info: #64a3ff;
+    --color-info-soft: #13233d;
+    --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 0.8);
   }
+}
+:root[data-theme='dark'] {
+  --color-bg: #000000;
+  --color-surface: #1c1c1e;
+  --color-sunken: #2c2c2e;
+  --color-hover: #3a3a3c;
+  --color-line: #2c2c2e;
+  --color-line-strong: #48484a;
+  --color-fg: #f5f5f7;
+  --color-muted: #98989f;
+  --color-faint: #6e6e73;
+  --color-brand: #2dbe4f;
+  --color-brand-hover: #3ccb5d;
+  --color-brand-strong: #5bd876;
+  --color-brand-soft: #14301b;
+  --color-on-brand: #ffffff;
+  --color-ink: #f5f5f7;
+  --color-ink-hover: #d9d9de;
+  --color-on-ink: #1c1c1e;
+  --color-ok: #2dbe4f;
+  --color-ok-soft: #14301b;
+  --color-warn: #ffa94d;
+  --color-warn-soft: #33240f;
+  --color-bad: #ff6961;
+  --color-bad-soft: #3a1614;
+  --color-info: #64a3ff;
+  --color-info-soft: #13233d;
+  --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 0.8);
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 html {
@@ -92,6 +121,8 @@ body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* Tabular digits everywhere: amounts and card numbers line up like in banking apps. */
+  font-feature-settings: 'tnum' 1, 'cv11' 1, 'ss01' 1;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -110,7 +141,7 @@ body {
 }
 
 h1, h2, h3 {
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 
 .num {

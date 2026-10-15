@@ -151,7 +151,7 @@ export function Payouts() {
   if (!data) return <Loading />;
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Баланс и выплаты" sub="Выручка за вычетом комиссии GPAY и возвратов. Выплата на карту зачисляется за несколько секунд." />
+      <PageHeader title="Баланс и выплаты" sub="Выручка за вычетом комиссии GPAY и возвратов. Выплата на счёт в Bobobank зачисляется сразу." />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {data.balances.map((b) => {
           const fee = data.fees.find((f) => f.currency === b.currency);
@@ -171,7 +171,7 @@ export function Payouts() {
               {data.bankEnabled && (
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[13px]">
                   <div className="rounded-xl bg-[#e2f6eb] px-3 py-2 text-[#0a6b3e] dark:bg-[#12261b] dark:text-[#45d98a]"><div className="opacity-80">Bobobank</div><div className="font-semibold tabular-nums">{money(b.live, b.currency)}</div></div>
-                  <div className="rounded-xl bg-sunken px-3 py-2"><div className="text-muted">Тестовые</div><div className="font-semibold tabular-nums">{money(b.test, b.currency)}</div></div>
+                  {b.test !== 0 && <div className="rounded-xl bg-sunken px-3 py-2"><div className="text-muted">Тестовые · вывод недоступен</div><div className="font-semibold tabular-nums">{money(b.test, b.currency)}</div></div>}
                 </div>
               )}
               <Button className="mt-4" variant={b.currency === 'RUB' ? 'primary' : 'secondary'} disabled={b.available <= 0} icon={<ArrowDownToLine className="size-4" />} onClick={() => setOpen(b.currency)}>
@@ -220,13 +220,12 @@ export function Payouts() {
 function PayoutModal({ currency, balance, account, bankEnabled, onClose, onDone }: { currency: string | null; balance?: Balance; account: PayoutAccount | null; bankEnabled: boolean; onClose: () => void; onDone: () => void }) {
   const shop = useShop();
   const toast = useToast();
-  const [dest, setDest] = useState<'bobobank' | 'card'>(() => (balance && balance.live > 0 ? 'bobobank' : 'card'));
+  const dest = 'bobobank' as const;
   const [amount, setAmount] = useState('');
-  const [card, setCard] = useState(() => localStorage.getItem('gpay.payoutCard') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!currency || !balance) return null;
-  const max = bankEnabled ? (dest === 'bobobank' ? balance.live : balance.test) : balance.available;
+  const max = bankEnabled ? balance.live : 0;
   return (
     <Modal
       open
@@ -241,13 +240,11 @@ function PayoutModal({ currency, balance, account, bankEnabled, onClose, onDone 
             onClick={async () => {
               const a = amount ? toAmount(amount) : (max / 100).toFixed(2);
               if (!a) return setError('Некорректная сумма');
-              if (dest === 'card' && !/^\d{4}$/.test(card)) return setError('Укажите последние 4 цифры карты');
               if (dest === 'bobobank' && !account) return setError('Подключите счёт Bobobank в настройках магазина');
               setBusy(true);
               setError(null);
               try {
-                await api(`/m/shops/${shop.id}/payouts`, { body: { amount: a, currency, destination: dest, cardLast4: dest === 'card' ? card : undefined } });
-                if (dest === 'card') localStorage.setItem('gpay.payoutCard', card);
+                await api(`/m/shops/${shop.id}/payouts`, { body: { amount: a, currency, destination: dest } });
                 toast('Выплата отправлена');
                 onDone();
                 onClose();
@@ -264,26 +261,17 @@ function PayoutModal({ currency, balance, account, bankEnabled, onClose, onDone 
       }
     >
       <div className="flex flex-col gap-4">
-        {bankEnabled && (
-          <Segmented value={dest} onChange={setDest} options={[{ value: 'bobobank', label: 'На счёт Bobobank' }, { value: 'card', label: 'Тестовые — на карту' }]} />
-        )}
         <Field label="Сумма" hint={`Доступно ${money(max, currency, { exact: true })}. Пусто — вывести всё.`}>
           <Input inputMode="decimal" placeholder={(max / 100).toFixed(2)} value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
-        {dest === 'bobobank' ? (
-          account ? (
+        {          account ? (
             <div className="rounded-xl bg-sunken px-4 py-3 text-sm">
               <div className="font-semibold">{account.holder}</div>
               <div className="text-muted tabular-nums">Счёт {account.number.slice(0, 5)}…{account.number.slice(-4)} · Bobobank · деньги придут сразу</div>
             </div>
           ) : (
             <div className="rounded-xl bg-sunken px-4 py-3 text-sm text-muted">Счёт не подключён. Откройте <Link to={`/app/${shop.id}/settings`} className="font-medium text-fg underline">настройки магазина</Link> → «Выплаты в Bobobank».</div>
-          )
-        ) : (
-          <Field label="Карта получателя" hint="Последние 4 цифры карты, привязанной к расчётному счёту">
-            <Input inputMode="numeric" placeholder="1234" maxLength={4} value={card} onChange={(e) => setCard(e.target.value.replace(/\D/g, ''))} mono />
-          </Field>
-        )}
+          )}
         {error && <ErrorNote>{error}</ErrorNote>}
       </div>
     </Modal>

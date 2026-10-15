@@ -15,7 +15,7 @@ export function Screen({ title, sub, back = -1, actions, children, className }: 
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[22px] sm:text-[26px] font-extrabold leading-tight">{title}</h1>
+          <h1 className="truncate text-[22px] sm:text-2xl font-semibold leading-tight">{title}</h1>
           {sub && <p className="text-sm text-muted truncate">{sub}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
@@ -32,7 +32,7 @@ export function Row({ icon, title, sub, right, onClick, className, danger }: { i
     <Tag type={onClick ? 'button' : undefined} onClick={onClick} className={cx('flex w-full items-center gap-3 px-4 py-3 text-left', onClick && 'hover:bg-sunken/70 transition-colors', className)}>
       {icon}
       <span className="min-w-0 flex-1">
-        <span className={cx('block truncate text-[15px] font-semibold', danger && 'text-bad')}>{title}</span>
+        <span className={cx('block truncate text-[15px] font-medium', danger && 'text-bad')}>{title}</span>
         {sub && <span className="block truncate text-[13px] text-muted">{sub}</span>}
       </span>
       {right}
@@ -43,12 +43,12 @@ export function Row({ icon, title, sub, right, onClick, className, danger }: { i
 /** Round icon tile for quick actions. */
 export function ActionTile({ icon, label, onClick, badge }: { icon: ReactNode; label: string; onClick: () => void; badge?: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="group flex w-[76px] shrink-0 flex-col items-center gap-2 text-center">
-      <span className="relative flex size-14 items-center justify-center rounded-[20px] bg-surface text-brand shadow-card transition-transform group-active:scale-95">
+    <button type="button" onClick={onClick} className="group flex w-[76px] shrink-0 flex-col items-center gap-1.5 text-center">
+      <span className="relative flex size-12 items-center justify-center rounded-full bg-brand-soft text-brand transition-transform group-active:scale-95">
         {icon}
         {badge}
       </span>
-      <span className="text-[12.5px] font-semibold leading-tight">{label}</span>
+      <span className="text-[12px] font-medium leading-tight">{label}</span>
     </button>
   );
 }
