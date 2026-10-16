@@ -81,7 +81,7 @@ export function RidePage() {
   if (!r) return <Page title="Поездка" back="/rides"><Loading /></Page>;
   const lines: [string, string][] = [
     r.bus ? ['Маршрут', `${r.bus.ref} → ${r.bus.to}`] : r.air ? ['Борт', `${r.air.model}${r.car ? `, ${r.car.plate}` : ''}`] : ['Тариф', r.tariff.title],
-    ...(r.car && r.mode === 'taxi' ? ([['Машина', `${r.car.color} ${r.car.model}`]] as [string, string][]) : []),
+    ...(r.car && r.mode === 'taxi' ? ([[/^(bus|minibus)/.test(r.tariff.id) ? 'Автобус' : 'Машина', `${r.car.color} ${r.car.model}`.trim()]] as [string, string][]) : []),
     ...(r.driver && r.mode !== 'bus' ? ([[r.air ? 'Командир' : 'Водитель', `${r.driver.name}, ★ ${r.driver.rating.toFixed(2).replace('.', ',')}`]] as [string, string][]) : []),
     ['Расстояние', km(r.distance * (r.progress ?? 1))],
     ...(r.surge > 1 ? ([['Повышенный спрос', `×${r.surge.toFixed(1).replace('.', ',')}`]] as [string, string][]) : []),

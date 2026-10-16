@@ -5,7 +5,7 @@ import { HttpError, type Ctx } from '../context.js';
 import { inMoscow, type LatLon } from '../domain/geo.js';
 import { reverse, search } from '../domain/maps.js';
 import { airQuote, HELIPADS, JET_DESTINATIONS, JET_ORIGINS } from '../domain/air.js';
-import { board as busBoard, liveIn, plan, routeView, stopsIn, type Bbox } from '../domain/buses.js';
+import { board as busBoard, busRoutes, liveIn, plan, routeView, stopsIn, type Bbox } from '../domain/buses.js';
 import { arriveRide, boardRide, cancel, complete, createAirRide, createBusRide, createRide, currentRide, estimate, historyItem, nearCars, ownRide, rate, serializeRide, settle, getRide } from '../domain/rides.js';
 import { receiptPdf } from '../pdf.js';
 import { TARIFF_IDS } from '../domain/tariffs.js';
@@ -52,6 +52,12 @@ export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/bus/live', async (req) => {
     const q = z.object({ route: z.coerce.number().int().optional() }).parse(req.query);
     return { now: ctx.now(), buses: liveIn(ctx, bbox.parse(req.query), ctx.now(), q.route) };
+  });
+  // Line numbers for calling a city bus: the known lines first, any number is fine.
+  app.get('/api/bus/lines', async () => {
+    const seen = new Map<string, { ref: string; kind: string; colour: string | null; title: string }>();
+    for (const r of busRoutes()) if (!seen.has(r.ref)) seen.set(r.ref, { ref: r.ref, kind: r.kind, colour: r.colour, title: `${r.from} — ${r.to}` });
+    return { lines: [...seen.values()].sort((a, b) => a.ref.localeCompare(b.ref, 'ru', { numeric: true })) };
   });
   app.get('/api/bus/routes/:id', async (req) => routeView(Number((req.params as { id: string }).id)));
   app.post('/api/bus/plan', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
@@ -114,7 +120,7 @@ export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
 
   app.post('/api/rides', async (req) => {
     const u = requireUser(req);
-    const b = z.object({ estimateId: z.string().max(64), tariff: z.enum(TARIFFS), childSeat: z.boolean().optional(), comment: z.string().max(200).optional() }).parse(req.body);
+    const b = z.object({ estimateId: z.string().max(64), tariff: z.enum(TARIFFS), childSeat: z.boolean().optional(), comment: z.string().max(200).optional(), line: z.string().max(8).optional() }).parse(req.body);
     const r = await createRide(ctx, u, b);
     return serializeRide(ctx, r);
   });

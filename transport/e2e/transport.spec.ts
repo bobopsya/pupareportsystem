@@ -94,9 +94,15 @@ test('вход через Bobobank, поездка по Москве, списа
   await page.waitForTimeout(2500);
   // By default the bus tab orders a bus like a taxi; city lines are one tap away.
   await page.getByRole('button', { name: 'улица Арбат, 10' }).click();
-  await expect(page.getByRole('button', { name: /Заказать · \d+/ })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText('Бизнес-автобус')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Вызвать 561 · \d+/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('Микроавтобус')).toBeVisible();
+  // Any city line: the number goes on the bus.
+  await page.getByRole('button', { name: /Маршрут 561/ }).click();
+  await page.getByPlaceholder('Номер маршрута').fill('м3');
+  await page.getByRole('button', { name: 'Вызвать автобус м3' }).click();
+  await expect(page.getByRole('button', { name: /Вызвать м3 · \d+/ })).toBeVisible();
+  await page.getByRole('button', { name: /Эконом/ }).click();
+  await expect(page.getByRole('button', { name: /Заказать · \d+/ })).toBeVisible();
   await page.getByRole('button', { name: 'Городской по маршруту' }).click();
   await expect(page.getByRole('button', { name: 'Поехали · 83 ₽' })).toBeVisible({ timeout: 20_000 });
   const beforeBus = await available(page);

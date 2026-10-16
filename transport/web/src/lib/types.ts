@@ -32,7 +32,7 @@ export interface TariffOption {
   cars: string[];
   vehicle: 'car' | 'bus';
 }
-export type TariffId = 'econom' | 'comfort' | 'comfort_plus' | 'business' | 'kids' | 'minibus' | 'bus' | 'bus_business';
+export type TariffId = 'econom' | 'comfort' | 'comfort_plus' | 'business' | 'kids' | 'bus_city' | 'minibus' | 'bus_econom' | 'bus' | 'bus_business';
 
 export interface Estimate {
   id: string;
@@ -134,6 +134,8 @@ export interface Ride {
   mode: Mode;
   bus: (Omit<BusOption, 'n' | 'path' | 'walkS' | 'waitS' | 'rideS' | 'totalS' | 'distance' | 'fare'> & { dep: number; boardAt: number; alightAt: number; line: { path: LatLon[]; stops: BusStop[] } | null }) | null;
   air: { kind: 'heli' | 'jet'; classId: string; className: string; model: string; seats: number; from: string; to: string } | null;
+  /** A city bus called like a taxi. */
+  line: { ref: string; colour: string | null } | null;
   confirmation: { url: string | null; expiresAt: number | null } | null;
   boardingUntil: number | null;
   finishAt: number | null;

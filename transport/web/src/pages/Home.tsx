@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Briefcase, ChevronRight, Clock, CreditCard, History as HistoryIcon, Home as HomeIcon, LocateFixed, LogOut, Menu, MessageSquare, Settings, Shield, User } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Briefcase, Bus as BusIcon, ChevronRight, Clock, CreditCard, History as HistoryIcon, Home as HomeIcon, LocateFixed, LogOut, Menu, MessageSquare, Settings, Shield, User } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAirPlanner } from '../components/Air';
@@ -39,6 +39,46 @@ function TransportSwitch({ value, onChange }: { value: Transport; onChange: (t: 
 const login = () => window.location.assign('/api/auth/bank/start');
 
 type BusMode = 'charter' | 'route';
+const LINE_RE = /^[а-яё]{0,2}\d{1,4}[а-яё]?$/i;
+const savedLine = () => {
+  try {
+    return localStorage.getItem('bt-line') || '561';
+  } catch {
+    return '561';
+  }
+};
+
+/** Which city line to call: any number, the imported lines as hints. */
+function LinePicker({ open, value, onClose, onPick }: { open: boolean; value: string; onClose: () => void; onPick: (ref: string) => void }) {
+  const [q, setQ] = useState(value);
+  useEffect(() => setQ(value), [open, value]);
+  const { data } = useQuery({ queryKey: ['bus-lines'], queryFn: () => api<{ lines: { ref: string; kind: string; colour: string | null; title: string }[] }>('/bus/lines'), enabled: open, staleTime: Infinity });
+  const ref = q.trim().toLowerCase();
+  const ok = LINE_RE.test(ref);
+  const hints = (data?.lines ?? []).filter((l) => l.kind === 'bus' && (!ref || l.ref.toLowerCase().startsWith(ref))).slice(0, 40);
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Какой автобус вызвать?"
+      footer={
+        <Button variant="ink" size="lg" disabled={!ok} onClick={() => onPick(ref)}>
+          {ok ? `Вызвать автобус ${ref}` : 'Например 561, м3 или т25'}
+        </Button>
+      }
+    >
+      <input autoFocus value={q} onChange={(e) => setQ(e.target.value.slice(0, 6))} placeholder="Номер маршрута" inputMode="text" className="h-14 w-full rounded-2xl bg-sunken px-4 text-[20px] font-bold outline-none focus:ring-2 focus:ring-ink" />
+      <p className="mt-2 text-sm text-muted">Любой номер — приедет городской автобус с ним на табличке. Ниже — маршруты, что ходят по карте.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {hints.map((l) => (
+          <button key={l.ref} type="button" title={l.title} onClick={() => onPick(l.ref.toLowerCase())} className="inline-flex h-9 min-w-12 items-center justify-center rounded-xl px-2.5 text-[15px] font-bold text-white" style={{ background: l.colour || '#d0021b' }}>
+            {l.ref}
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
 /** Bus tab: a chartered bus like a taxi, or a city bus on its line. */
 function BusModeSwitch({ value, onChange }: { value: BusMode; onChange: (m: BusMode) => void }) {
   return (
@@ -165,6 +205,17 @@ export default function Home() {
   const [drawer, setDrawer] = useState(false);
   const [tariff, setTariff] = useState<TariffId>('econom');
   const [busMode, setBusMode] = useState<BusMode>('charter');
+  const [line, setLine] = useState(savedLine);
+  const [linePicker, setLinePicker] = useState(false);
+  const pickLine = (ref: string) => {
+    setLine(ref);
+    setLinePicker(false);
+    try {
+      localStorage.setItem('bt-line', ref);
+    } catch {
+      /* private mode */
+    }
+  };
   const [childSeat, setChildSeat] = useState(false);
   const [comment, setComment] = useState('');
   const [commentOpen, setCommentOpen] = useState(false);
@@ -258,7 +309,7 @@ export default function Home() {
   }, [mode, from, to, taxiLike]);
 
   const order = useMutation({
-    mutationFn: () => api<Ride>('/rides', { body: { estimateId: estimate!.id, tariff: selected!.id, childSeat: seatOk && childSeat, comment: comment || undefined } }),
+    mutationFn: () => api<Ride>('/rides', { body: { estimateId: estimate!.id, tariff: selected!.id, childSeat: seatOk && childSeat, comment: comment || undefined, line: selected!.id === 'bus_city' ? line : undefined } }),
     onSuccess: (r) => {
       qc.setQueryData(['ride'], { ride: r, offset: r.now - Date.now() });
       void qc.invalidateQueries({ queryKey: ['account'] });
@@ -291,7 +342,7 @@ export default function Home() {
   });
   const switchTransport = (t: Transport) => {
     setTransport(t);
-    if (t === 'bus') setTariff('bus');
+    if (t === 'bus') setTariff('bus_city');
     else if (t === 'taxi') setTariff('econom');
     if (mode === 'estimate' && from && to && (t === 'taxi' || t === 'bus')) runEstimate(from, to, t);
     else if (t === 'heli' || t === 'jet') setMode('main');
@@ -379,7 +430,7 @@ export default function Home() {
       {ride.status === 'searching' && <SearchPulse pos={[ride.from.lat, ride.from.lon]} />}
       {ride.status !== 'in_ride' && ride.status !== 'completed' && <PointMarker pos={[ride.from.lat, ride.from.lon]} kind="from" label={ride.status === 'arrived' ? (ride.tariff.vehicle === 'bus' ? 'Автобус ждёт' : 'Машина ждёт') : undefined} />}
       <PointMarker pos={[ride.to.lat, ride.to.lon]} kind="to" label={ride.status === 'in_ride' ? ride.to.title : undefined} />
-      {ride.car && ride.status !== 'completed' && <RideCar kind={ride.tariff.vehicle === 'bus' ? 'bus' : 'car'} color={ride.car.colorHex} motion={ride.motion} position={ride.position} clockOffset={rideData?.offset ?? 0} follow={ride.status === 'in_ride'} />}
+      {ride.car && ride.status !== 'completed' && <RideCar kind={ride.tariff.vehicle === 'bus' ? 'bus' : 'car'} label={ride.line?.ref} color={ride.car.colorHex} motion={ride.motion} position={ride.position} clockOffset={rideData?.offset ?? 0} follow={ride.status === 'in_ride'} />}
       <FitBounds points={fitPoints} padding={[56, 56]} />
     </>
   ) : mode === 'estimate' && taxiLike && from && to ? (
@@ -507,8 +558,8 @@ export default function Home() {
           {(tariffs ?? [null, null, null, null]).map((t, i) =>
             t ? (
               <button key={t.id} type="button" onClick={() => setTariff(t.id)} className={cx('flex w-[108px] shrink-0 flex-col items-start rounded-2xl border-2 px-2.5 pb-2.5 pt-1 text-left transition-colors', selected?.id === t.id ? 'border-ink bg-surface' : 'border-transparent bg-sunken')}>
-                <TariffCar tariff={t.id} className="-ml-1 h-9 w-[86px]" />
-                <span className="mt-0.5 text-[13px] font-medium text-muted">{t.title}</span>
+                <TariffCar tariff={t.id} label={line} className="-ml-1 h-9 w-[86px]" />
+                <span className="mt-0.5 truncate text-[13px] font-medium text-muted">{t.id === 'bus_city' ? `Городской ${line}` : t.title}</span>
                 <span className="text-[17px] font-bold num">{rub(t.price)}</span>
                 <span className="text-xs text-muted">{t.eta} мин</span>
               </button>
@@ -519,6 +570,12 @@ export default function Home() {
         </div>
         {selected && <p className="mt-2 truncate text-xs text-muted">{selected.cars.join(', ')} или похожие · до {selected.seats} пассажиров</p>}
         <div className="no-scrollbar -mx-5 mt-2 flex items-center gap-2 overflow-x-auto px-5">
+          {selected?.id === 'bus_city' && (
+            <button type="button" onClick={() => setLinePicker(true)} className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-ink px-3 text-sm font-medium text-on-ink">
+              <BusIcon className="size-4" />
+              Маршрут {line} · сменить
+            </button>
+          )}
           {seatOk && (
             <button type="button" onClick={() => setChildSeat(!childSeat)} className={cx('inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm font-medium', childSeat ? 'bg-ink text-on-ink' : 'bg-sunken')}>
               <ChildIcon className="size-4" />
@@ -543,7 +600,7 @@ export default function Home() {
         {user && !user.linked && <p className="mt-3 rounded-2xl bg-warn-soft px-3 py-2.5 text-sm text-warn">Привязка к Bobobank отключена. Привяжите счёт снова, чтобы ездить.</p>}
         {user?.linked ? (
           <Button className="mt-3 w-full" size="lg" variant="brand" loading={order.isPending} disabled={!estimate || est.isPending} onClick={() => order.mutate()}>
-            {estimate ? `${transport === 'bus' ? 'Заказать' : 'Вызвать'} · ${rub(price)}` : 'Считаем цену…'}
+            {estimate ? `${selected?.id === 'bus_city' ? `Вызвать ${line}` : transport === 'bus' ? 'Заказать' : 'Вызвать'} · ${rub(price)}` : 'Считаем цену…'}
           </Button>
         ) : (
           <Button className="mt-3 w-full" size="lg" variant="ink" onClick={login}>
@@ -684,6 +741,7 @@ export default function Home() {
       )}
       <Drawer open={drawer} onClose={() => setDrawer(false)} />
       <StopBoard id={stop} onClose={() => setStop(null)} />
+      <LinePicker open={linePicker} value={line} onClose={() => setLinePicker(false)} onPick={pickLine} />
       <Modal open={commentOpen} onClose={() => setCommentOpen(false)} title="Пожелания водителю" footer={<Button variant="ink" size="lg" onClick={() => setCommentOpen(false)}>Готово</Button>}>
         <textarea value={comment} onChange={(e) => setComment(e.target.value.slice(0, 200))} placeholder="Например: подъезд 2, не звонить" className="min-h-24 w-full rounded-2xl bg-sunken p-4 text-[16px] outline-none focus:ring-2 focus:ring-ink" />
         <div className="mt-2 flex flex-wrap gap-2">

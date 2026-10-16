@@ -9,9 +9,9 @@ import { BusBadge } from './Bus';
 import { Button, cx, Modal, useToast } from './ui';
 
 /** Side view of a car for the tariff cards (own drawing). */
-export function TariffCar({ tariff, className }: { tariff: TariffId; className?: string }) {
-  if (tariff === 'minibus' || tariff === 'bus' || tariff === 'bus_business') return <TariffBus tariff={tariff} className={className} />;
-  const body = { econom: '#f1f1ee', comfort: '#c9ccd1', comfort_plus: '#3b4a63', business: '#1d1d1f', kids: '#ffe680' }[tariff];
+export function TariffCar({ tariff, label, className }: { tariff: TariffId; label?: string; className?: string }) {
+  if (BUS_TARIFFS.includes(tariff)) return <TariffBus tariff={tariff as BusTariff} label={label} className={className} />;
+  const body = { econom: '#f1f1ee', comfort: '#c9ccd1', comfort_plus: '#3b4a63', business: '#1d1d1f', kids: '#ffe680' }[tariff as 'econom'];
   const glass = tariff === 'business' || tariff === 'comfort_plus' ? '#8fa3bf' : '#5d6f86';
   return (
     <svg viewBox="0 0 96 40" className={className ?? 'h-9 w-[86px]'} aria-hidden="true">
@@ -29,29 +29,39 @@ export function TariffCar({ tariff, className }: { tariff: TariffId; className?:
   );
 }
 
-/** Side view of a minibus, a city bus or a coach (own drawing). */
-function TariffBus({ tariff, className }: { tariff: 'minibus' | 'bus' | 'bus_business'; className?: string }) {
-  const body = { minibus: '#f1f1ee', bus: '#2f8f4e', bus_business: '#1d1d1f' }[tariff];
+/** Side view of a bus for the bus tariffs (own drawing). */
+type BusTariff = 'bus_city' | 'minibus' | 'bus_econom' | 'bus' | 'bus_business';
+const BUS_TARIFFS: TariffId[] = ['bus_city', 'minibus', 'bus_econom', 'bus', 'bus_business'];
+function TariffBus({ tariff, label, className }: { tariff: BusTariff; label?: string; className?: string }) {
+  const body = { bus_city: '#d0021b', minibus: '#f1f1ee', bus_econom: '#f2c230', bus: '#2f8f4e', bus_business: '#1d1d1f' }[tariff];
   const glass = tariff === 'bus_business' ? '#8fa3bf' : '#5d6f86';
-  const long = tariff !== 'minibus';
-  const x1 = long ? 4 : 14;
-  const x2 = long ? 92 : 82;
-  const windows = long ? [12, 25, 38, 51, 64] : [28, 42, 56];
+  const short = tariff === 'minibus' || tariff === 'bus_econom';
+  const x1 = short ? 14 : 4;
+  const x2 = short ? 82 : 92;
+  const windows = short ? [28, 42, 56] : [12, 25, 38, 51, 64];
+  const front = tariff === 'minibus';
   return (
     <svg viewBox="0 0 96 40" className={className ?? 'h-9 w-[86px]'} aria-hidden="true">
       <ellipse cx="48" cy="36" rx="44" ry="2.6" fill="#000" opacity=".12" />
-      <path d={long ? `M${x1} 29 L${x1} 9 Q${x1} 5 9 5 L${x2 - 6} 5 Q${x2} 5 ${x2} 11 L${x2} 29 Z` : `M${x1} 29 L${x1} 9 Q${x1} 6 18 6 L66 6 Q72 6 75 12 L${x2 - 2} 17 Q${x2} 18 ${x2} 22 L${x2} 29 Z`} fill={body} stroke="#141414" strokeOpacity=".5" strokeWidth="1" />
+      <path d={front ? `M${x1} 29 L${x1} 9 Q${x1} 6 18 6 L66 6 Q72 6 75 12 L${x2 - 2} 17 Q${x2} 18 ${x2} 22 L${x2} 29 Z` : `M${x1} 29 L${x1} 9 Q${x1} 5 ${x1 + 5} 5 L${x2 - 6} 5 Q${x2} 5 ${x2} 11 L${x2} 29 Z`} fill={body} stroke="#141414" strokeOpacity=".5" strokeWidth="1" />
       {windows.map((x) => (
         <rect key={x} x={x} y="8.5" width="10.5" height={tariff === 'bus_business' ? 7 : 9} rx="1.2" fill={glass} />
       ))}
-      <path d={long ? `M${x2 - 14} 8.5 L${x2 - 3} 8.5 Q${x2 - 1.5} 8.5 ${x2 - 1.5} 11 L${x2 - 1.5} 18 L${x2 - 14} 18 Z` : 'M68 9 Q71 9 73 13 L74 17 L68 17 Z'} fill={glass} />
-      {tariff === 'bus' && <rect x={x2 - 26} y="8.5" width="9" height="19" rx="1" fill={glass} opacity=".85" />}
+      <path d={front ? 'M68 9 Q71 9 73 13 L74 17 L68 17 Z' : `M${x2 - 14} 8.5 L${x2 - 3} 8.5 Q${x2 - 1.5} 8.5 ${x2 - 1.5} 11 L${x2 - 1.5} 18 L${x2 - 14} 18 Z`} fill={glass} />
+      {(tariff === 'bus' || tariff === 'bus_city') && <rect x={x2 - 26} y="8.5" width="9" height="19" rx="1" fill={glass} opacity=".85" />}
       {tariff === 'bus_business' && <rect x={x1 + 1} y="20" width={x2 - x1 - 2} height="1.6" fill="#c8a24a" />}
       {tariff === 'bus' && <rect x={x1 + 1} y="21" width={x2 - x1 - 2} height="2" fill="#f1f1ee" />}
-      <circle cx={long ? 20 : 26} cy="29" r="5.5" fill="#141414" />
-      <circle cx={long ? 20 : 26} cy="29" r="2.2" fill="#bbb" />
-      <circle cx={long ? 76 : 70} cy="29" r="5.5" fill="#141414" />
-      <circle cx={long ? 76 : 70} cy="29" r="2.2" fill="#bbb" />
+      {tariff === 'bus_econom' && <rect x={x1 + 1} y="21" width={x2 - x1 - 2} height="2" fill="#1d1d1f" opacity=".7" />}
+      {tariff === 'bus_city' && label && (
+        <>
+          <rect x={x2 - 14} y="1" width="13" height="7" rx="1.2" fill="#1d1d1f" />
+          <text x={x2 - 7.5} y="6.6" textAnchor="middle" fontSize="6" fontWeight="700" fill="#ffb300">{label.slice(0, 4)}</text>
+        </>
+      )}
+      <circle cx={short ? 26 : 20} cy="29" r="5.5" fill="#141414" />
+      <circle cx={short ? 26 : 20} cy="29" r="2.2" fill="#bbb" />
+      <circle cx={short ? 70 : 76} cy="29" r="5.5" fill="#141414" />
+      <circle cx={short ? 70 : 76} cy="29" r="2.2" fill="#bbb" />
       <rect x={x2 - 3} y="23" width="3" height="2.5" rx="1" fill="#fff6b0" />
     </svg>
   );
@@ -112,6 +122,7 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<null | 'cancel'>(null);
   const isBus = ride.tariff.vehicle === 'bus';
+  const noun = ride.line ? `Автобус ${ride.line.ref}` : isBus ? 'Автобус' : 'Машина';
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['ride'] });
     void qc.invalidateQueries({ queryKey: ['account'] });
@@ -278,7 +289,7 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
   } else if (ride.status === 'searching') {
     body = (
       <>
-        <h2 className="text-[22px] font-bold">{isBus ? 'Ищем автобус' : 'Ищем машину'}</h2>
+        <h2 className="text-[22px] font-bold">{ride.line ? `Вызываем автобус ${ride.line.ref}` : isBus ? 'Ищем автобус' : 'Ищем машину'}</h2>
         <p className="mt-1 text-[15px] text-muted">
           {ride.tariff.title} · {rub(ride.price)} · заморозили {rub(ride.holdAmount)} на счёте
         </p>
@@ -296,7 +307,7 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
     body = (
       <>
         <h2 className="text-[22px] font-bold">
-          {gameMin <= 1 ? (isBus ? 'Автобус подъезжает' : 'Машина подъезжает') : `Приедет через ${gameMin} мин`}
+          {gameMin <= 1 ? `${noun} подъезжает` : `${ride.line ? `${noun} п` : 'П'}риедет через ${gameMin} мин`}
         </h2>
         <p className="mt-0.5 text-[15px] text-muted">Подача к «{ride.from.title}»</p>
         <div className="mt-4 rounded-2xl bg-sunken p-3">
@@ -318,7 +329,7 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
     const free = ride.waiting.freeS - waited;
     body = (
       <>
-        <h2 className="text-[22px] font-bold">{isBus ? 'Автобус на месте' : 'Машина на месте'}</h2>
+        <h2 className="text-[22px] font-bold">{`${noun} на месте`}</h2>
         <p className={cx('mt-0.5 text-[15px]', free > 0 ? 'text-muted' : 'text-warn')}>
           {free > 0 ? `Бесплатное ожидание ещё ${mmss(free)}` : `Платное ожидание ${mmss(-free)} · ${rub(ride.tariff.waitPerMin)}/мин`}
         </p>
@@ -377,7 +388,7 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
           </>
         }
       >
-        <p className="text-[15px] text-muted">{isBus ? 'Автобус' : 'Машина'} уже {ride.status === 'arrived' ? 'ждёт вас' : 'в пути больше двух минут'}. За отмену спишем {rub(ride.cancelFeeNow)}{ride.status === 'arrived' ? ' и платное ожидание, если оно было' : ''}, остальное разморозим.</p>
+        <p className="text-[15px] text-muted">{noun} уже {ride.status === 'arrived' ? 'ждёт вас' : 'в пути больше двух минут'}. За отмену спишем {rub(ride.cancelFeeNow)}{ride.status === 'arrived' ? ' и платное ожидание, если оно было' : ''}, остальное разморозим.</p>
       </Modal>
     </>
   );

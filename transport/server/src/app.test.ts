@@ -283,7 +283,7 @@ describe('поездка', () => {
     const h = await login();
     const { e, r } = await order(h, 'minibus');
     const buses = e.tariffs.filter((t: { vehicle: string }) => t.vehicle === 'bus').map((t: { id: string }) => t.id);
-    expect(buses).toEqual(['minibus', 'bus', 'bus_business']);
+    expect(buses).toEqual(['bus_city', 'minibus', 'bus_econom', 'bus', 'bus_business']);
     expect(e.tariffs.find((t: { id: string }) => t.id === 'bus').cars[0]).toContain('НефАЗ');
     const minibus = e.tariffs.find((t: { id: string }) => t.id === 'minibus');
     expect(r.json()).toMatchObject({ mode: 'taxi', price: minibus.price, tariff: { id: 'minibus', title: 'Микроавтобус', vehicle: 'bus' } });
@@ -291,6 +291,22 @@ describe('поездка', () => {
     expect((await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/board`, headers: h })).json().status).toBe('in_ride');
     const done = (await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/arrive`, headers: h })).json();
     expect(done).toMatchObject({ status: 'completed', finalPrice: minibus.price });
+  });
+
+  it('городской автобус по вызову: номер маршрута на борту', async () => {
+    const h = await login();
+    const est = (await app.inject({ method: 'POST', url: '/api/rides/estimate', headers: h, payload: { from: FROM, to: TO } })).json();
+    const bad = await app.inject({ method: 'POST', url: '/api/rides', headers: h, payload: { estimateId: est.id, tariff: 'bus_city', line: '56-1!' } });
+    expect(bad.json().code).toBe('bad_line');
+    const r = (await app.inject({ method: 'POST', url: '/api/rides', headers: h, payload: { estimateId: est.id, tariff: 'bus_city', line: '561' } })).json();
+    expect(r).toMatchObject({ line: { ref: '561' }, tariff: { id: 'bus_city', vehicle: 'bus' } });
+    const ride = await until(h, 'arrived');
+    expect(ride.car).toMatchObject({ colorHex: '#d0021b' });
+    expect(['ЛиАЗ-5292', 'ЛиАЗ-6213 (гармошка)', 'МАЗ-203']).toContain(ride.car.model);
+    await app.inject({ method: 'POST', url: `/api/rides/${ride.id}/board`, headers: h });
+    await app.inject({ method: 'POST', url: `/api/rides/${ride.id}/arrive`, headers: h });
+    expect((await app.inject({ url: '/api/rides', headers: h })).json().rides[0]).toMatchObject({ tariff: 'Автобус 561 · по вызову', colour: '#d0021b' });
+    expect((await app.inject({ url: '/api/bus/lines' })).json().lines.length).toBeGreaterThan(0);
   });
 
   it('денег не хватает — машину не ищем; вне Москвы не возим', async () => {

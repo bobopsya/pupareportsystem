@@ -2,7 +2,7 @@ import { HttpError, type Ctx } from '../context.js';
 import { newId, safeJson } from '../util.js';
 import { airQuote, registration, type AirKind } from './air.js';
 import { bank, holdOrConfirm, type BankCharge, type Confirmation } from './bank.js';
-import { arrivals, busRoute, busTravelMs, type BusOption } from './buses.js';
+import { arrivals, busRoute, busRoutes, busTravelMs, type BusOption } from './buses.js';
 import { newCar, newDriver, type Car, type Driver } from './fleet.js';
 import { along, distance, inMoscow, offset, pathLength, slice, type LatLon } from './geo.js';
 import { route } from './maps.js';
@@ -31,7 +31,13 @@ export interface RideExtra {
   bus?: { route: number; ref: string; kind: string; colour: string | null; to: string; board: BusOption['board']; alight: BusOption['alight']; dep: number; stops: number; boardAt: number; alightAt: number };
   /** Helicopter or jet: aircraft class and places. */
   air?: { kind: AirKind; classId: string; className: string; model: string; seats: number; from: string; to: string };
+  /** A city bus called like a taxi: the line number on its board. */
+  line?: { ref: string; colour: string | null };
 }
+
+/** «561», «м3», «т25», «н1», «с823а»: a city line number. */
+export const LINE_RE = /^[а-яё]{0,2}\d{1,4}[а-яё]?$/i;
+export const DEFAULT_LINE = '561';
 
 export interface RideRow {
   id: string;
@@ -141,7 +147,7 @@ export async function estimate(ctx: Ctx, userId: string | null, from: Point, to:
 
 // ---- Order ----
 
-export async function createRide(ctx: Ctx, user: { id: string; mandateId: string | null }, input: { estimateId: string; tariff: TariffId; childSeat?: boolean; comment?: string }) {
+export async function createRide(ctx: Ctx, user: { id: string; mandateId: string | null }, input: { estimateId: string; tariff: TariffId; childSeat?: boolean; comment?: string; line?: string }) {
   if (!user.mandateId) throw new HttpError(403, 'Привяжите счёт Bobobank, чтобы вызвать машину', 'no_mandate');
   if (currentRide(ctx, user.id)) throw new HttpError(409, 'У вас уже есть активная поездка', 'has_ride');
   const est = ctx.db.prepare('SELECT * FROM estimates WHERE id = ?').get(input.estimateId) as
@@ -151,7 +157,13 @@ export async function createRide(ctx: Ctx, user: { id: string; mandateId: string
   const s = getSettings(ctx);
   const t = tariffOf(ctx, input.tariff);
   if (!t) throw new HttpError(400, 'Нет такого тарифа');
-  const seat = input.childSeat && t.id !== 'kids' ? s.childSeat : 0;
+  const seat = input.childSeat && t.id !== 'kids' && t.vehicle !== 'bus' ? s.childSeat : 0;
+  let line: RideExtra['line'];
+  if (t.id === 'bus_city') {
+    const ref = (input.line ?? DEFAULT_LINE).trim().toLowerCase();
+    if (!LINE_RE.test(ref)) throw new HttpError(400, 'Номер маршрута — например 561, м3 или т25', 'bad_line');
+    line = { ref, colour: busRoutes().find((x) => x.ref.toLowerCase() === ref)?.colour ?? null };
+  }
   const price = priceOf(t, est.distance_m, est.duration_s, est.surge, seat);
   const hold = Math.ceil((price * HOLD_FACTOR) / 100) * 100;
   const id = newId('ride', 12);
@@ -169,7 +181,7 @@ export async function createRide(ctx: Ctx, user: { id: string; mandateId: string
     .run(
       id, user.id, pay.charge ? 'searching' : 'awaiting_payment', t.id, est.from_json, est.to_json, est.distance_m, est.duration_s, est.route, est.surge, price, seat ? 1 : 0,
       (input.comment ?? '').slice(0, 200), s.timeScale, hold, pay.charge?.id ?? null, pay.charge ? 'held' : 'none', searchAt(ctx, now, s.timeScale), now,
-      pay.confirmation?.id ?? null, pay.confirmation?.url ?? null, pay.confirmation?.expires_at ?? null, JSON.stringify({ eta }),
+      pay.confirmation?.id ?? null, pay.confirmation?.url ?? null, pay.confirmation?.expires_at ?? null, JSON.stringify({ eta, line }),
     );
   return getRide(ctx, id)!;
 }
@@ -261,6 +273,9 @@ async function assign(ctx: Ctx, r: RideRow) {
   const ms = realMs(way.duration, r.time_scale);
   const driver: Driver = newDriver(ctx);
   const car: Car = newCar(ctx, t.cars);
+  const line = safeJson<RideExtra>(r.extra, {}).line;
+  // A city bus wears the line's colour (red when the line has none).
+  if (line) Object.assign(car, { color: line.colour ? '' : 'Красный', colorHex: line.colour || '#d0021b' });
   ctx.db
     .prepare(`UPDATE rides SET status = 'driver_coming', driver = ?, car = ?, car_route = ?, car_duration_s = ?, assigned_at = ?, arrive_at = ? WHERE id = ? AND status = 'searching'`)
     .run(JSON.stringify(driver), JSON.stringify(car), JSON.stringify(way.path), way.duration, now, now + ms, r.id);
@@ -558,6 +573,7 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     mode: r.mode,
     bus: busView ?? null,
     air: extra.air ?? null,
+    line: extra.line ?? null,
     confirmation: r.status === 'awaiting_payment' ? { url: r.confirm_url, expiresAt: r.confirm_expires_at } : null,
     boardingUntil: r.status === 'preparing' ? r.assign_at : null,
     busLeavesAt: r.status === 'bus_arrived' && r.arrived_at ? r.arrived_at + realMs(BUS_DWELL_S, r.time_scale) : null,
@@ -606,8 +622,16 @@ export function historyItem(ctx: Ctx, r: RideRow) {
     id: r.id,
     mode: r.mode,
     status: r.status,
-    tariff: extra.bus ? `${extra.bus.kind === 'trolleybus' ? 'Троллейбус' : 'Автобус'} ${extra.bus.ref}` : extra.air ? extra.air.model : (t?.title ?? r.tariff),
-    colour: extra.bus?.colour ?? null,
+    tariff: extra.bus
+      ? `${extra.bus.kind === 'trolleybus' ? 'Троллейбус' : 'Автобус'} ${extra.bus.ref}`
+      : extra.air
+        ? extra.air.model
+        : extra.line
+          ? `Автобус ${extra.line.ref} · по вызову`
+          : t?.vehicle === 'bus'
+            ? `Автобус · ${t.title}`
+            : (t?.title ?? r.tariff),
+    colour: extra.bus?.colour ?? (extra.line ? extra.line.colour || '#d0021b' : null),
     tariffId: r.tariff,
     from: safeJson<Point>(r.from_json, {} as Point),
     to: safeJson<Point>(r.to_json, {} as Point),
