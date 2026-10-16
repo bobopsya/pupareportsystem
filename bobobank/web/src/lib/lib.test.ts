@@ -6,6 +6,8 @@ describe('format', () => {
   it('formats phone numbers as the user types', () => {
     expect(formatPhoneInput('89001112233')).toBe('+7 900 111-22-33');
     expect(formatPhoneInput('900')).toBe('+7 900');
+    expect(formatPhoneInput('1239041888800')).toBe('+123 904 188-88-00');
+    expect(formatPhoneInput('12')).toBe('+12');
     expect(phoneDigits('+7 900 111-22-33')).toBe('79001112233');
   });
   it('formats card and account numbers', () => {

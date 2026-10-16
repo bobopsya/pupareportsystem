@@ -24,10 +24,12 @@ export interface Ctx {
   random: () => number;
   /** Outbound HTTP to Bobobank. Replaced in tests. */
   bankHttp: (url: string, init: RequestInit) => Promise<Response>;
+  /** Outbound HTTP to Бобуслуги (Supabase). Replaced in tests. */
+  gosHttp: (url: string, init: RequestInit) => Promise<Response>;
 }
 
 export function createCtx(db: DB, cfg: Config, now: () => number = Date.now): Ctx {
-  return { db, cfg, now, random: Math.random, bankHttp: (url, init) => fetch(url, init) };
+  return { db, cfg, now, random: Math.random, bankHttp: (url, init) => fetch(url, init), gosHttp: (url, init) => fetch(url, init) };
 }
 
 export class HttpError extends Error {

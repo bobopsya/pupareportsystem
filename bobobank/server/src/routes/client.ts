@@ -18,7 +18,7 @@ import {
 } from '../domain/ledger.js';
 import { CURRENCIES, humanMoney, parseAmount } from '../domain/money.js';
 import { gosEnabled, kycStatus, refreshPerson, requireKyc } from '../domain/gos.js';
-import { formatPhone, getUser, normalizePhone, resolveRecipient, transfer, transferFee, type Recipient, type RecipientRef } from '../domain/transfers.js';
+import { formatPhone, getUser, normalizePhone, normalizeTransferPhone, resolveRecipient, telecomPhone, transfer, transferFee, type Recipient, type RecipientRef } from '../domain/transfers.js';
 import { operationPdf, requisitesPdf, statementPdf } from '../pdf.js';
 import { decrypt, newId, randomDigits, safeJson, sha256 } from '../util.js';
 
@@ -134,6 +134,10 @@ function profile(ctx: Ctx, userId: string) {
     id: u.id,
     phone: u.phone,
     phoneFormatted: formatPhone(u.phone),
+    telecomPhone: (() => {
+      const t = telecomPhone(ctx, u.id);
+      return t ? formatPhone(t) : null;
+    })(),
     name: u.name,
     birthDate: u.birth_date,
     role: u.role,
@@ -583,7 +587,7 @@ export function registerClientRoutes(app: FastifyInstance, ctx: Ctx) {
       .object({ title: z.string().trim().min(1).max(40), type: z.enum(['phone', 'card', 'account']), value: z.string().min(1).max(30), bik: z.string().regex(/^\d{9}$/).optional(), amount: amountSchema.optional() })
       .parse(req.body);
     if ((db.prepare('SELECT COUNT(*) c FROM favorites WHERE user_id = ?').get(u.id) as { c: number }).c >= 30) throw new HttpError(400, 'В избранном не больше 30 получателей');
-    const value = b.type === 'phone' ? normalizePhone(b.value) : b.value.replace(/\s/g, '');
+    const value = b.type === 'phone' ? normalizeTransferPhone(b.value) : b.value.replace(/\s/g, '');
     if (!value) throw new HttpError(400, 'Некорректный номер телефона');
     if (b.type === 'card' && !db.prepare(`SELECT 1 FROM cards WHERE id = ? AND status != 'closed'`).get(value)) throw new HttpError(400, 'Карта получателя не найдена');
     const dup = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND type = ? AND value = ?').get(u.id, b.type, value) as { id: string } | undefined;

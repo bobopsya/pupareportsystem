@@ -4,7 +4,7 @@ import { requireUser } from '../auth.js';
 import { HttpError, type Ctx } from '../context.js';
 import {
   captureCharge, chargeNow, decideConfirmation, grantMandate, holdCharge, mandateInfo, partnerCharge, partnerConfirmation, partnerMandate, partners, pendingPartnerRequests, redeemCode, refundCharge,
-  requestConfirmation, revokeMandate, updateMandate, userConfirmation, userMandates, voidCharge,
+  requestConfirmation, revokeMandate, setPartnerPhone, updateMandate, userConfirmation, userMandates, voidCharge,
   type ChargeRow,
 } from '../domain/partners.js';
 import { SIGNATURE_HEADER, verify } from '../domain/signing.js';
@@ -85,6 +85,11 @@ export function registerPartnerRoutes(app: FastifyInstance, ctx: Ctx) {
     if (b.allow_confirmation && !done && b.amount > m.limit_per_tx) return { status: 'confirmation_required', confirmation: requestConfirmation(ctx, client(req), m.id, b.amount, b.external_id, b.title) };
     if (b.amount > 10_000_000_00) throw new HttpError(402, 'Сумма слишком большая', 'limit_exceeded');
     return chargeView(holdCharge(ctx, client(req), id(req), b.amount, b.external_id, b.title));
+  }));
+
+  app.post(`${PREFIX}mandates/:id/phone`, idempotent((req) => {
+    const b = z.object({ phone: z.string().regex(/^123\d{10}$/).nullable() }).parse(req.body);
+    return setPartnerPhone(ctx, client(req), id(req), b.phone);
   }));
 
   app.get(`${PREFIX}confirmations/:id`, async (req) => partnerConfirmation(ctx, client(req), id(req)));

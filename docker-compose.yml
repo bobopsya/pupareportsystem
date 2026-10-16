@@ -91,6 +91,7 @@ services:
         VITE_EMAIL_DOMAIN: ${GOS_EMAIL_DOMAIN:-bobuslugi.local}
         VITE_BANK_URL: https://${BANK_DOMAIN:-bank.localhost}
         VITE_GPAY_URL: https://${GPAY_DOMAIN:-pay.localhost}
+        VITE_TELECOM_URL: ${TELECOM_PUBLIC_URL:-}
     image: bobuslugi:latest
     profiles: ["bobuslugi"]
     restart: unless-stopped
@@ -140,6 +141,10 @@ services:
       BANK_INTERNAL_URL: http://bobobank:8082
       BANK_PUBLIC_URL: https://${BANK_DOMAIN:-bank.localhost}
       BANK_TELECOM_SECRET: ${BANK_TELECOM_SECRET:-}
+      # Бобуслуги: «Подтвердить через Бобуслуги» and the number in the citizen's cabinet (when installed).
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      GOS_PUBLIC_URL: ${GOS_PUBLIC_URL:-}
     volumes:
       - ./telecom-data:/data
     ports:

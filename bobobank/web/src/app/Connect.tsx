@@ -29,6 +29,7 @@ interface Mandate {
   limit: number;
   spent: number;
   usable: boolean;
+  phone: string | null;
 }
 
 const CHARGEABLE = ['current', 'savings', 'business', 'credit_card', 'kids'];
@@ -152,7 +153,7 @@ export function ConnectedServices() {
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#FFD600] text-[#111]">{m.client === 'transport' ? <Car className="size-5" /> : m.client === 'telecom' ? <Smartphone className="size-5" /> : <Link2 className="size-5" />}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[15px] font-medium">{m.name}</span>
-              <span className="block truncate text-sm text-muted">Счёт •• {m.accountLast4} · до {money(m.limit)} за раз</span>
+              <span className="block truncate text-sm text-muted">{m.phone ? `${m.phone} · ` : ''}Счёт •• {m.accountLast4} · до {money(m.limit)} за раз</span>
             </span>
             {m.spent > 0 && <span className="shrink-0 text-sm text-muted num">{money(m.spent)}</span>}
           </button>

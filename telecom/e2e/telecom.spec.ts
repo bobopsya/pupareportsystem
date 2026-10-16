@@ -89,4 +89,17 @@ test('два абонента: подключение со списанием, S
   await expect(a.page.getByText('199', { exact: true })).toBeVisible();
   await a.page.getByRole('link', { name: 'Расходы' }).click();
   await expect(a.page.getByText('Тариф «Мини», первый месяц')).toBeVisible();
+
+  // Bobobank knows B's number: a transfer to +123 … reaches B's account; B's profile shows the link.
+  await expect(async () => {
+    await b.page.goto(`${TEL}/profile`);
+    await expect(b.page.getByText(`Переводы по номеру ${b.number} приходят на счёт`)).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
+  const from = (await (await a.page.request.get(`${BANK}/api/home`)).json()).accounts[0].id;
+  const bBefore = await available(b.page);
+  const t = await a.page.request.post(`${BANK}/api/transfers`, { headers: H, data: { fromAccountId: from, recipient: { type: 'phone', phone: b.number }, amount: '150.00' } });
+  expect(t.ok(), await t.text()).toBeTruthy();
+  expect((await available(b.page)) - bBefore).toBe(150_00);
+  await b.page.goto(`${BANK}/app/profile`);
+  await expect(b.page.getByText(`Бобтелеком: ${b.number}`)).toBeVisible();
 });

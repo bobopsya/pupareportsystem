@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, ExternalLink, LogOut, QrCode, Shield, Trash2 } from 'lucide-react';
-import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { BadgeCheck, ChevronRight, ExternalLink, Landmark, LogOut, QrCode, Shield, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { EsimModal } from '../components/Line';
 import { Card, Shell } from '../components/Shell';
 import { Button, cx, Modal, useToast } from '../components/ui';
@@ -22,6 +22,20 @@ export default function Profile() {
   const [theme, setT] = useState<Theme>(getTheme());
   const [esim, setEsim] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [params, setParams] = useSearchParams();
+  // Links are synced in the background: show the latest state when the page opens.
+  useEffect(() => void qc.invalidateQueries({ queryKey: ['me'] }), [qc]);
+  useEffect(() => {
+    const err = params.get('gos_error');
+    if (err) toast(err, 'bad');
+    if (params.get('gos') === 'linked') toast('Номер подтверждён через Бобуслуги');
+    if (err || params.get('gos')) setParams({}, { replace: true });
+  }, [params, setParams, toast]);
+  const unlink = useMutation({
+    mutationFn: () => api('/gos/unlink', { method: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['me'] }),
+    onError: (e) => toast(errorText(e), 'bad'),
+  });
   const logout = useMutation({
     mutationFn: () => api('/auth/logout', { method: 'POST' }),
     onSuccess: () => {
@@ -72,6 +86,57 @@ export default function Profile() {
           )}
         </div>
       </Card>
+
+      {l && (
+        <>
+          <h2 className="mb-2 mt-6 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">Привязки номера</h2>
+          <div className="flex flex-col gap-2">
+            <Card>
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#21a038] text-sm font-bold text-white">B</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold">Bobobank</span>
+                  <span className="block text-sm text-muted">
+                    {user.bankPhone === l.number ? `Переводы по номеру ${l.formatted} приходят на счёт •• ${user.accountLast4}` : user.linked ? 'Сообщаем номер банку…' : 'Привяжите счёт, чтобы получать переводы по номеру'}
+                  </span>
+                </span>
+                {user.bankPhone === l.number && <BadgeCheck className="size-5 shrink-0 text-ok" />}
+              </div>
+            </Card>
+            <Card>
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#1d4ed8] text-white">
+                  <Landmark className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold">Бобуслуги</span>
+                  {user.gos ? (
+                    <span className="block text-sm text-muted">
+                      Номер оформлен на {user.gos.name}
+                      {user.gos.passport ? `, паспорт ${user.gos.passport}` : ''} · @{user.gos.login}
+                      {user.gos.phone === l.number ? ' · виден в кабинете' : ''}
+                    </span>
+                  ) : (
+                    <span className="block text-sm text-muted">Оформите номер на свой Бобопаспорт — он появится в кабинете Бобуслуг.</span>
+                  )}
+                </span>
+                {user.gos && <BadgeCheck className="size-5 shrink-0 text-ok" />}
+              </div>
+              {user.gos ? (
+                <Button className="mt-3" size="sm" loading={unlink.isPending} onClick={() => unlink.mutate()}>
+                  Отвязать
+                </Button>
+              ) : me.data?.gosEnabled ? (
+                <a href="/api/auth/gos/start" className="mt-3 inline-flex h-9 items-center rounded-xl bg-[#1d4ed8] px-3.5 text-sm font-semibold text-white hover:brightness-110">
+                  Подтвердить через Бобуслуги
+                </a>
+              ) : (
+                <p className="mt-2 text-xs text-faint">Бобуслуги пока не подключены к Бобтелекому на этом сервере.</p>
+              )}
+            </Card>
+          </div>
+        </>
+      )}
 
       <h2 className="mb-2 mt-6 px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">Оформление</h2>
       <div className="grid grid-cols-3 gap-1 rounded-2xl bg-sunken p-1">

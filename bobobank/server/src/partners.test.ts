@@ -232,5 +232,22 @@ describe('второй партнёр — Бобтелеком', () => {
     const hist = JSON.stringify((await app.inject({ url: '/api/history', headers: c.headers })).json());
     expect(hist).toContain('Бобтелеком');
     expect(hist).toContain('utilities');
+
+    // The operator tells the bank the customer's number: it shows in the profile and transfers by it arrive.
+    const tel = (path: string, body: object) => partner('POST', path, body, { client: 'telecom', secret: 'telecom-secret' });
+    expect((await tel(`/internal/partner/v1/mandates/${mandate.id}/phone`, { phone: '79991234567' })).statusCode).toBe(400);
+    expect((await tel(`/internal/partner/v1/mandates/${mandate.id}/phone`, { phone: '1239041888800' })).json()).toMatchObject({ ok: true });
+    expect((await partner('POST', `/internal/partner/v1/mandates/${mandate.id}/phone`, { phone: '1239041888800' })).statusCode).toBe(404);
+    expect((await app.inject({ url: '/api/profile', headers: c.headers })).json().profile.telecomPhone).toBe('+123 904 188-88-00');
+    expect((await app.inject({ url: '/api/mandates', headers: c.headers })).json().mandates[0].phone).toBe('+123 904 188-88-00');
+    const d = await client('+7 900 222-33-44', 'Дарья Отправителева');
+    fund(d.main.id, 1000);
+    const t = await app.inject({ method: 'POST', url: '/api/transfers', headers: d.headers, payload: { fromAccountId: d.main.id, recipient: { type: 'phone', phone: '+123 904 188-88-00' }, amount: '100.00' } });
+    expect(t.statusCode, t.body).toBe(200);
+    expect(await available(c)).toBe(3000_00 - 549_00 + 100_00);
+    // Contract over: the number no longer leads to the customer.
+    await tel(`/internal/partner/v1/mandates/${mandate.id}/phone`, { phone: null });
+    const q = await app.inject({ method: 'POST', url: '/api/transfers/quote', headers: d.headers, payload: { fromAccountId: d.main.id, recipient: { type: 'phone', phone: '1239041888800' }, amount: '10.00' } });
+    expect(q.statusCode).toBe(404);
   });
 });

@@ -33,7 +33,18 @@ export function normalizePhone(raw: string): string | null {
   return /^7\d{10}$/.test(d) ? d : null;
 }
 
-export const formatPhone = (p: string) => `+7 ${p.slice(1, 4)} ${p.slice(4, 7)}-${p.slice(7, 9)}-${p.slice(9, 11)}`;
+/** A Bobobank phone (7XXXXXXXXXX) or a Бобтелеком number (123XXXXXXXXXX) for transfers. */
+export function normalizeTransferPhone(raw: string): string | null {
+  const d = raw.replace(/\D/g, '');
+  return /^123\d{10}$/.test(d) ? d : normalizePhone(raw);
+}
+
+export const formatPhone = (p: string) =>
+  p.length === 13 ? `+123 ${p.slice(3, 6)} ${p.slice(6, 9)}-${p.slice(9, 11)}-${p.slice(11)}` : `+7 ${p.slice(1, 4)} ${p.slice(4, 7)}-${p.slice(7, 9)}-${p.slice(9, 11)}`;
+
+/** The Бобтелеком number of a customer, if the operator told us about one. */
+export const telecomPhone = (ctx: Ctx, userId: string) =>
+  (ctx.db.prepare(`SELECT phone FROM phone_aliases WHERE user_id = ? AND client = 'telecom'`).get(userId) as { phone: string } | undefined)?.phone ?? null;
 
 /** Outgoing transfers to other people this month (RUB equivalent is not needed: the free limit is per tariff in ₽). */
 export function monthTransfers(ctx: Ctx, userId: string, now: number): number {
@@ -83,9 +94,11 @@ export interface ResolvedRecipient {
 
 export function resolveRecipient(ctx: Ctx, r: Recipient, currency: string): ResolvedRecipient {
   if (r.type === 'phone') {
-    const phone = normalizePhone(r.phone);
+    const phone = normalizeTransferPhone(r.phone);
     if (!phone) throw new HttpError(400, 'Некорректный номер телефона');
-    const u = ctx.db.prepare(`SELECT * FROM users WHERE phone = ? AND role = 'client'`).get(phone) as UserRow | undefined;
+    const u = (phone.length === 13
+      ? ctx.db.prepare(`SELECT u.* FROM phone_aliases a JOIN users u ON u.id = a.user_id WHERE a.phone = ? AND u.role = 'client'`).get(phone)
+      : ctx.db.prepare(`SELECT * FROM users WHERE phone = ? AND role = 'client'`).get(phone)) as UserRow | undefined;
     if (!u) throw new HttpError(404, 'Получатель с таким номером не найден в Bobobank');
     const acc = currency === 'RUB'
       ? mainAccount(ctx, u.id)

@@ -46,9 +46,14 @@ export function toAmount(s: string): string | null {
   return Number(v).toFixed(2);
 }
 
-/** "+7 900 123-45-67" as the user types. */
+/** "+7 900 123-45-67" as the user types; a Бобтелеком number "+123 904 188-88-00" when it starts with 1. */
 export function formatPhoneInput(raw: string) {
   let d = raw.replace(/\D/g, '');
+  if (d.startsWith('1')) {
+    d = d.slice(0, 13);
+    const q = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9), d.slice(9, 11), d.slice(11, 13)];
+    return `+${q[0]}${q[1] ? ` ${q[1]}` : ''}${q[2] ? ` ${q[2]}` : ''}${q[3] ? `-${q[3]}` : ''}${q[4] ? `-${q[4]}` : ''}`;
+  }
   if (d.startsWith('8')) d = `7${d.slice(1)}`;
   if (d && !d.startsWith('7')) d = `7${d}`;
   d = d.slice(0, 11);
@@ -62,6 +67,8 @@ export function formatPhoneInput(raw: string) {
 }
 
 export const phoneDigits = (s: string) => s.replace(/\D/g, '');
+/** A full number to send money to: +7 (11 digits) or Бобтелеком +123 (13 digits). */
+export const fullPhone = (s: string) => /^(7\d{10}|123\d{10})$/.test(phoneDigits(s));
 
 /** "4276 1234 5678 9012" as the user types. */
 export const formatPan = (s: string) => s.replace(/\D/g, '').slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ');

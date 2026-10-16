@@ -87,6 +87,8 @@ export interface Profile {
   id: string;
   phone: string;
   phoneFormatted: string;
+  /** Бобтелеком number, when the customer has one. */
+  telecomPhone: string | null;
   name: string;
   birthDate: string;
   role: string;

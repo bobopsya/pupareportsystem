@@ -1,7 +1,18 @@
 export interface Me {
-  user: { id: string; name: string; role: 'subscriber' | 'admin'; phone: string; linked: boolean; accountLast4: string | null } | null;
+  user: {
+    id: string;
+    name: string;
+    role: 'subscriber' | 'admin';
+    phone: string;
+    linked: boolean;
+    accountLast4: string | null;
+    /** The number Bobobank sends transfers to (synced from the line). */
+    bankPhone: string | null;
+    gos: { login: string; name: string; passport: string | null; phone: string | null; since: number } | null;
+  } | null;
   bankUrl: string | null;
   bankEnabled: boolean;
+  gosEnabled: boolean;
 }
 
 export interface Account {

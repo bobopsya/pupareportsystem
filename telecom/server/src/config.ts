@@ -17,6 +17,10 @@ export interface Config {
   bankSecret: string;
   /** Length of a paid period in days (30 by default). */
   periodDays: number;
+  /** Бобуслуги (Supabase): «Подтвердить через Бобуслуги» and the number in the citizen's cabinet. */
+  supabaseUrl: string;
+  supabaseServiceKey: string;
+  gosPublicUrl: string;
 }
 
 const HEX = /^[0-9a-f]{32,128}$/i;
@@ -40,5 +44,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     bankPublicUrl: (env.BANK_PUBLIC_URL ?? env.BANK_INTERNAL_URL ?? '').replace(/\/$/, ''),
     bankSecret: env.BANK_TELECOM_SECRET ?? '',
     periodDays: Math.min(365, Math.max(1, Number(env.BILLING_PERIOD_DAYS ?? 30) || 30)),
+    supabaseUrl: (env.SUPABASE_URL ?? '').replace(/\/$/, ''),
+    supabaseServiceKey: env.SUPABASE_SERVICE_KEY ?? '',
+    gosPublicUrl: (env.GOS_PUBLIC_URL ?? '').replace(/\/$/, ''),
   };
 }

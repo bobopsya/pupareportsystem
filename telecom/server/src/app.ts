@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { registerAuth } from './auth.js';
 import { HttpError, type Ctx } from './context.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerGosRoutes } from './routes/gos.js';
 import { registerTelecomRoutes } from './routes/telecom.js';
 
 export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
@@ -58,6 +59,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   app.get('/api/health', async () => ({ ok: true }));
   registerAuth(app, ctx);
   registerTelecomRoutes(app, ctx);
+  registerGosRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
 
   const webDist = ctx.cfg.webDist;

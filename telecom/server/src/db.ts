@@ -112,6 +112,17 @@ const MIGRATIONS: string[] = [
   UPDATE calls SET from_number = '123' || substr(from_number, 2) WHERE length(from_number) = 11 AND from_number LIKE '79%';
   UPDATE calls SET to_number = '123' || substr(to_number, 2) WHERE length(to_number) = 11 AND to_number LIKE '79%';
   `,
+  `
+  -- Which number Bobobank and Бобуслуги know for the person (synced by the tick), and the Бобуслуги identity.
+  ALTER TABLE users ADD COLUMN bank_phone TEXT;
+  ALTER TABLE users ADD COLUMN gos_uid TEXT;
+  ALTER TABLE users ADD COLUMN gos_login TEXT;
+  ALTER TABLE users ADD COLUMN gos_name TEXT;
+  ALTER TABLE users ADD COLUMN gos_passport TEXT;
+  ALTER TABLE users ADD COLUMN gos_phone TEXT;
+  ALTER TABLE users ADD COLUMN gos_linked_at INTEGER;
+  CREATE UNIQUE INDEX users_gos_uid ON users(gos_uid) WHERE gos_uid IS NOT NULL;
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

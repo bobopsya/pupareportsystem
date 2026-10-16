@@ -94,6 +94,13 @@ else
 fi
 
 echo
+if grep -q '^GOS_PUBLIC_URL=' .env; then
+  info "Бобуслуги найдены: в кабинете появится номер, если выполнить в Supabase SQL Editor"
+  info "  bobuslugi/supabase/migrations/20261017000001_telecom.sql"
+  docker compose up -d --build bobuslugi >/dev/null 2>&1 || true
+fi
+
+echo
 bold "Готово!  Откройте https://$TELECOM_DOMAIN и нажмите «Войти через Bobobank»."
 info "Админка Бобтелекома: войдите на сайт, затем выполните"
 info "  docker compose exec telecom node dist/cli.js make-admin \"Ваше имя\""

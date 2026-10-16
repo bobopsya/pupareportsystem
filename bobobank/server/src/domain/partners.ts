@@ -4,7 +4,7 @@ import { categoryOfMcc, type Category } from './bank.js';
 import { accrueCashback } from './bonus.js';
 import { assertDebitAllowed, available, createHold, getAccount, notify, post, releaseHold, systemAccount, type AccountRow, type SystemCode } from './ledger.js';
 import { humanMoney } from './money.js';
-import { getUser } from './transfers.js';
+import { formatPhone, getUser } from './transfers.js';
 
 /** Services that sign people in with Bobobank and charge a linked account («Войти через Bobobank»). */
 export interface Partner {
@@ -353,8 +353,23 @@ export function userMandates(ctx: Ctx, userId: string) {
   const rows = ctx.db.prepare(`SELECT * FROM mandates WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC`).all(userId) as MandateRow[];
   return rows.map((m) => {
     const spent = (ctx.db.prepare(`SELECT COALESCE(SUM(captured - refunded), 0) s FROM partner_charges c JOIN mandates m ON m.id = c.mandate_id WHERE m.user_id = ? AND m.client = ?`).get(userId, m.client) as { s: number }).s;
-    return { ...mandateInfo(ctx, m), client: m.client, name: ps[m.client]?.name ?? m.client, accountId: m.account_id, createdAt: m.created_at, spent };
+    const phone = (ctx.db.prepare('SELECT phone FROM phone_aliases WHERE user_id = ? AND client = ?').get(userId, m.client) as { phone: string } | undefined)?.phone;
+    return { ...mandateInfo(ctx, m), client: m.client, name: ps[m.client]?.name ?? m.client, accountId: m.account_id, createdAt: m.created_at, spent, phone: phone ? formatPhone(phone) : null };
   });
+}
+
+/** The operator says which of its numbers belongs to the customer now (null: the contract is over). */
+export function setPartnerPhone(ctx: Ctx, client: string, mandateId: string, phone: string | null) {
+  const m = partnerMandate(ctx, client, mandateId);
+  ctx.db.transaction(() => {
+    ctx.db.prepare('DELETE FROM phone_aliases WHERE user_id = ? AND client = ?').run(m.user_id, client);
+    if (phone) {
+      // A number handed to someone else stops leading to its old owner.
+      ctx.db.prepare('DELETE FROM phone_aliases WHERE phone = ?').run(phone);
+      ctx.db.prepare('INSERT INTO phone_aliases(phone, user_id, client, created_at) VALUES(?,?,?,?)').run(phone, m.user_id, client, ctx.now());
+    }
+  })();
+  return { ok: true, phone };
 }
 
 export function updateMandate(ctx: Ctx, userId: string, id: string, patch: { accountId?: string; limit?: number }) {

@@ -8,7 +8,7 @@ import { Screen } from '../components/Screen';
 import { Success } from '../components/Success';
 import { Button, Card, ErrorNote, Field, Input, Loading, Spinner, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
-import { formatPan, formatPhoneInput, money, phoneDigits, toAmount } from '../lib/format';
+import { formatPan, formatPhoneInput, fullPhone, money, phoneDigits, toAmount } from '../lib/format';
 import { useHome, useMeta, useRefresh } from '../lib/hooks';
 
 type Kind = 'phone' | 'card' | 'account' | 'own';
@@ -57,7 +57,7 @@ export default function Transfer() {
   }, [type, meta, req.bik]);
 
   const recipient = useMemo(() => {
-    if (type === 'phone') return phoneDigits(phone).length === 11 ? { type, phone } : null;
+    if (type === 'phone') return fullPhone(phone) ? { type, phone } : null;
     if (type === 'card') return savedCard ? { type: 'card_id' as const, cardId: savedCard.id } : phoneDigits(pan).length >= 16 ? { type, pan: phoneDigits(pan) } : null;
     if (type === 'own') return to ? { type, accountId: to } : null;
     return req.number.replace(/\D/g, '').length === 20 && req.bik.length === 9 && req.name.trim().length > 1 ? { type, number: req.number.replace(/\D/g, ''), bik: req.bik, name: req.name, inn: req.inn || undefined, purpose: req.purpose || undefined } : null;
@@ -126,7 +126,7 @@ export default function Transfer() {
         <AccountPicker label="Откуда" accounts={accounts} value={from} onChange={setFrom} />
         {type === 'phone' && (
           <Field label="Номер телефона получателя">
-            <Input inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} placeholder="+7 900 000-00-00" />
+            <Input inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} placeholder="+7 900 000-00-00 или +123 …" />
           </Field>
         )}
         {type === 'card' && (

@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { createCtx, type Ctx } from './context.js';
 import { openDb } from './db.js';
 import { tickCalls } from './domain/comm.js';
+import { syncLinks } from './domain/gos.js';
 import { tick } from './domain/lines.js';
 import { formatNumber, normalize, numberPrice } from './domain/numbers.js';
 import { verify } from './domain/signing.js';
@@ -21,10 +22,13 @@ let funds: Record<string, number>;
 let charges: Map<string, { id: string; mandate: string; amount: number; refunded: number }>;
 let bankLog: { path: string; body: Record<string, unknown> }[];
 let bankDown: boolean;
+/** Fake Бобуслуги: svc_* calls and the phone numbers in citizens' cabinets. */
+let gosPhones: Record<string, string>;
+let aliases: Record<string, string | null>;
 
 beforeEach(async () => {
   now = Date.UTC(2026, 9, 14, 11, 0, 0);
-  const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://telecom.test', BANK_INTERNAL_URL: 'http://bank.internal', BANK_PUBLIC_URL: 'https://bank.test', BANK_TELECOM_SECRET: SECRET });
+  const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://telecom.test', BANK_INTERNAL_URL: 'http://bank.internal', BANK_PUBLIC_URL: 'https://bank.test', BANK_TELECOM_SECRET: SECRET, SUPABASE_URL: 'https://gos-db.test', SUPABASE_SERVICE_KEY: 'sb_secret_test', GOS_PUBLIC_URL: 'https://gos.test' });
   ctx = createCtx(openDb(null), cfg, () => now);
   let seed = 7;
   ctx.random = () => {
@@ -35,6 +39,23 @@ beforeEach(async () => {
   charges = new Map();
   bankLog = [];
   bankDown = false;
+  gosPhones = {};
+  aliases = {};
+  ctx.gosHttp = async (url, init) => {
+    const fn = new URL(url).pathname.split('/').pop()!;
+    const args = JSON.parse(String(init.body));
+    if ((init.headers as Record<string, string>).apikey !== 'sb_secret_test') return Response.json({ message: 'no key' }, { status: 401 });
+    if (fn === 'svc_redeem_code') {
+      if (args.p_code !== 'gos-code' || args.p_client !== 'telecom') return Response.json({ message: 'E_BAD_CODE' }, { status: 400 });
+      return Response.json({ id: 'gos-uid-1', login: 'ivan', display_name: 'Ваня', banned: false, passport: { number: '123456', country_code: 'BOBO', last_name: 'Петров', first_name: 'Иван', birth_date: '1990-01-01' } });
+    }
+    if (fn === 'svc_set_phone') {
+      if (args.p_number) gosPhones[String(args.p_user)] = String(args.p_number);
+      else delete gosPhones[String(args.p_user)];
+      return Response.json({ ok: true });
+    }
+    return Response.json({ message: 'E_NOT_FOUND' }, { status: 404 });
+  };
   ctx.bankHttp = async (url, init) => {
     if (bankDown) throw new Error('down');
     const path = new URL(url).pathname;
@@ -59,6 +80,10 @@ beforeEach(async () => {
       const c = { id: `pch_${charges.size + 1}`, mandate: m[1], amount: body.amount as number, refunded: 0 };
       charges.set(key, c);
       return Response.json({ id: c.id, status: 'captured', amount: c.amount, captured: c.amount, refunded: 0 });
+    }
+    if ((m = path.match(/mandates\/(\w+)\/phone$/))) {
+      aliases[m[1]] = body.phone;
+      return Response.json({ ok: true, phone: body.phone });
     }
     if ((m = path.match(/charges\/(\w+)\/refund$/))) {
       const c = [...charges.values()].find((x) => x.id === m![1])!;
@@ -265,6 +290,46 @@ describe('связь между абонентами', () => {
     expect((await get(a, '/api/calls')).calls[0]).toMatchObject({ status: 'ended', seconds: 120 });
     expect((await get(a, '/api/line')).line.left.minutes).toBe(0);
     expect((await post(a, '/api/calls', { to: lb.number })).json().code).toBe('no_minutes');
+  });
+});
+
+describe('привязка к Bobobank и Бобуслугам', () => {
+  it('номер сам уходит в банк: переводы по +123 приходят на счёт; после расторжения — снимается', async () => {
+    const h = await login();
+    const { line } = await subscribe(h, 'mini');
+    await syncLinks(ctx);
+    expect(aliases.mnd_1).toBe(line.number);
+    expect((await get(h, '/api/me')).user.bankPhone).toBe(line.number);
+    await syncLinks(ctx);
+    expect(bankLog.filter((x) => x.path.endsWith('/phone'))).toHaveLength(1);
+    await post(h, '/api/line/close');
+    await syncLinks(ctx);
+    expect(aliases.mnd_1).toBeNull();
+  });
+
+  it('подтверждение через Бобуслуги: номер оформлен на паспорт и виден в кабинете гражданина', async () => {
+    const h = await login();
+    const { line } = await subscribe(h, 'base');
+    const start = await app.inject({ url: '/api/auth/gos/start', headers: h });
+    const loc = new URL(String(start.headers.location).replace('#/', ''));
+    expect(loc.origin).toBe('https://gos.test');
+    expect(loc.searchParams.get('client')).toBe('telecom');
+    const gosCookie = String(start.headers['set-cookie']).split(';')[0];
+    // A forged state does not link.
+    const bad = await app.inject({ url: '/api/auth/gos/callback?code=gos-code&state=other', headers: { ...h, cookie: `${h.cookie}; ${gosCookie}` } });
+    expect(bad.headers.location).toContain('gos_error');
+    const start2 = await app.inject({ url: '/api/auth/gos/start', headers: h });
+    const state2 = new URL(String(start2.headers.location).replace('#/', '')).searchParams.get('state')!;
+    const cb = await app.inject({ url: `/api/auth/gos/callback?code=gos-code&state=${state2}`, headers: { ...h, cookie: `${h.cookie}; ${String(start2.headers['set-cookie']).split(';')[0]}` } });
+    expect(cb.headers.location).toBe('/profile?gos=linked');
+    expect(gosPhones['gos-uid-1']).toBe(line.number);
+    const me = (await get(h, '/api/me')).user;
+    expect(me.gos).toMatchObject({ login: 'ivan', name: 'Петров Иван', phone: line.number });
+    expect(me.gos.passport).toBe('BOBO ••3456');
+    expect((await get(h, '/api/chats')).chats[0].last.text).toContain('Номер оформлен на Петров Иван');
+    await post(h, '/api/gos/unlink');
+    expect(gosPhones['gos-uid-1']).toBeUndefined();
+    expect((await get(h, '/api/me')).user.gos).toBeNull();
   });
 });
 

@@ -46,6 +46,7 @@ export default function Profile() {
         <div className="min-w-0">
           <div className="truncate text-xl font-semibold">{p.name}</div>
           <div className="text-sm text-muted num">{p.phoneFormatted}</div>
+          {p.telecomPhone && <div className="text-sm text-muted num">Бобтелеком: {p.telecomPhone}</div>}
           <div className="mt-1 text-xs text-faint">Клиент с {longDate(p.createdAt)}</div>
         </div>
       </Card>

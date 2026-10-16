@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { HttpError, type Ctx, type SessionUser } from './context.js';
 import { bank, bankEnabled, type MandateInfo } from './domain/bank.js';
+import { gosEnabled } from './domain/gos.js';
 import { newId, sha256 } from './util.js';
 
 export const SESSION_COOKIE = 'bk_sid';
@@ -102,9 +103,29 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
 
   app.get('/api/me', async (req) => {
     const u = req.user;
-    const extra = u ? (db.prepare('SELECT phone_masked FROM users WHERE id = ?').get(u.id) as { phone_masked: string }) : null;
+    const extra = u
+      ? (db.prepare('SELECT phone_masked, bank_phone, gos_login, gos_name, gos_passport, gos_phone, gos_linked_at FROM users WHERE id = ?').get(u.id) as {
+          phone_masked: string;
+          bank_phone: string | null;
+          gos_login: string | null;
+          gos_name: string | null;
+          gos_passport: string | null;
+          gos_phone: string | null;
+          gos_linked_at: number | null;
+        })
+      : null;
     return {
-      user: u && { id: u.id, name: u.name, role: u.role, phone: extra!.phone_masked, linked: !!u.mandateId, accountLast4: u.accountLast4 },
+      user: u && {
+        id: u.id,
+        name: u.name,
+        role: u.role,
+        phone: extra!.phone_masked,
+        linked: !!u.mandateId,
+        accountLast4: u.accountLast4,
+        bankPhone: extra!.bank_phone,
+        gos: extra!.gos_linked_at ? { login: extra!.gos_login, name: extra!.gos_name, passport: extra!.gos_passport ? `${extra!.gos_passport.slice(0, -4).replace(/\d/g, '•')}${extra!.gos_passport.slice(-4)}` : null, phone: extra!.gos_phone, since: extra!.gos_linked_at } : null,
+      },
+      gosEnabled: gosEnabled(ctx),
       bankUrl: ctx.cfg.bankPublicUrl || null,
       bankEnabled: bankEnabled(ctx),
     };

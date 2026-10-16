@@ -498,6 +498,16 @@ const MIGRATIONS: string[] = [
     UNIQUE (mandate_id, external_id)
   );
   `,
+  `
+  -- A number from a partner operator (Бобтелеком, +123 …) that belongs to a customer: transfers by it reach them.
+  CREATE TABLE phone_aliases (
+    phone TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    client TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX phone_aliases_user ON phone_aliases(user_id);
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {
