@@ -32,13 +32,12 @@ export const data = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(mb >= 1
 /** 125 → «2:05». */
 export const talk = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 export const day = (ts: number) => new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' }).format(ts);
-/** «+7 999 123-45-67» as one types: digits only, grouped. */
+/** «+123 999 123-45-67» as one types: digits only, grouped; the +123 code is added by itself. */
 export function typePhone(raw: string) {
   let d = raw.replace(/\D/g, '');
-  if (d.startsWith('8')) d = '7' + d.slice(1);
-  if (d && !d.startsWith('7')) d = '7' + d;
-  d = d.slice(0, 11);
-  const p = [d.slice(0, 1), d.slice(1, 4), d.slice(4, 7), d.slice(7, 9), d.slice(9, 11)];
+  if (d && !d.startsWith('123') && !'123'.startsWith(d)) d = '123' + d;
+  d = d.slice(0, 13);
+  const p = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9), d.slice(9, 11), d.slice(11, 13)];
   let out = d ? `+${p[0]}` : '';
   if (p[1]) out += ` ${p[1]}`;
   if (p[2]) out += ` ${p[2]}`;
@@ -47,3 +46,6 @@ export function typePhone(raw: string) {
   return out;
 }
 export const phoneDigits = (s: string) => s.replace(/\D/g, '');
+/** Full Бобтелеком number: +123 and ten digits. */
+export const fullNumber = (s: string) => phoneDigits(s).length === 13;
+export const formatNumber = (n: string) => typePhone(n);

@@ -5,7 +5,7 @@ import { Navigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { cx, Loading } from '../components/ui';
 import { api } from '../lib/api';
-import { clock, dayLabel, rub, talk } from '../lib/format';
+import { clock, dayLabel, formatNumber, rub, talk } from '../lib/format';
 import { useMe } from '../lib/hooks';
 import type { Call, Charge } from '../lib/types';
 
@@ -39,7 +39,7 @@ export default function History() {
           sub: `${c.direction === 'in' ? 'Входящий' : 'Исходящий'}${c.seconds ? ` · ${talk(c.seconds)}` : ''}`,
           right: c.billedMin ? `−${c.billedMin} мин` : c.direction === 'in' ? 'бесплатно' : '0 мин',
         })),
-        ...d.sms.map((s) => ({ key: s.id, at: s.createdAt, kind: 'sms' as const, icon: <MessageCircle className="size-5" />, title: `+7 ${s.to.slice(1, 4)} ${s.to.slice(4, 7)}-${s.to.slice(7, 9)}-${s.to.slice(9)}`, sub: 'Исходящее SMS', right: '−1 SMS' })),
+        ...d.sms.map((s) => ({ key: s.id, at: s.createdAt, kind: 'sms' as const, icon: <MessageCircle className="size-5" />, title: formatNumber(s.to), sub: 'Исходящее SMS', right: '−1 SMS' })),
       ].sort((a, b) => b.at - a.at)
     : [];
   const shown = items.filter((i) => f === 'all' || i.kind === f);

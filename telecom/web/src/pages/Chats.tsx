@@ -5,14 +5,14 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Avatar, Shell } from '../components/Shell';
 import { Button, cx, Loading, Modal, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
-import { clock, dayLabel, phoneDigits, typePhone } from '../lib/format';
+import { clock, dayLabel, fullNumber, phoneDigits, typePhone } from '../lib/format';
 import { useLine, useMe } from '../lib/hooks';
 import type { Call, Chat, Conversation } from '../lib/types';
 
 function NewChat({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [v, setV] = useState('+7 ');
+  const [v, setV] = useState('+123 ');
   const nav = useNavigate();
-  const ok = phoneDigits(v).length === 11;
+  const ok = fullNumber(v);
   return (
     <Modal
       open={open}
@@ -24,7 +24,7 @@ function NewChat({ open, onClose }: { open: boolean; onClose: () => void }) {
         </Button>
       }
     >
-      <input autoFocus value={v} onChange={(e) => setV(typePhone(e.target.value))} inputMode="tel" placeholder="+7 9XX XXX-XX-XX" className="h-14 w-full rounded-2xl bg-sunken px-4 text-[20px] font-semibold outline-none focus:ring-2 focus:ring-brand num" />
+      <input autoFocus value={v} onChange={(e) => setV(typePhone(e.target.value))} inputMode="tel" placeholder="+123 XXX XXX-XX-XX" className="h-14 w-full rounded-2xl bg-sunken px-4 text-[20px] font-semibold outline-none focus:ring-2 focus:ring-brand num" />
       <p className="mt-2 text-sm text-muted">Писать можно абонентам Бобтелекома.</p>
     </Modal>
   );

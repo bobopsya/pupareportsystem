@@ -124,7 +124,7 @@ export async function connect(ctx: Ctx, user: SessionUser, input: { number: stri
   if (!user.mandateId) throw new HttpError(403, 'Привяжите счёт Bobobank, чтобы подключиться', 'no_mandate');
   if (openLine(ctx, user.id)) throw new HttpError(409, 'У вас уже есть номер Бобтелекома', 'has_line');
   const n = normalize(input.number);
-  if (!n) throw new HttpError(400, 'Номер должен быть вида +7 9XX XXX-XX-XX', 'bad_number');
+  if (!n) throw new HttpError(400, 'Номер должен быть вида +123 XXX XXX-XX-XX', 'bad_number');
   const t = tariffOf(ctx, input.tariff);
   if (!t) throw new HttpError(400, 'Нет такого тарифа');
   assertFree(ctx, n);

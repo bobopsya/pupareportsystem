@@ -64,7 +64,7 @@ test('два абонента: подключение со списанием, S
   // A writes to B.
   await a.page.getByRole('link', { name: 'Чаты' }).click();
   await a.page.getByRole('button', { name: 'Новое сообщение' }).click();
-  await a.page.getByPlaceholder('+7 9XX XXX-XX-XX').fill(b.number);
+  await a.page.getByPlaceholder('+123 XXX XXX-XX-XX').fill(b.number);
   await a.page.getByRole('button', { name: 'Написать' }).click();
   await a.page.getByLabel('Сообщение').fill('Привет, это Анна!');
   await a.page.getByRole('button', { name: 'Отправить' }).click();

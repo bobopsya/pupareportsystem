@@ -5,7 +5,7 @@ import { Navigate } from 'react-router-dom';
 import { Avatar, Shell } from '../components/Shell';
 import { cx, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
-import { clock, dayLabel, phoneDigits, talk, typePhone } from '../lib/format';
+import { clock, dayLabel, fullNumber, phoneDigits, talk, typePhone } from '../lib/format';
 import { useLine, useMe } from '../lib/hooks';
 import type { Call } from '../lib/types';
 
@@ -28,7 +28,7 @@ export default function Calls() {
   });
   if (me.data && !me.data.user) return <Navigate to="/" replace />;
   const press = (k: string) => setV((s) => (k === '⌫' ? typePhone(phoneDigits(s).slice(0, -1)) : k === '+' ? s : typePhone(s + k)));
-  const ok = phoneDigits(v).length === 11;
+  const ok = fullNumber(v);
   const minutes = line.data?.line?.left.minutes;
 
   return (

@@ -31,7 +31,7 @@ export function subscriberName(ctx: Ctx, number: string): string | null {
 
 function peer(ctx: Ctx, raw: string, me: LineRow): LineRow {
   const n = normalize(raw);
-  if (!n) throw new HttpError(400, 'Наберите номер полностью: +7 9XX XXX-XX-XX', 'bad_number');
+  if (!n) throw new HttpError(400, 'Наберите номер полностью: +123 XXX XXX-XX-XX', 'bad_number');
   if (n === me.number) throw new HttpError(400, 'Это ваш номер', 'self');
   const l = lineByNumber(ctx, n);
   if (!l) throw new HttpError(404, 'Абонент не обслуживается Бобтелекомом. Звонить и писать можно только абонентам Бобтелекома.', 'not_subscriber');

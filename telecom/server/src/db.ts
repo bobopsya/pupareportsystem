@@ -104,6 +104,14 @@ const MIGRATIONS: string[] = [
   CREATE INDEX calls_to ON calls(to_number, created_at);
   CREATE INDEX calls_status ON calls(status);
   `,
+  `
+  -- Numbers move from +7 9XX … to the game code +123: 79001234567 → 1239001234567.
+  UPDATE lines SET number = '123' || substr(number, 2) WHERE length(number) = 11 AND number LIKE '79%';
+  UPDATE messages SET from_number = '123' || substr(from_number, 2) WHERE length(from_number) = 11 AND from_number LIKE '79%';
+  UPDATE messages SET to_number = '123' || substr(to_number, 2) WHERE length(to_number) = 11 AND to_number LIKE '79%';
+  UPDATE calls SET from_number = '123' || substr(from_number, 2) WHERE length(from_number) = 11 AND from_number LIKE '79%';
+  UPDATE calls SET to_number = '123' || substr(to_number, 2) WHERE length(to_number) = 11 AND to_number LIKE '79%';
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

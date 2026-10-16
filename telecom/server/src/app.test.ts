@@ -104,16 +104,17 @@ async function advance(ms: number, step = 60_000) {
 
 describe('номера', () => {
   it('нормализация, формат и цена красивых номеров', () => {
-    expect(normalize('+7 (999) 123-45-67')).toBe('79991234567');
-    expect(normalize('89991234567')).toBe('79991234567');
+    expect(normalize('+123 (999) 123-45-67')).toBe('1239991234567');
+    expect(normalize('9991234567')).toBe('1239991234567');
+    expect(normalize('+7 999 123-45-67')).toBe('1239991234567');
     expect(normalize('12345')).toBeNull();
-    expect(formatNumber('79991234567')).toBe('+7 999 123-45-67');
-    expect(numberPrice('79991234567')).toBe(1000);
-    expect(numberPrice('79997777777')).toBe(5000);
-    expect(numberPrice('79001230000')).toBe(3000);
-    expect(numberPrice('79001237777')).toBe(3000);
-    expect(numberPrice('79001234500')).toBe(500);
-    expect(numberPrice('79001938274')).toBe(0);
+    expect(formatNumber('1239991234567')).toBe('+123 999 123-45-67');
+    expect(numberPrice('1239991234567')).toBe(1000);
+    expect(numberPrice('1239997777777')).toBe(5000);
+    expect(numberPrice('1239001230000')).toBe(3000);
+    expect(numberPrice('1239001237777')).toBe(3000);
+    expect(numberPrice('1239001234500')).toBe(500);
+    expect(numberPrice('1239001938274')).toBe(0);
   });
 });
 
@@ -127,7 +128,7 @@ describe('подключение и абонплата', () => {
     expect(line.periodEnd - line.periodStart).toBe(30 * DAY);
     expect(funds.mnd_1).toBe(5000_00 - 549_00);
     expect(bankLog.at(-1)).toMatchObject({ body: { amount: 549_00, external_id: `sub_${line.id}_1` } });
-    expect((await post(h, '/api/line', { number: '79001234567', tariff: 'mini' })).json().code).toBe('has_line');
+    expect((await post(h, '/api/line', { number: '1239001234567', tariff: 'mini' })).json().code).toBe('has_line');
     const chats = (await get(h, '/api/chats')).chats;
     expect(chats[0]).toMatchObject({ name: 'Бобтелеком', system: true, unread: 1 });
     expect(chats[0].last.text).toContain('Добро пожаловать');
@@ -173,7 +174,7 @@ describe('подключение и абонплата', () => {
     await advance(30 * DAY, 3600_000);
     l = (await get(h, '/api/line')).line;
     expect(l).toMatchObject({ status: 'blocked', blockReason: 'debt' });
-    expect((await post(h, '/api/sms', { to: '79001112233', text: 'hi' })).json().code).toBe('blocked');
+    expect((await post(h, '/api/sms', { to: '1239001112233', text: 'hi' })).json().code).toBe('blocked');
     expect((await get(h, '/api/chats')).chats[0].last.text).toContain('Номер заблокирован');
     expect((await post(h, '/api/line/pay')).json().code).toBe('insufficient_funds');
 
@@ -225,7 +226,7 @@ describe('связь между абонентами', () => {
     const conv = await get(b, `/api/chats/${la.number}`);
     expect(conv.messages).toHaveLength(1);
     expect((await get(b, '/api/line')).unread).toBe(1);
-    expect((await post(a, '/api/sms', { to: '79000000001', text: 'x' })).json().code).toBe('not_subscriber');
+    expect((await post(a, '/api/sms', { to: '1239000000001', text: 'x' })).json().code).toBe('not_subscriber');
   });
 
   it('звонок: входящий у адресата, ответ, разговор 2:05 — списано 3 минуты у звонящего', async () => {

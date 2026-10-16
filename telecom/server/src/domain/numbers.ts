@@ -1,23 +1,25 @@
 import { HttpError, type Ctx } from '../context.js';
 
-/** Codes after +7 that Бобтелеком hands out. */
+/** Бобтелеком numbers: +123 (a country code nobody uses), a three-digit code and seven digits. */
+export const COUNTRY = '123';
+/** Codes after +123 that Бобтелеком hands out. */
 const CODES = ['900', '901', '902', '904', '908', '950', '951', '958', '977', '999'];
 /** The sender of service messages. */
 export const SYSTEM_SENDER = 'BOBTEL';
 
-/** «+7 (999) 123-45-67», «89991234567», «9991234567» → «79991234567». */
+/** «+123 (999) 123-45-67», «9991234567» → «1239991234567»; an old «+7 9XX …» number maps to «+123 9XX …». */
 export function normalize(raw: string): string | null {
   let d = raw.replace(/\D/g, '');
-  if (d.length === 10 && d[0] === '9') d = '7' + d;
-  if (d.length === 11 && d[0] === '8') d = '7' + d.slice(1);
-  return /^79\d{9}$/.test(d) ? d : null;
+  if (d.length === 10) d = COUNTRY + d;
+  if (d.length === 11 && d.startsWith('79')) d = COUNTRY + d.slice(1);
+  return /^123\d{10}$/.test(d) ? d : null;
 }
 
-export const formatNumber = (n: string) => (n === SYSTEM_SENDER ? 'Бобтелеком' : /^7\d{10}$/.test(n) ? `+7 ${n.slice(1, 4)} ${n.slice(4, 7)}-${n.slice(7, 9)}-${n.slice(9)}` : n);
+export const formatNumber = (n: string) => (n === SYSTEM_SENDER ? 'Бобтелеком' : /^123\d{10}$/.test(n) ? `+123 ${n.slice(3, 6)} ${n.slice(6, 9)}-${n.slice(9, 11)}-${n.slice(11)}` : n);
 
 /** A «красивый» number costs extra: the more regular its last seven digits, the more. Rubles. */
 export function numberPrice(n: string): number {
-  const d = n.slice(4);
+  const d = n.slice(6);
   const same = (s: string) => s.split('').every((c) => c === s[0]);
   const run = (s: string) => '0123456789'.includes(s) || '9876543210'.includes(s);
   if (same(d)) return 5000;
@@ -40,12 +42,12 @@ export function offerNumbers(ctx: Ctx, kind: 'plain' | 'beautiful', q = '', prem
   const out = new Map<string, number>();
   for (let i = 0; i < 400 && out.size < 8; i++) {
     let n: string;
-    if (want) n = `7${code(ctx)}${digits(ctx, 7 - want.length)}${want}`;
-    else if (kind === 'plain') n = `7${code(ctx)}${digits(ctx, 7)}`;
+    if (want) n = `${COUNTRY}${code(ctx)}${digits(ctx, 7 - want.length)}${want}`;
+    else if (kind === 'plain') n = `${COUNTRY}${code(ctx)}${digits(ctx, 7)}`;
     else {
       const [a, b, c] = [digit(ctx), digit(ctx), digit(ctx)];
       const shapes = [`${a}${b}${c}0000`, `${a}${b}${c}${b}${b}${b}${b}`, `${a}${b}${c}${a}${b}${c}${c}`, `${a}${b}${c}${b}${c}${b}${c}`, `${a}${b}${c}1234`, `${a}${b}${c}${b}${c}00`, `${a}${a}${a}${a}${a}${a}${a}`, `${a}${b}${c}${c}${c}${c}${c}`];
-      n = `7${code(ctx)}${shapes[Math.floor(ctx.random() * shapes.length)]}`;
+      n = `${COUNTRY}${code(ctx)}${shapes[Math.floor(ctx.random() * shapes.length)]}`;
     }
     const price = numberPrice(n);
     if (!want && kind === 'plain' && price > 0) continue;
