@@ -81,7 +81,7 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
   const toast = useToast();
   const now = useNow() + offset;
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<null | 'cancel' | 'stop'>(null);
+  const [confirm, setConfirm] = useState<null | 'cancel'>(null);
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['ride'] });
     void qc.invalidateQueries({ queryKey: ['account'] });
@@ -165,8 +165,8 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
         )}
         {craftCard}
         {ride.status === 'boarding' && (
-          <Button className="mt-3 w-full" size="lg" variant="brand" icon={<Plane className="size-5" />} loading={busy === 'takeoff'} onClick={() => void act('takeoff', `/rides/${ride.id}/takeoff`)}>
-            Я на борту, взлетаем
+          <Button className="mt-3 w-full" size="lg" variant="brand" icon={<Plane className="size-5" />} loading={busy === 'board'} onClick={() => void act('board', `/rides/${ride.id}/board`)}>
+            Я на борту
           </Button>
         )}
         <Button className="mt-2 w-full" variant="soft" loading={busy === 'cancel'} onClick={() => (ride.status === 'boarding' ? setConfirm('cancel') : void cancel())}>
@@ -175,49 +175,48 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
       </>
     );
   } else if (ride.status === 'in_flight' && air) {
-    const left = ride.motion ? Math.max(0, ride.motion.endAt - now) : 0;
-    const gameS = (left / 1000) * ride.timeScale;
-    const frac = ride.motion ? Math.min(1, Math.max(0, (now - ride.motion.startAt) / (ride.motion.endAt - ride.motion.startAt))) : 0;
+    const gameS = ride.etaS ?? ride.duration;
     body = (
       <>
         <h2 className="text-[22px] font-bold">В полёте</h2>
         <p className="mt-0.5 text-[15px] text-muted">
-          {ride.from.title} → {ride.to.title} · ещё {minutes(gameS)} · {Math.round((ride.distance * (1 - frac)) / 1000).toLocaleString('ru-RU')} км
+          {ride.from.title} → {ride.to.title} · {Math.round(ride.distance / 1000).toLocaleString('ru-RU')} км · прилёт ≈ {clock(Date.now() + gameS * 1000)}
         </p>
-        <p className="mt-0.5 text-[15px] font-semibold">Прилёт в {clock(Date.now() + gameS * 1000)} по Москве</p>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken">
-          <div className="h-full rounded-full bg-ink transition-[width] duration-1000 ease-linear" style={{ width: `${frac * 100}%` }} />
-        </div>
         {craftCard}
-        <p className="mt-3 text-center text-xs text-muted">Высота {air.kind === 'heli' ? '450 м' : '12 500 м'}{ride.timeScale > 1 ? ` · время ускорено ×${ride.timeScale}` : ' · можно закрыть приложение — полёт продолжится'}</p>
+        <Button className="mt-3 w-full" size="lg" variant="brand" loading={busy === 'arrive'} onClick={() => void act('arrive', `/rides/${ride.id}/arrive`)}>
+          Прилетели
+        </Button>
       </>
     );
-  } else if ((ride.status === 'waiting_bus' || ride.status === 'on_bus') && bus) {
+  } else if ((ride.status === 'waiting_bus' || ride.status === 'bus_arrived' || ride.status === 'on_bus') && bus) {
     const waitS = ride.etaS ?? 0;
-    const frac = ride.motion ? Math.min(1, Math.max(0, (now - ride.motion.startAt) / (ride.motion.endAt - ride.motion.startAt))) : 0;
-    const left = ride.motion ? Math.max(0, ((ride.motion.endAt - now) / 1000) * ride.timeScale) : 0;
+    const leaves = ride.busLeavesAt ? Math.max(0, (ride.busLeavesAt - now) / 1000) : 0;
     body = (
       <>
         <div className="flex items-center gap-2">
           <BusBadge num={bus.ref} colour={bus.colour} />
           <span className="min-w-0 truncate text-sm text-muted">→ {bus.to}</span>
         </div>
-        {ride.status === 'waiting_bus' ? (
+        {ride.status === 'waiting_bus' && (
           <>
             <h2 className="mt-2 text-[22px] font-bold">{waitS < 60 ? 'Автобус подходит' : `Автобус через ${minutes(waitS)}`}</h2>
             <p className="mt-0.5 text-[15px] text-muted">
-              Идите к остановке «{bus.board.name}» — {Math.round(bus.board.walkM / 10) * 10} м. Проезд {rub(ride.price)} спишется при посадке, как по «Тройке».
+              Идите на остановку «{bus.board.name}» ({Math.round(bus.board.walkM / 10) * 10} м). Когда автобус подойдёт, нажмите «Я сел».
             </p>
           </>
-        ) : (
+        )}
+        {ride.status === 'bus_arrived' && (
           <>
-            <h2 className="mt-2 text-[22px] font-bold">Едем</h2>
+            <h2 className="mt-2 text-[22px] font-bold">Автобус на остановке — садитесь!</h2>
+            <p className="mt-0.5 text-[15px] text-warn">Уедет через {mmss(leaves)}. Проезд {rub(ride.price)} спишется, когда нажмёте «Я сел».</p>
+          </>
+        )}
+        {ride.status === 'on_bus' && (
+          <>
+            <h2 className="mt-2 text-[22px] font-bold">Едете в автобусе</h2>
             <p className="mt-0.5 text-[15px] text-muted">
-              До «{bus.alight.name}» {minutes(left)} · {bus.stops} ост. · проезд оплачен
+              Выходите на «{bus.alight.name}» — {bus.stops} ост.{ride.etaS ? `, примерно ${minutes(ride.etaS)}` : ''}. Проезд оплачен.
             </p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken">
-              <div className="h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${frac * 100}%`, background: bus.colour || '#d0021b' }} />
-            </div>
           </>
         )}
         {bus.line && (
@@ -230,13 +229,18 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
             ))}
           </ol>
         )}
-        {ride.status === 'waiting_bus' ? (
-          <Button className="mt-3 w-full" variant="soft" loading={busy === 'cancel'} onClick={() => void cancel()}>
-            Не поеду
+        {ride.status === 'bus_arrived' && (
+          <Button className="mt-3 w-full" size="lg" variant="brand" icon={<Bus className="size-5" />} loading={busy === 'board'} onClick={() => void act('board', `/rides/${ride.id}/board`)}>
+            Я сел · {rub(ride.price)}
+          </Button>
+        )}
+        {ride.status === 'on_bus' ? (
+          <Button className="mt-3 w-full" size="lg" variant="brand" loading={busy === 'arrive'} onClick={() => void act('arrive', `/rides/${ride.id}/arrive`)}>
+            Я вышел
           </Button>
         ) : (
-          <Button className="mt-3 w-full" variant="soft" icon={<Bus className="size-[18px]" />} loading={busy === 'stop'} onClick={() => void act('stop', `/rides/${ride.id}/stop`)}>
-            Выйти на следующей
+          <Button className="mt-2 w-full" variant="soft" loading={busy === 'cancel'} onClick={() => void cancel()}>
+            Не поеду
           </Button>
         )}
       </>
@@ -292,7 +296,7 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
           <DriverCard car={ride.car} driver={ride.driver} />
         </div>
         <Button className="mt-3 w-full" size="lg" variant="brand" loading={busy === 'board'} onClick={() => void act('board', `/rides/${ride.id}/board`)}>
-          Я в машине, поехали
+          Я сел
         </Button>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <Button icon={<MessageCircle className="size-[18px]" />} onClick={callBot}>
@@ -303,27 +307,22 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
       </>
     );
   } else if (ride.status === 'in_ride' && ride.car && ride.driver) {
-    const left = ride.motion ? Math.max(0, ride.motion.endAt - now) : 0;
-    const gameS = (left / 1000) * ride.timeScale;
-    const frac = ride.motion ? Math.min(1, Math.max(0, (now - ride.motion.startAt) / (ride.motion.endAt - ride.motion.startAt))) : 0;
+    const gameS = ride.etaS ?? ride.duration;
     body = (
       <>
-        <h2 className="text-[22px] font-bold">В пути</h2>
+        <h2 className="text-[22px] font-bold">Едем</h2>
         <p className="mt-0.5 text-[15px] text-muted">
-          До «{ride.to.title}» ещё {minutes(gameS)} · {km(ride.distance * (1 - frac))} · прибытие ≈ {clock(Date.now() + gameS * 1000)}
+          До «{ride.to.title}» · {km(ride.distance)} · примерно {minutes(gameS)}, прибытие ≈ {clock(Date.now() + gameS * 1000)}
         </p>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken">
-          <div className="h-full rounded-full bg-ink transition-[width] duration-1000 ease-linear" style={{ width: `${frac * 100}%` }} />
-        </div>
         <div className="mt-4 rounded-2xl bg-sunken p-3">
           <DriverCard car={ride.car} driver={ride.driver} />
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button icon={<ShieldCheck className="size-[18px]" />} onClick={() => toast('Поездка застрахована и записывается. Хорошей дороги!')}>
-            Безопасность
-          </Button>
-          <Button onClick={() => setConfirm('stop')}>Остановите здесь</Button>
-        </div>
+        <Button className="mt-3 w-full" size="lg" variant="brand" loading={busy === 'arrive'} onClick={() => void act('arrive', `/rides/${ride.id}/arrive`)}>
+          Мы приехали
+        </Button>
+        <Button className="mt-2 w-full" variant="soft" icon={<ShieldCheck className="size-[18px]" />} onClick={() => toast('Поездка застрахована и записывается. Хорошей дороги!')}>
+          Безопасность
+        </Button>
       </>
     );
   } else if (ride.status === 'completed') {
@@ -349,23 +348,6 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
         }
       >
         <p className="text-[15px] text-muted">Машина уже {ride.status === 'arrived' ? 'ждёт вас' : 'в пути больше двух минут'}. За отмену спишем {rub(ride.cancelFeeNow)}{ride.status === 'arrived' ? ' и платное ожидание, если оно было' : ''}, остальное разморозим.</p>
-      </Modal>
-      <Modal
-        open={confirm === 'stop'}
-        onClose={() => setConfirm(null)}
-        title="Остановить здесь?"
-        footer={
-          <>
-            <Button variant="ink" size="lg" loading={busy === 'stop'} onClick={() => void act('stop', `/rides/${ride.id}/stop`)}>
-              Да, выйду здесь
-            </Button>
-            <Button size="lg" onClick={() => setConfirm(null)}>
-              Едем дальше
-            </Button>
-          </>
-        }
-      >
-        <p className="text-[15px] text-muted">Поездка закончится там, где сейчас машина. Заплатите только за проеханную часть пути (но не меньше минимальной цены тарифа).</p>
       </Modal>
     </>
   );

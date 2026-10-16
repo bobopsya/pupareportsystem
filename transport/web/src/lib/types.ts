@@ -62,7 +62,7 @@ export type Mode = 'taxi' | 'bus' | 'heli' | 'jet';
 export type RideStatus =
   | 'awaiting_payment'
   | 'searching' | 'driver_coming' | 'arrived' | 'in_ride'
-  | 'waiting_bus' | 'on_bus'
+  | 'waiting_bus' | 'bus_arrived' | 'on_bus'
   | 'preparing' | 'boarding' | 'in_flight'
   | 'completed' | 'cancelled';
 
@@ -136,6 +136,7 @@ export interface Ride {
   confirmation: { url: string | null; expiresAt: number | null } | null;
   boardingUntil: number | null;
   finishAt: number | null;
+  busLeavesAt: number | null;
   status: RideStatus;
   tariff: { id: TariffId; title: string; waitPerMin: number };
   from: Place;

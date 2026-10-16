@@ -19,10 +19,10 @@ export type Mode = 'taxi' | 'bus' | 'heli' | 'jet';
 export type RideStatus =
   | 'awaiting_payment'
   | 'searching' | 'driver_coming' | 'arrived' | 'in_ride'
-  | 'waiting_bus' | 'on_bus'
+  | 'waiting_bus' | 'bus_arrived' | 'on_bus'
   | 'preparing' | 'boarding' | 'in_flight'
   | 'completed' | 'cancelled';
-export const ACTIVE: RideStatus[] = ['awaiting_payment', 'searching', 'driver_coming', 'arrived', 'in_ride', 'waiting_bus', 'on_bus', 'preparing', 'boarding', 'in_flight'];
+export const ACTIVE: RideStatus[] = ['awaiting_payment', 'searching', 'driver_coming', 'arrived', 'in_ride', 'waiting_bus', 'bus_arrived', 'on_bus', 'preparing', 'boarding', 'in_flight'];
 const ACTIVE_SQL = ACTIVE.map((x) => `'${x}'`).join(',');
 
 /** Mode-specific details of a ride (rides.extra). */
@@ -96,7 +96,6 @@ const realMs = (gameS: number, scale: number) => Math.max(MIN_LEG_MS, (gameS * 1
 /** Looking for a car: 10–40 seconds. */
 const searchAt = (ctx: Ctx, now: number, scale: number) => now + realMs(10 + ctx.random() * 30, scale);
 const prepAt = (s: ReturnType<typeof getSettings>, kind: string, now: number) => now + realMs((kind === 'heli' ? s.heliPrepMin : s.jetPrepMin) * 60, s.airTimeScale);
-const autoBoardMs = (s: ReturnType<typeof getSettings>, r: { mode: string; time_scale: number }) => realMs((r.mode === 'heli' || r.mode === 'jet' ? s.airBoardMin : s.autoBoardMin) * 60, r.time_scale);
 
 export const getRide = (ctx: Ctx, id: string) => ctx.db.prepare('SELECT * FROM rides WHERE id = ?').get(id) as RideRow | undefined;
 
@@ -295,7 +294,7 @@ export function cancel(ctx: Ctx, r: RideRow, by: 'user' | 'admin' | 'system' | '
   const now = ctx.now();
   let fee = 0;
   // Nothing is frozen yet: a bus before boarding, a ride waiting for the bank's confirmation.
-  const nothingHeld = r.status === 'waiting_bus' || (r.status === 'awaiting_payment' && !r.confirmation_id);
+  const nothingHeld = r.status === 'waiting_bus' || r.status === 'bus_arrived' || (r.status === 'awaiting_payment' && !r.confirmation_id);
   if (r.mode === 'heli' || r.mode === 'jet') {
     if (by === 'user' && r.status === 'boarding') fee = Math.round(r.price / 10 / 100) * 100;
   } else if (by === 'user' && (r.status === 'arrived' || (r.status === 'driver_coming' && r.assigned_at && now - r.assigned_at >= FREE_CANCEL_MS))) {
@@ -387,19 +386,55 @@ async function checkConfirmation(ctx: Ctx, r: RideRow) {
   }
 }
 
-/** The bus reached the stop: the fare is charged like a validator does; without money the passenger stays at the stop. */
+/** How long a bus stands at the stop: the passenger has to get on in time, or wait for the next one. */
+export const BUS_DWELL_S = 120;
+
+/** «Я сел» in the bus: the fare is charged like a validator does. */
 async function boardBus(ctx: Ctx, r: RideRow) {
   const u = ctx.db.prepare('SELECT mandate_id FROM users WHERE id = ?').get(r.user_id) as { mandate_id: string | null } | undefined;
   const x = safeJson<RideExtra>(r.extra, {}).bus!;
-  try {
-    if (!u?.mandate_id) throw new HttpError(403, 'Привязка к Bobobank отключена');
-    const c = await bank<BankCharge>(ctx, 'POST', `/mandates/${u.mandate_id}/charges`, { amount: r.price, external_id: `bus_${r.id}`, title: `${x.kind === 'trolleybus' ? 'Троллейбус' : 'Автобус'} ${x.ref}`, subtitle: `${x.board.name} → ${x.alight.name}` }, `bus_${r.id}`);
-    ctx.db.prepare(`UPDATE rides SET status = 'on_bus', started_at = arrive_at, hold_id = ?, bank_status = 'captured', final_price = price WHERE id = ? AND status = 'waiting_bus'`).run(c.id, r.id);
-  } catch (e) {
-    const err = e as HttpError;
-    if (!err.statusCode || err.statusCode >= 500) return; // the bank is down: try on the next tick
-    ctx.db.prepare(`UPDATE rides SET status = 'cancelled', cancelled_at = ?, cancelled_by = 'bank', bank_error = ? WHERE id = ?`).run(ctx.now(), `Проезд не оплачен: ${err.message}`, r.id);
+  if (!u?.mandate_id) throw new HttpError(403, 'Привязка к Bobobank отключена — привяжите счёт заново', 'no_mandate');
+  const c = await bank<BankCharge>(ctx, 'POST', `/mandates/${u.mandate_id}/charges`, { amount: r.price, external_id: `bus_${r.id}`, title: `${x.kind === 'trolleybus' ? 'Троллейбус' : 'Автобус'} ${x.ref}`, subtitle: `${x.board.name} → ${x.alight.name}` }, `bus_${r.id}`);
+  const now = ctx.now();
+  const rideMs = busTravelMs(ctx, x.alightAt - x.boardAt);
+  ctx.db.prepare(`UPDATE rides SET status = 'on_bus', started_at = ?, finish_at = ?, hold_id = ?, bank_status = 'captured', final_price = price WHERE id = ? AND status = 'bus_arrived'`).run(now, now + rideMs, c.id, r.id);
+}
+
+/** The bus left without the passenger: the ride switches to the next bus of the line. */
+function nextBus(ctx: Ctx, r: RideRow) {
+  const x = safeJson<RideExtra>(r.extra, {});
+  const line = x.bus && busRoute(x.bus.route);
+  if (!x.bus || !line) return;
+  const next = arrivals(ctx, line, x.bus.board.idx, ctx.now() + 1000, 1)[0];
+  if (!next) {
+    ctx.db.prepare(`UPDATE rides SET status = 'cancelled', cancelled_at = ?, cancelled_by = 'system', bank_error = 'Автобусы на сегодня закончились' WHERE id = ?`).run(ctx.now(), r.id);
+    return;
   }
+  x.bus.dep = next.dep;
+  ctx.db.prepare(`UPDATE rides SET status = 'waiting_bus', arrive_at = ?, arrived_at = NULL, extra = ? WHERE id = ? AND status = 'bus_arrived'`).run(next.at, JSON.stringify(x), r.id);
+}
+
+/** «Я сел» / «Я на борту»: the passenger gets in; the ride goes on until they press «Мы приехали». */
+export async function boardRide(ctx: Ctx, r: RideRow) {
+  if (r.mode === 'taxi') return board(ctx, r);
+  if (r.mode === 'bus') {
+    if (r.status !== 'bus_arrived') throw new HttpError(409, 'Автобус ещё не подошёл', 'bad_status');
+    return boardBus(ctx, r);
+  }
+  return takeOff(ctx, r);
+}
+
+/** «Мы приехали» / «Я вышел» / «Прилетели». */
+export function arriveRide(ctx: Ctx, r: RideRow) {
+  const now = ctx.now();
+  if (r.mode === 'taxi') return complete(ctx, r, 1, now);
+  if (r.mode === 'bus') {
+    if (r.status !== 'on_bus') throw new HttpError(409, 'Вы ещё не в автобусе', 'bad_status');
+    ctx.db.prepare(`UPDATE rides SET status = 'completed', finished_at = ?, progress = 1 WHERE id = ? AND status = 'on_bus'`).run(now, r.id);
+    return;
+  }
+  if (r.status !== 'in_flight') throw new HttpError(409, 'Борт ещё не взлетел', 'bad_status');
+  ctx.db.prepare(`UPDATE rides SET status = 'completed', finished_at = ?, final_price = price, progress = 1, bank_op = 'capture' WHERE id = ? AND status = 'in_flight'`).run(now, r.id);
 }
 
 export async function tick(ctx: Ctx) {
@@ -407,19 +442,14 @@ export async function tick(ctx: Ctx) {
   const s = getSettings(ctx);
   await guarded(ctx.db.prepare(`SELECT * FROM rides WHERE status = 'awaiting_payment' AND confirmation_id IS NOT NULL`).all() as RideRow[], (r) => checkConfirmation(ctx, r));
 
-  // Buses: boarding with the fare, then to the alighting stop.
-  await guarded(ctx.db.prepare(`SELECT * FROM rides WHERE status = 'waiting_bus' AND arrive_at <= ?`).all(now) as RideRow[], (r) => boardBus(ctx, r));
-  ctx.db.prepare(`UPDATE rides SET status = 'completed', finished_at = finish_at, progress = 1 WHERE status = 'on_bus' AND finish_at <= ?`).run(now);
-
-  // Helicopters and jets: preparation → boarding → flight.
-  ctx.db.prepare(`UPDATE rides SET status = 'boarding', arrived_at = assign_at WHERE status = 'preparing' AND mode IN ('heli','jet') AND assign_at <= ?`).run(now);
-  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'boarding'`).all() as RideRow[]) {
-    const at = r.arrived_at! + autoBoardMs(s, r);
-    if (at <= now) takeOff(ctx, r, at);
+  // Buses come by the timetable and stand at the stop for two minutes; boarding and getting off are the passenger's buttons.
+  ctx.db.prepare(`UPDATE rides SET status = 'bus_arrived', arrived_at = arrive_at WHERE status = 'waiting_bus' AND arrive_at <= ?`).run(now);
+  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'bus_arrived'`).all() as RideRow[]) {
+    if (r.arrived_at! + realMs(BUS_DWELL_S, r.time_scale) <= now) nextBus(ctx, r);
   }
-  ctx.db
-    .prepare(`UPDATE rides SET status = 'completed', finished_at = finish_at, final_price = price, progress = 1, bank_op = 'capture' WHERE status = 'in_flight' AND finish_at <= ?`)
-    .run(now);
+
+  // Helicopters and jets: the aircraft is ready after the preparation; then «Я на борту» and «Прилетели».
+  ctx.db.prepare(`UPDATE rides SET status = 'boarding', arrived_at = assign_at WHERE status = 'preparing' AND mode IN ('heli','jet') AND assign_at <= ?`).run(now);
 
   const due = ctx.db.prepare(`SELECT * FROM rides WHERE status = 'searching' AND mode = 'taxi' AND assign_at <= ?`).all(now) as RideRow[];
   await Promise.all(
@@ -432,12 +462,8 @@ export async function tick(ctx: Ctx) {
       }
     }),
   );
+  // The car arrives by itself; «Я сел» and «Мы приехали» are the passenger's buttons.
   ctx.db.prepare(`UPDATE rides SET status = 'arrived', arrived_at = arrive_at WHERE status = 'driver_coming' AND arrive_at <= ?`).run(now);
-  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'arrived' AND mode = 'taxi'`).all() as RideRow[]) {
-    const at = r.arrived_at! + autoBoardMs(s, r);
-    if (at <= now) board(ctx, r, at);
-  }
-  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'in_ride' AND finish_at <= ?`).all(now) as RideRow[]) complete(ctx, r, 1, r.finish_at!);
 
   const pending = ctx.db.prepare('SELECT * FROM rides WHERE bank_op IS NOT NULL').all() as RideRow[];
   await Promise.all(
@@ -498,12 +524,10 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     etaS = Math.max(0, Math.round((r.car_duration_s ?? 0) * (1 - f)));
   } else if (r.status === 'arrived') {
     car = { pos: [from.lat, from.lon], heading: carPath.length > 1 ? along(carPath, 1).heading : 0 };
-  } else if (r.status === 'in_ride' && r.started_at && r.finish_at) {
-    const f = (now - r.started_at) / (r.finish_at - r.started_at);
-    car = along(path, f);
-    motion = { path, startAt: r.started_at, endAt: r.finish_at };
-    etaS = Math.max(0, Math.round(r.duration_s * (1 - f)));
-    left = slice(path, f);
+  } else if (r.status === 'in_ride') {
+    // No animation on the way: the passenger presses «Мы приехали».
+    car = { pos: [from.lat, from.lon], heading: path.length > 1 ? along(path, 0).heading : 0 };
+    etaS = r.finish_at ? Math.max(0, Math.round(((r.finish_at - now) / 1000) * r.time_scale)) : r.duration_s;
   } else if (r.status === 'completed') {
     left = r.progress !== null && r.progress < 1 ? slice(path, 0, r.progress) : path;
   }
@@ -517,22 +541,14 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
       motion = { path: prefix, startAt: b.dep, endAt: r.arrive_at };
       car = along(prefix, (now - b.dep) / (r.arrive_at - b.dep));
       etaS = Math.max(0, Math.round(((r.arrive_at - now) / 1000) * r.time_scale));
-    } else if (r.status === 'on_bus' && r.started_at && r.finish_at) {
-      const f = (now - r.started_at) / (r.finish_at - r.started_at);
-      motion = { path, startAt: r.started_at, endAt: r.finish_at };
-      car = along(path, f);
-      etaS = Math.max(0, Math.round(r.duration_s * (1 - f)));
-      left = slice(path, f);
+    } else if (r.status === 'bus_arrived' || r.status === 'on_bus') {
+      car = { pos: [from.lat, from.lon], heading: path.length > 1 ? along(path, 0).heading : 0 };
+      etaS = r.status === 'on_bus' && r.finish_at ? Math.max(0, Math.round(((r.finish_at - now) / 1000) * r.time_scale)) : null;
     }
   }
-  if ((r.mode === 'heli' || r.mode === 'jet') && r.status === 'in_flight' && r.started_at && r.finish_at) {
-    const f = (now - r.started_at) / (r.finish_at - r.started_at);
-    motion = { path, startAt: r.started_at, endAt: r.finish_at };
-    car = along(path, f);
-    etaS = Math.max(0, Math.round(r.duration_s * (1 - f)));
-    left = slice(path, f);
-  } else if ((r.mode === 'heli' || r.mode === 'jet') && r.status !== 'completed') {
+  if ((r.mode === 'heli' || r.mode === 'jet') && r.status !== 'completed') {
     car = { pos: [from.lat, from.lon], heading: path.length > 1 ? along(path, 0).heading : 0 };
+    if (r.status === 'in_flight' && r.finish_at) etaS = Math.max(0, Math.round(((r.finish_at - now) / 1000) * r.time_scale));
   }
   const waitedGameS = r.status === 'arrived' && r.arrived_at ? Math.round(((now - r.arrived_at) / 1000) * r.time_scale) : 0;
   const busView = extra.bus && { ...extra.bus, line: busRoute(extra.bus.route) ? { path: busRoute(extra.bus.route)!.path, stops: busRoute(extra.bus.route)!.stops.slice(extra.bus.board.idx, extra.bus.alight.idx + 1) } : null };
@@ -542,7 +558,8 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     bus: busView ?? null,
     air: extra.air ?? null,
     confirmation: r.status === 'awaiting_payment' ? { url: r.confirm_url, expiresAt: r.confirm_expires_at } : null,
-    boardingUntil: r.status === 'boarding' && r.arrived_at ? r.arrived_at + autoBoardMs(s, r) : r.status === 'preparing' ? r.assign_at : null,
+    boardingUntil: r.status === 'preparing' ? r.assign_at : null,
+    busLeavesAt: r.status === 'bus_arrived' && r.arrived_at ? r.arrived_at + realMs(BUS_DWELL_S, r.time_scale) : null,
     finishAt: r.finish_at,
     status: r.status,
     tariff: { id: r.tariff, title: t?.title ?? extra.air?.className ?? r.tariff, waitPerMin: (t?.waitPerMin ?? 0) * 100 },
@@ -564,7 +581,7 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     position: car,
     motion,
     etaS,
-    waiting: r.status === 'arrived' ? { waitedS: waitedGameS, freeS: s.freeWaitMin * 60, autoBoardAt: (r.arrived_at ?? now) + autoBoardMs(s, r) } : null,
+    waiting: r.status === 'arrived' ? { waitedS: waitedGameS, freeS: s.freeWaitMin * 60, autoBoardAt: null } : null,
     freeCancelUntil: r.status === 'searching' ? null : r.status === 'driver_coming' && r.assigned_at ? r.assigned_at + FREE_CANCEL_MS : r.status === 'arrived' || r.status === 'boarding' ? now : null,
     cancelFeeNow: r.mode === 'heli' || r.mode === 'jet' ? Math.round(r.price / 10 / 100) * 100 : s.cancelFee * 100,
     timeScale: r.time_scale,

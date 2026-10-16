@@ -6,7 +6,7 @@ import { inMoscow, type LatLon } from '../domain/geo.js';
 import { reverse, search } from '../domain/maps.js';
 import { airQuote, HELIPADS, JET_DESTINATIONS, JET_ORIGINS } from '../domain/air.js';
 import { board as busBoard, liveIn, plan, routeView, stopsIn, type Bbox } from '../domain/buses.js';
-import { board, cancel, complete, createAirRide, createBusRide, createRide, currentRide, estimate, historyItem, nearCars, ownRide, rate, serializeRide, settle, getRide, takeOff } from '../domain/rides.js';
+import { arriveRide, boardRide, cancel, complete, createAirRide, createBusRide, createRide, currentRide, estimate, historyItem, nearCars, ownRide, rate, serializeRide, settle, getRide } from '../domain/rides.js';
 import { receiptPdf } from '../pdf.js';
 import { newId } from '../util.js';
 
@@ -75,11 +75,6 @@ export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
     const b = z.object({ estimateId: z.string().max(64), classId: z.string().max(32) }).parse(req.body);
     return serializeRide(ctx, await createAirRide(ctx, u, b));
   });
-  app.post('/api/rides/:id/takeoff', async (req) => {
-    const r = ownRide(ctx, requireUser(req).id, (req.params as { id: string }).id);
-    takeOff(ctx, r);
-    return serializeRide(ctx, getRide(ctx, r.id)!);
-  });
 
   // ---- Places ----
   app.get('/api/places', async (req) => {
@@ -143,9 +138,20 @@ export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
     return serializeRide(ctx, getRide(ctx, r.id)!);
   });
 
-  app.post('/api/rides/:id/board', async (req) => {
+  // «Я сел» (taxi, bus — with the fare) / «Я на борту» (helicopter, jet). /takeoff is the old name.
+  for (const name of ['board', 'takeoff']) {
+    app.post(`/api/rides/:id/${name}`, async (req) => {
+      const r = ownRide(ctx, requireUser(req).id, (req.params as { id: string }).id);
+      await boardRide(ctx, r);
+      return serializeRide(ctx, getRide(ctx, r.id)!);
+    });
+  }
+
+  /** «Мы приехали» / «Я вышел» / «Прилетели»: the ride ends and the money is charged. */
+  app.post('/api/rides/:id/arrive', async (req) => {
     const r = ownRide(ctx, requireUser(req).id, (req.params as { id: string }).id);
-    board(ctx, r);
+    arriveRide(ctx, r);
+    await settle(ctx, getRide(ctx, r.id)!);
     return serializeRide(ctx, getRide(ctx, r.id)!);
   });
 

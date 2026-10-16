@@ -57,9 +57,11 @@ test('вход через Bobobank, поездка по Москве, списа
   await expect(page.getByText(/Приедет через|подъезжает/)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.bt-car')).toBeVisible();
   await expect(page.getByText('Машина на месте')).toBeVisible({ timeout: 180_000 });
-  await page.getByRole('button', { name: 'Я в машине, поехали' }).click();
-  await expect(page.getByText('В пути')).toBeVisible();
-  await expect(page.getByText('Приехали!')).toBeVisible({ timeout: 180_000 });
+  // The car came; the passenger gets in and says when they arrived.
+  await page.getByRole('button', { name: 'Я сел' }).click();
+  await expect(page.getByRole('heading', { name: 'Едем' })).toBeVisible();
+  await page.getByRole('button', { name: 'Мы приехали' }).click();
+  await expect(page.getByText('Приехали!')).toBeVisible();
   await expect(page.getByText('Оплачено Bobobank')).toBeVisible({ timeout: 10_000 });
   expect(before - (await available(page))).toBe(price);
   await page.getByRole('button', { name: '5 из 5' }).click();
@@ -96,9 +98,13 @@ test('вход через Bobobank, поездка по Москве, списа
   const beforeBus = await available(page);
   await page.getByRole('button', { name: 'Поехали · 83 ₽' }).click();
   await expect(page.getByText(/Автобус через|Автобус подходит/)).toBeVisible();
-  await expect(page.getByText('Едем')).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByText('Автобус на остановке — садитесь!')).toBeVisible({ timeout: 180_000 });
+  expect(beforeBus - (await available(page))).toBe(0);
+  await page.getByRole('button', { name: 'Я сел · 83 ₽' }).click();
+  await expect(page.getByText('Едете в автобусе')).toBeVisible();
   expect(beforeBus - (await available(page))).toBe(83_00);
-  await expect(page.getByText('Приехали!')).toBeVisible({ timeout: 180_000 });
+  await page.getByRole('button', { name: 'Я вышел' }).click();
+  await expect(page.getByText('Приехали!')).toBeVisible();
   await page.getByRole('button', { name: /Готово/ }).click();
 
   // A helicopter above the mandate limit: the customer confirms the amount in the bank app.
@@ -119,9 +125,10 @@ test('вход через Bobobank, поездка по Москве, списа
   await expect(bank.getByText('Оплата подтверждена')).toBeVisible();
   await bank.close();
   expect(beforeHeli - (await available(page))).toBe(heliPrice);
-  await page.getByRole('button', { name: 'Я на борту, взлетаем' }).click({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Я на борту' }).click({ timeout: 60_000 });
   await expect(page.getByText('В полёте')).toBeVisible();
-  await expect(page.getByText('Прилетели!')).toBeVisible({ timeout: 120_000 });
+  await page.getByRole('button', { name: 'Прилетели', exact: true }).click();
+  await expect(page.getByText('Прилетели!')).toBeVisible();
   await expect(page.getByText('Оплачено Bobobank')).toBeVisible({ timeout: 10_000 });
   expect(beforeHeli - (await available(page))).toBe(heliPrice);
   await page.getByRole('button', { name: /Готово/ }).click();

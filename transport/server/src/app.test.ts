@@ -223,12 +223,12 @@ describe('поездка', () => {
     expect(ride.position.pos).toEqual([FROM.lat, FROM.lon]);
     expect((await app.inject({ method: 'POST', url: `/api/rides/${ride.id}/board`, headers: h })).json().status).toBe('in_ride');
 
-    now += 10_000;
+    // No timer on the way: the ride waits for «Мы приехали».
+    await advance(60 * 60_000, 60_000);
     ride = await current(h);
-    expect(ride.position.pos[0]).not.toBe(FROM.lat);
-    ride = await until(h, 'completed');
-    await tick(ctx);
-    ride = await current(h);
+    expect(ride.status).toBe('in_ride');
+    expect(ride.motion).toBeNull();
+    ride = (await app.inject({ method: 'POST', url: `/api/rides/${ride.id}/arrive`, headers: h })).json();
     expect(ride).toMatchObject({ status: 'completed', finalPrice: econom.price, bank: { status: 'captured' } });
     expect(bankLog.at(-1)).toMatchObject({ path: expect.stringMatching(/holds\/pch_1\/capture$/), body: { amount: econom.price, subtitle: 'Тверская улица, 1 → улица Арбат, 10' } });
     expect(funds).toBe(5000_00 - econom.price);
@@ -262,24 +262,21 @@ describe('поездка', () => {
     expect(funds).toBe(5000_00 - 199_00);
   });
 
-  it('ожидание сверх бесплатного платное; «остановите здесь» — цена за проеханное', async () => {
+  it('машина ждёт, пока не нажмёте «Я сел»; ожидание сверх бесплатного — платное', async () => {
     const h = await login();
     const { e, r } = await order(h, 'comfort');
     await until(h, 'arrived');
-    // Auto-boarding after 5 game minutes (50 s at ×6): 2 paid minutes → 2 × 24 ₽.
-    await advance(49_000, 1000);
+    // 5 game minutes of waiting (50 s at ×6): 3 free, 2 paid → 2 × 24 ₽.
+    await advance(50_000, 1000);
     expect((await current(h)).status).toBe('arrived');
-    await advance(2000, 1000);
-    expect((await current(h)).status).toBe('in_ride');
-    const halfway = ((await app.inject({ url: `/api/rides/${r.json().id}`, headers: h })).json());
-    now += Math.round((halfway.motion.endAt - halfway.motion.startAt) / 2) - (now - halfway.motion.startAt);
-    const s = await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/stop`, headers: h });
+    expect((await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/board`, headers: h })).json().status).toBe('in_ride');
+    const s = await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/arrive`, headers: h });
     const comfort = e.tariffs.find((t: { id: string }) => t.id === 'comfort');
+    // 5+ minutes waited: 3 free, the rest paid by the started minute (24 ₽).
+    const extra = s.json().finalPrice - comfort.price;
     expect(s.json().status).toBe('completed');
-    expect(s.json().progress).toBeCloseTo(0.5, 1);
-    // Half of a short ride is below the minimum: minimum 599 ₽ + 2 paid minutes of waiting.
-    expect(comfort.price).toBe(599_00);
-    expect(s.json().finalPrice).toBe(599_00 + 48_00);
+    expect(extra).toBeGreaterThanOrEqual(48_00);
+    expect(extra % 24_00).toBe(0);
   });
 
   it('денег не хватает — машину не ищем; вне Москвы не возим', async () => {

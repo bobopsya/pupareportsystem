@@ -96,6 +96,13 @@ async function login() {
   return { ...H, cookie: sid };
 }
 
+async function advance(ms: number, step = 2000) {
+  for (let t = 0; t < ms; t += step) {
+    now += step;
+    await tick(ctx);
+  }
+}
+
 const current = async (h: Record<string, string>) => (await app.inject({ url: '/api/rides/current', headers: h })).json().ride;
 async function until(h: Record<string, string>, status: string, maxMs = 30 * 60_000) {
   for (let t = 0; t < maxMs; t += 1000) {
@@ -152,29 +159,39 @@ describe('автобусы', () => {
     expect(r).toMatchObject({ mode: 'bus', status: 'waiting_bus', price: 83_00, bus: { ref: 'т1', board: { name: 'Остановка т1-3' }, alight: { name: 'Остановка т1-8' } } });
     expect(r.motion.path.length).toBeGreaterThan(1);
     expect(log.some((x) => x.path.includes('/charges'))).toBe(false);
-    const on = await until(h, 'on_bus');
-    expect(on.bank.status).toBe('captured');
+    await until(h, 'bus_arrived');
+    expect(log.some((x) => x.path.includes('/charges'))).toBe(false);
+    const on = (await app.inject({ method: 'POST', url: `/api/rides/${r.id}/board`, headers: h })).json();
+    expect(on).toMatchObject({ status: 'on_bus', bank: { status: 'captured' } });
     await tick(ctx);
     expect(log.filter((x) => x.path.endsWith('/charges'))).toEqual([{ path: '/internal/partner/v1/mandates/mnd_1/charges', body: expect.objectContaining({ amount: 83_00, external_id: `bus_${r.id}`, title: 'Автобус т1', subtitle: 'Остановка т1-3 → Остановка т1-8' }) }]);
-    const done = await until(h, 'completed');
-    expect(done.finalPrice).toBe(83_00);
+    await advance(60 * 60_000);
+    expect((await current(h)).status).toBe('on_bus');
+    const done = (await app.inject({ method: 'POST', url: `/api/rides/${r.id}/arrive`, headers: h })).json();
+    expect(done).toMatchObject({ status: 'completed', finalPrice: 83_00 });
     expect((await app.inject({ method: 'POST', url: `/api/rides/${r.id}/rate`, headers: h, payload: { stars: 5, tip: 50_00 } })).statusCode).toBe(400);
     const hist = (await app.inject({ url: '/api/rides', headers: h })).json().rides[0];
     expect(hist).toMatchObject({ mode: 'bus', tariff: 'Автобус т1', amount: 83_00, colour: '#027fff' });
     expect((await app.inject({ url: `/api/rides/${r.id}/receipt.pdf`, headers: h })).headers['content-type']).toBe('application/pdf');
   });
 
-  it('нет денег на проезд — остаёмся на остановке', async () => {
+  it('нет денег на проезд — не пускают; автобус уходит через 2 минуты, ждём следующий', async () => {
     const h = await login();
     funds = 50_00;
     const p = (await app.inject({ method: 'POST', url: '/api/bus/plan', headers: h, payload: { from: { lat: 55.7517, lon: 37.6 }, to: { lat: 55.777, lon: 37.6 } } })).json();
     const r = (await app.inject({ method: 'POST', url: '/api/rides/bus', headers: h, payload: { estimateId: p.id, option: 0 } })).json();
-    for (let i = 0; i < 400 && (await current(h))?.status === 'waiting_bus'; i++) {
-      now += 1000;
-      await tick(ctx);
-    }
-    const ride = (await app.inject({ url: `/api/rides/${r.id}`, headers: h })).json();
-    expect(ride).toMatchObject({ status: 'cancelled', bank: { error: expect.stringContaining('Недостаточно средств') } });
+    const here = await until(h, 'bus_arrived');
+    const no = await app.inject({ method: 'POST', url: `/api/rides/${r.id}/board`, headers: h });
+    expect(no.statusCode).toBe(402);
+    expect(no.json().error).toMatch(/Недостаточно средств/);
+    expect((await current(h)).status).toBe('bus_arrived');
+    expect(here.busLeavesAt - now).toBeLessThanOrEqual((120 * 1000) / 6);
+    // The bus leaves; the next one is a headway later.
+    now = here.busLeavesAt;
+    await tick(ctx);
+    const next = await current(h);
+    expect(next.status).toBe('waiting_bus');
+    expect(next.etaS).toBeGreaterThan(0);
   });
 });
 
@@ -211,14 +228,15 @@ describe('вертолёты и джеты', () => {
     expect((await current(h)).status).toBe('preparing');
     const boarding = await until(h, 'boarding');
     expect(boarding.position.pos).toEqual([q.from.lat, q.from.lon]);
-    expect((await app.inject({ method: 'POST', url: `/api/rides/${r.id}/takeoff`, headers: h })).json().status).toBe('in_flight');
+    await advance(60 * 60_000, 60_000);
+    expect((await current(h)).status).toBe('boarding');
+    expect((await app.inject({ method: 'POST', url: `/api/rides/${r.id}/board`, headers: h })).json().status).toBe('in_flight');
     now += 5000;
     const flying = await current(h);
-    expect(flying.motion.path).toHaveLength(65);
-    expect(flying.position.pos[0]).toBeLessThan(q.from.lat);
-    const done = await until(h, 'completed', 60 * 60_000);
-    await tick(ctx);
-    expect((await current(h)) ?? done).toMatchObject({ finalPrice: heavy.price });
+    expect(flying.fullRoute).toHaveLength(65);
+    expect(flying.motion).toBeNull();
+    const done = (await app.inject({ method: 'POST', url: `/api/rides/${r.id}/arrive`, headers: h })).json();
+    expect(done).toMatchObject({ status: 'completed', finalPrice: heavy.price, bank: { status: 'captured' } });
     expect(log.at(-1)).toMatchObject({ path: '/internal/partner/v1/holds/pch_99/capture', body: { amount: heavy.price, title: 'Частный джет' } });
   });
 
@@ -259,8 +277,7 @@ describe('вертолёты и джеты', () => {
     expect(prep.boardingUntil - now).toBe(15 * 60_000);
     now = prep.boardingUntil;
     await tick(ctx);
-    const boarding = await current(h);
-    expect(boarding.boardingUntil - now).toBe(10 * 60_000);
+    expect((await current(h)).status).toBe('boarding');
     const fly = (await app.inject({ method: 'POST', url: `/api/rides/${r.id}/takeoff`, headers: h })).json();
     expect(fly.finishAt - now).toBe(r44.durationS * 1000);
     expect(r44.durationS).toBeGreaterThan(15 * 60);
