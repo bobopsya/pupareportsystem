@@ -79,10 +79,60 @@ export interface Call {
   now: number;
 }
 
+export interface RecentEvent {
+  kind: 'call' | 'sms';
+  id: string;
+  number: string;
+  formatted: string;
+  name: string | null;
+  createdAt: number;
+  /** Calls. */
+  direction?: 'in' | 'out';
+  status?: Call['status'];
+  seconds?: number;
+  /** SMS. */
+  text?: string;
+  mine?: boolean;
+}
+
+export interface HomeTariff {
+  id: string;
+  title: string;
+  speed: number;
+  price: number;
+  bundlePrice: number;
+  perks: string[];
+}
+
+export interface Home {
+  id: string;
+  contract: string;
+  status: 'scheduled' | 'active' | 'blocked';
+  stage: 'booked' | 'master' | 'active' | 'blocked';
+  blockReason: string | null;
+  tariff: Omit<HomeTariff, 'bundlePrice'>;
+  nextTariff: Omit<HomeTariff, 'bundlePrice'> | null;
+  address: { street: string; house: string; flat: string };
+  addressText: string;
+  router: 'own' | 'rent' | 'buy';
+  master: string;
+  installAt: number;
+  installUntil: number;
+  installedAt: number | null;
+  periodEnd: number | null;
+  nextCharge: { at: number; amount: number; bundle: boolean } | null;
+  gbUsed: number;
+  wifi: string;
+  createdAt: number;
+}
+
 export interface LineState {
   line: Line | null;
   unread: number;
   call: Call | null;
+  usage7: { day: string; mb: number }[];
+  recent: RecentEvent[];
+  home: Home | null;
   now: number;
 }
 
@@ -105,7 +155,7 @@ export interface Conversation {
 
 export interface Charge {
   id: string;
-  kind: 'number' | 'subscription' | 'change' | 'addon';
+  kind: 'number' | 'subscription' | 'change' | 'addon' | 'home' | 'router';
   title: string;
   amount: number;
   status: 'paid' | 'refunded' | 'failed' | 'pending';

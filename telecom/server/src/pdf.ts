@@ -10,10 +10,10 @@ const font = (name: string) => path.join(FONT_DIR, name);
 
 const rub = (k: number) => `${(k / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ /g, ' ')} ₽`;
 const msk = (ts: number) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(ts).replace(',', '');
-const KIND: Record<ChargeRow['kind'], string> = { number: 'Красивый номер', subscription: 'Абонентская плата', change: 'Смена тарифа', addon: 'Дополнительный пакет' };
+const KIND: Record<ChargeRow['kind'], string> = { number: 'Красивый номер', subscription: 'Абонентская плата', change: 'Смена тарифа', addon: 'Дополнительный пакет', home: 'Домашний интернет', router: 'Wi‑Fi роутер' };
 
 /** Receipt of one charge (A6). */
-export function receiptPdf(c: ChargeRow, number: string, name: string): Promise<Buffer> {
+export function receiptPdf(c: ChargeRow, number: string | null, name: string, contract?: string | null): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A6', margin: 22, info: { Title: `Бобтелеком — чек ${c.id}`, Author: 'Бобтелеком' } });
   doc.registerFont('r', font('DejaVuSans.ttf'));
   doc.registerFont('b', font('DejaVuSans-Bold.ttf'));
@@ -31,7 +31,8 @@ export function receiptPdf(c: ChargeRow, number: string, name: string): Promise<
   doc.font('r').fontSize(8).fill('#666').text(msk(c.paid_at ?? c.created_at));
   doc.moveDown(0.8);
   line('Абонент', name);
-  line('Номер', formatNumber(number));
+  if (number) line('Номер', formatNumber(number));
+  if (contract) line('Договор', contract);
   line('Услуга', c.title);
   doc.moveDown(0.3);
   doc.moveTo(22, doc.y).lineTo(22 + W, doc.y).strokeColor('#DDD').stroke();

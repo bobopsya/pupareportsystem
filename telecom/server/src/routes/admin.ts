@@ -21,6 +21,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
       revenueMonth: one<{ s: number }>(`SELECT COALESCE(SUM(amount - refunded), 0) s FROM charges WHERE status = 'paid' AND paid_at >= ?`, month).s,
       callsDay: one<{ c: number }>('SELECT COUNT(*) c FROM calls WHERE created_at >= ?', day).c,
       smsDay: one<{ c: number }>('SELECT COUNT(*) c FROM messages WHERE created_at >= ?', day).c,
+      homes: one<{ c: number }>(`SELECT COUNT(*) c FROM homes WHERE status IN ('active', 'blocked', 'scheduled')`).c,
+      homesRevenueMonth: one<{ s: number }>(`SELECT COALESCE(SUM(amount - refunded), 0) s FROM charges WHERE status = 'paid' AND home_id IS NOT NULL AND paid_at >= ?`, month).s,
       byTariff: db.prepare(`SELECT tariff, COUNT(*) c FROM lines WHERE status IN ('active', 'blocked') GROUP BY tariff`).all(),
     };
   });
@@ -45,7 +47,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
   });
 
   app.get('/api/admin/charges', async () => ({
-    charges: db.prepare(`SELECT c.id, c.kind, c.title, c.amount, c.status, c.error, c.created_at createdAt, u.name, l.number FROM charges c JOIN users u ON u.id = c.user_id JOIN lines l ON l.id = c.line_id ORDER BY c.created_at DESC LIMIT 300`).all(),
+    charges: db.prepare(`SELECT c.id, c.kind, c.title, c.amount, c.status, c.error, c.created_at createdAt, u.name, l.number FROM charges c JOIN users u ON u.id = c.user_id LEFT JOIN lines l ON l.id = c.line_id ORDER BY c.created_at DESC LIMIT 300`).all(),
   }));
 
   app.get('/api/admin/settings', async () => getSettings(ctx));

@@ -6,6 +6,7 @@ import { createCtx, type Ctx } from './context.js';
 import { openDb } from './db.js';
 import { tickCalls } from './domain/comm.js';
 import { syncLinks } from './domain/gos.js';
+import { tickHomes } from './domain/home.js';
 import { tick } from './domain/lines.js';
 import { formatNumber, normalize, numberPrice } from './domain/numbers.js';
 import { verify } from './domain/signing.js';
@@ -124,7 +125,17 @@ async function advance(ms: number, step = 60_000) {
     now += step;
     tickCalls(ctx);
     await tick(ctx);
+    await tickHomes(ctx);
   }
+}
+
+/** A covered address: the coverage answer is fixed per house, so look for one. */
+async function coveredAddress(h: Record<string, string>) {
+  for (let n = 1; n < 50; n++) {
+    const a = { street: 'улица Арбат', house: String(n), flat: '12' };
+    if ((await post(h, '/api/home/coverage', a)).json().ok) return a;
+  }
+  throw new Error('no covered house');
 }
 
 describe('номера', () => {
@@ -330,6 +341,86 @@ describe('привязка к Bobobank и Бобуслугам', () => {
     await post(h, '/api/gos/unlink');
     expect(gosPhones['gos-uid-1']).toBeUndefined();
     expect((await get(h, '/api/me')).user.gos).toBeNull();
+  });
+});
+
+describe('домашний интернет', () => {
+  it('заказ со скидкой «вместе», роутер в аренду, мастер, подключение и продление', async () => {
+    const h = await login();
+    await subscribe(h, 'mini');
+    const offer = (await get(h, '/api/home/offer'));
+    expect(offer).toMatchObject({ bundle: true, discount: 20 });
+    expect(offer.tariffs.find((t: { id: string }) => t.id === 'home300')).toMatchObject({ price: 699, bundlePrice: 559 });
+    const address = await coveredAddress(h);
+    const { slots } = await get(h, '/api/home/slots');
+    expect(slots).toHaveLength(42);
+    const slot = slots[0];
+    const before = funds.mnd_1;
+    const r = await post(h, '/api/home', { tariff: 'home300', address, router: 'rent', installAt: slot.at });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json()).toMatchObject({ status: 'scheduled', stage: 'booked', tariff: { id: 'home300' }, router: 'rent', addressText: 'улица Арбат, д. ' + address.house + ', кв. 12' });
+    expect(before - funds.mnd_1).toBe(559_00 + 99_00);
+    expect((await post(h, '/api/home', { tariff: 'home100', address, router: 'own', installAt: slots[1].at })).json().code).toBe('has_home');
+    expect((await get(h, '/api/home/speedtest')).code).toBe('not_active');
+    // The master leaves an hour before the window; the internet works after it.
+    now = slot.at - 3600_000 + 1000;
+    await tickHomes(ctx);
+    expect((await get(h, '/api/home')).home.stage).toBe('master');
+    expect((await get(h, '/api/chats')).chats[0].last.text).toContain('выехал');
+    now = slot.until + 1000;
+    await tickHomes(ctx);
+    const home = (await get(h, '/api/home')).home;
+    expect(home).toMatchObject({ status: 'active', installedAt: slot.until, nextCharge: { amount: 559 + 99, bundle: true } });
+    const sp = await get(h, '/api/home/speedtest');
+    expect(sp.down).toBeGreaterThan(250);
+    expect(sp.down).toBeLessThanOrEqual(300);
+    // 30 days later: the fee and the router rent again.
+    const mid = funds.mnd_1;
+    await advance(30 * 86_400_000, 3600_000);
+    expect((await get(h, '/api/home')).home.status).toBe('active');
+    expect(mid - funds.mnd_1).toBeGreaterThanOrEqual(559_00 + 99_00);
+    expect((await get(h, '/api/line')).home.gbUsed).toBeGreaterThan(5);
+    const hist = await get(h, '/api/history');
+    const homeCharge = hist.charges.find((c: { kind: string }) => c.kind === 'home');
+    const pdf = await app.inject({ url: `/api/charges/${homeCharge.id}/receipt.pdf`, headers: h });
+    expect(pdf.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('без мобильной — полная цена; нет денег — блок; отмена до мастера возвращает деньги; нет покрытия', async () => {
+    const h = await login();
+    const address = await coveredAddress(h);
+    const { slots } = await get(h, '/api/home/slots');
+    let far = null;
+    for (let n = 1; n < 80 && !far; n++) if (!(await post(h, '/api/home/coverage', { street: 'Тверская улица', house: String(n) })).json().ok) far = { street: 'Тверская улица', house: String(n), flat: '' };
+    expect((await post(h, '/api/home', { tariff: 'home100', address: far, router: 'own', installAt: slots[0].at })).json().code).toBe('no_coverage');
+    const r = await post(h, '/api/home', { tariff: 'home500', address, router: 'buy', installAt: slots[2].at });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(funds.mnd_1).toBe(5000_00 - 899_00 - 2990_00);
+    await post(h, '/api/home/cancel');
+    expect(funds.mnd_1).toBe(5000_00);
+    expect((await get(h, '/api/home')).home).toBeNull();
+    // Not enough money for the next month: blocked, then paid by hand.
+    const r2 = await post(h, '/api/home', { tariff: 'home100', address, router: 'own', installAt: slots[3].at });
+    expect(r2.statusCode).toBe(200);
+    now = slots[3].until + 1000;
+    await tickHomes(ctx);
+    funds.mnd_1 = 100_00;
+    await advance(30 * 86_400_000, 3600_000);
+    expect((await get(h, '/api/home')).home).toMatchObject({ status: 'blocked', blockReason: 'debt' });
+    expect((await get(h, '/api/home/speedtest')).code).toBe('not_active');
+    funds.mnd_1 = 1000_00;
+    expect((await post(h, '/api/home/pay')).json().status).toBe('active');
+    expect(funds.mnd_1).toBe(1000_00 - 499_00);
+  });
+
+  it('график мобильного интернета за неделю и недавние события на главной', async () => {
+    const h = await login();
+    await subscribe(h, 'base');
+    await advance(2 * 86_400_000, 15 * 60_000);
+    const s = await get(h, '/api/line');
+    expect(s.usage7).toHaveLength(7);
+    expect(s.usage7.at(-1).mb + s.usage7.at(-2).mb).toBeGreaterThan(100);
+    expect(s.recent[0]).toMatchObject({ kind: 'sms', name: 'Бобтелеком' });
   });
 });
 

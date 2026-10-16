@@ -13,7 +13,7 @@ export const CSRF_HEADER = 'x-requested-with';
 export const CSRF_VALUE = 'bobtelecom';
 
 /** Without a session one can see the tariffs. */
-const isPublic = (url: string) => url === '/api/health' || url === '/api/me' || url.startsWith('/api/auth/') || url === '/api/tariffs';
+const isPublic = (url: string) => url === '/api/health' || url === '/api/me' || url.startsWith('/api/auth/') || url === '/api/tariffs' || url === '/api/home/offer' || url === '/api/home/coverage' || url === '/api/home/slots';
 
 interface UserRow {
   id: string;

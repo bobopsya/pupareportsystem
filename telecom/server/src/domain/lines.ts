@@ -42,8 +42,9 @@ export interface LineRow {
 export interface ChargeRow {
   id: string;
   user_id: string;
-  line_id: string;
-  kind: 'number' | 'subscription' | 'change' | 'addon';
+  line_id: string | null;
+  home_id: string | null;
+  kind: 'number' | 'subscription' | 'change' | 'addon' | 'home' | 'router';
   title: string;
   amount: number;
   external_id: string;
@@ -72,6 +73,18 @@ export function notifyLine(ctx: Ctx, number: string, text: string) {
   ctx.db.prepare('INSERT INTO messages(id, from_number, to_number, text, created_at) VALUES(?,?,?,?,?)').run(newId('msg', 16), SYSTEM_SENDER, number, text, ctx.now());
 }
 
+/** «2026-10-17» in Moscow time. */
+export const mskDay = (ts: number) => new Date(ts + 3 * 3600_000).toISOString().slice(0, 10);
+
+/** Mobile data of the last seven days, oldest first (empty days included). */
+export function usage7(ctx: Ctx, lineId: string) {
+  const rows = new Map((ctx.db.prepare('SELECT day, mb FROM data_usage WHERE line_id = ?').all(lineId) as { day: string; mb: number }[]).map((r) => [r.day, r.mb]));
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = mskDay(ctx.now() - (6 - i) * DAY);
+    return { day, mb: rows.get(day) ?? 0 };
+  });
+}
+
 const rub = (r: number) => `${r.toLocaleString('ru-RU')} ₽`;
 const date = (ts: number) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long' }).format(ts);
 
@@ -79,12 +92,27 @@ const date = (ts: number) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europ
  * Takes money through Bobobank and records it. The external id makes the charge happen at most once in the bank,
  * so a retry after a failure or a lost answer is safe.
  */
-async function pay(ctx: Ctx, user: { id: string; mandateId: string | null }, line: LineRow, kind: ChargeRow['kind'], title: string, rubles: number, externalId: string): Promise<ChargeRow> {
+function pay(ctx: Ctx, user: { id: string; mandateId: string | null }, line: LineRow, kind: ChargeRow['kind'], title: string, rubles: number, externalId: string): Promise<ChargeRow> {
+  return payFor(ctx, user, { lineId: line.id, homeId: null, subtitle: formatNumber(line.number) }, kind, title, rubles, externalId);
+}
+
+/** A charge for a mobile line or a home internet contract (the subtitle goes to the bank statement). */
+export async function payFor(
+  ctx: Ctx,
+  user: { id: string; mandateId: string | null },
+  target: { lineId: string | null; homeId: string | null; subtitle: string },
+  kind: ChargeRow['kind'],
+  title: string,
+  rubles: number,
+  externalId: string,
+): Promise<ChargeRow> {
   const prev = ctx.db.prepare('SELECT * FROM charges WHERE external_id = ?').get(externalId) as ChargeRow | undefined;
   if (prev?.status === 'paid') return prev;
   const id = prev?.id ?? newId('chg', 16);
   if (!prev) {
-    ctx.db.prepare(`INSERT INTO charges(id, user_id, line_id, kind, title, amount, external_id, status, created_at) VALUES(?,?,?,?,?,?,?,'pending',?)`).run(id, user.id, line.id, kind, title, rubles * 100, externalId, ctx.now());
+    ctx.db
+      .prepare(`INSERT INTO charges(id, user_id, line_id, home_id, kind, title, amount, external_id, status, created_at) VALUES(?,?,?,?,?,?,?,?,'pending',?)`)
+      .run(id, user.id, target.lineId, target.homeId, kind, title, rubles * 100, externalId, ctx.now());
   } else {
     ctx.db.prepare(`UPDATE charges SET status = 'pending', error = NULL, amount = ?, title = ? WHERE id = ?`).run(rubles * 100, title, id);
   }
@@ -94,7 +122,7 @@ async function pay(ctx: Ctx, user: { id: string; mandateId: string | null }, lin
   }
   let c: BankCharge;
   try {
-    c = await chargeNow(ctx, user.mandateId, rubles * 100, externalId, `Бобтелеком: ${title}`, formatNumber(line.number));
+    c = await chargeNow(ctx, user.mandateId, rubles * 100, externalId, `Бобтелеком: ${title}`, target.subtitle);
   } catch (e) {
     const err = e instanceof HttpError ? e : new BankDown();
     if (err.code === 'mandate_revoked') ctx.db.prepare('UPDATE users SET mandate_id = NULL WHERE id = ?').run(user.id);
@@ -245,6 +273,7 @@ function useData(ctx: Ctx, line: LineRow) {
   const left = line.mb_left < 0 ? -1 : Math.max(0, line.mb_left - mb);
   const used = line.mb_left < 0 ? mb : Math.min(mb, line.mb_left);
   ctx.db.prepare('UPDATE lines SET mb_left = ?, mb_used = mb_used + ?, data_at = ? WHERE id = ?').run(left, used, ctx.now() + DATA_EVERY_MS, line.id);
+  if (used > 0) ctx.db.prepare('INSERT INTO data_usage(line_id, day, mb) VALUES(?,?,?) ON CONFLICT(line_id, day) DO UPDATE SET mb = mb + excluded.mb').run(line.id, mskDay(ctx.now()), used);
   if (line.mb_left >= 0 && left < 512 && !line.low_data_sent) {
     ctx.db.prepare('UPDATE lines SET low_data_sent = 1 WHERE id = ?').run(line.id);
     notifyLine(ctx, line.number, left === 0 ? 'Интернет по тарифу закончился. Подключите пакет «+10 ГБ» в приложении.' : `Осталось меньше 512 МБ интернета. Пакет «+10 ГБ» — в приложении.`);

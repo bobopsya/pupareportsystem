@@ -15,6 +15,8 @@ interface Overview {
   revenueMonth: number;
   callsDay: number;
   smsDay: number;
+  homes: number;
+  homesRevenueMonth: number;
 }
 
 export default function Admin() {
@@ -67,6 +69,8 @@ export default function Admin() {
           {tile('Выручка 30 дн.', rub(o.revenueMonth))}
           {tile('Звонков за сутки', o.callsDay)}
           {tile('SMS за сутки', o.smsDay)}
+          {tile('Квартир с интернетом', o.homes)}
+          {tile('Дом. интернет, 30 дн.', rub(o.homesRevenueMonth))}
         </div>
       )}
       <div className="mt-4 grid grid-cols-3 gap-1 rounded-2xl bg-sunken p-1">

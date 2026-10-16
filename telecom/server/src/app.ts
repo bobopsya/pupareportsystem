@@ -10,6 +10,7 @@ import { registerAuth } from './auth.js';
 import { HttpError, type Ctx } from './context.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerGosRoutes } from './routes/gos.js';
+import { registerHomeRoutes } from './routes/home.js';
 import { registerTelecomRoutes } from './routes/telecom.js';
 
 export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
@@ -60,6 +61,7 @@ export async function buildApp(ctx: Ctx, opts: { logger?: boolean } = {}): Promi
   registerAuth(app, ctx);
   registerTelecomRoutes(app, ctx);
   registerGosRoutes(app, ctx);
+  registerHomeRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
 
   const webDist = ctx.cfg.webDist;

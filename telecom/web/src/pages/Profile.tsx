@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BadgeCheck, ChevronRight, ExternalLink, Landmark, LogOut, QrCode, Shield, Trash2 } from 'lucide-react';
+import { BadgeCheck, ChevronRight, ExternalLink, Landmark, LogOut, QrCode, Shield, Trash2, Wifi } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { EsimModal } from '../components/Line';
@@ -155,6 +155,11 @@ export default function Profile() {
             <ChevronRight className="size-5 text-muted" />
           </button>
         )}
+        <Link to="/internet" className="flex items-center gap-3 border-t border-line px-4 py-3.5 hover:bg-sunken">
+          <Wifi className="size-5 text-brand-text" />
+          <span className="flex-1 text-[15px] font-medium">Домашний интернет</span>
+          <ChevronRight className="size-5 text-muted" />
+        </Link>
         {user.role === 'admin' && (
           <Link to="/admin" className="flex items-center gap-3 border-t border-line px-4 py-3.5 hover:bg-sunken">
             <Shield className="size-5 text-brand-text" />

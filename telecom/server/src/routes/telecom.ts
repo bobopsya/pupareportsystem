@@ -2,11 +2,27 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireUser } from '../auth.js';
 import { HttpError, type Ctx } from '../context.js';
-import { answerCall, chats, conversation, currentCall, endCall, recentCalls, sendSms, startCall, unreadCount } from '../domain/comm.js';
-import { buyAddon, changeTariff, chargeView, closeLine, connect, lineView, openLine, payNow, requireLine, type ChargeRow } from '../domain/lines.js';
-import { offerNumbers } from '../domain/numbers.js';
+import { answerCall, callView, chats, conversation, currentCall, endCall, recentCalls, sendSms, startCall, subscriberName, unreadCount, type CallRow } from '../domain/comm.js';
+import { homeView, openHome } from '../domain/home.js';
+import { buyAddon, changeTariff, chargeView, closeLine, connect, lineView, openLine, payNow, requireLine, usage7, type ChargeRow } from '../domain/lines.js';
+import { formatNumber, offerNumbers } from '../domain/numbers.js';
 import { getSettings } from '../domain/plans.js';
 import { receiptPdf } from '../pdf.js';
+
+/** The last calls and messages of the number, for the main screen. */
+function recentEvents(ctx: Ctx, number: string) {
+  const calls = ctx.db.prepare(`SELECT * FROM calls WHERE from_number = ? OR to_number = ? ORDER BY created_at DESC LIMIT 4`).all(number, number) as CallRow[];
+  const sms = ctx.db.prepare(`SELECT * FROM messages WHERE (from_number = ? OR to_number = ?) ORDER BY created_at DESC LIMIT 4`).all(number, number) as { id: string; from_number: string; to_number: string; text: string; created_at: number }[];
+  return [
+    ...calls.map((c) => ({ kind: 'call' as const, ...callView(ctx, c, number) })),
+    ...sms.map((m) => {
+      const other = m.from_number === number ? m.to_number : m.from_number;
+      return { kind: 'sms' as const, id: m.id, number: other, formatted: formatNumber(other), name: subscriberName(ctx, other), text: m.text, mine: m.from_number === number, createdAt: m.created_at };
+    }),
+  ]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 4);
+}
 
 export function registerTelecomRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/tariffs', async () => getSettings(ctx));
@@ -20,7 +36,16 @@ export function registerTelecomRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/api/line', async (req) => {
     const u = requireUser(req);
     const l = openLine(ctx, u.id);
-    return { line: l ? lineView(ctx, l) : null, unread: l ? unreadCount(ctx, l.number) : 0, call: l ? currentCall(ctx, u.id) : null, now: ctx.now() };
+    const h = openHome(ctx, u.id);
+    return {
+      line: l ? lineView(ctx, l) : null,
+      unread: l ? unreadCount(ctx, l.number) : 0,
+      call: l ? currentCall(ctx, u.id) : null,
+      usage7: l ? usage7(ctx, l.id) : [],
+      recent: l ? recentEvents(ctx, l.number) : [],
+      home: h ? homeView(ctx, h) : null,
+      now: ctx.now(),
+    };
   });
 
   app.post('/api/line', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
@@ -78,8 +103,9 @@ export function registerTelecomRoutes(app: FastifyInstance, ctx: Ctx) {
     const u = requireUser(req);
     const c = ctx.db.prepare('SELECT * FROM charges WHERE id = ? AND user_id = ?').get((req.params as { id: string }).id, u.id) as ChargeRow | undefined;
     if (!c || c.status === 'failed' || c.status === 'pending') throw new HttpError(404, 'Чек не найден');
-    const line = ctx.db.prepare('SELECT number FROM lines WHERE id = ?').get(c.line_id) as { number: string };
-    const pdf = await receiptPdf(c, line.number, u.name);
+    const line = c.line_id ? (ctx.db.prepare('SELECT number FROM lines WHERE id = ?').get(c.line_id) as { number: string }) : null;
+    const home = c.home_id ? (ctx.db.prepare('SELECT contract FROM homes WHERE id = ?').get(c.home_id) as { contract: string }) : null;
+    const pdf = await receiptPdf(c, line?.number ?? null, u.name, home?.contract);
     return reply.type('application/pdf').header('Content-Disposition', `inline; filename="bobtelecom-${c.id}.pdf"`).send(pdf);
   });
 }

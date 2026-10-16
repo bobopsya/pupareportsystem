@@ -54,9 +54,30 @@ async function subscriber(browser: Browser, phone: string, name: string, tariff:
 test('два абонента: подключение со списанием, SMS и звонок', async ({ browser }) => {
   const a = await subscriber(browser, `79${stamp}1`, 'Анна Звонова', 'Мини');
   expect(a.before - (await available(a.page))).toBe(299_00);
-  await expect(a.page.getByText('Тариф «Мини»')).toBeVisible();
+  await expect(a.page.getByText('Тариф «Мини»', { exact: true })).toBeVisible();
   const b = await subscriber(browser, `79${stamp}2`, 'Борис Слушаев', 'Базовый');
   expect(b.before - (await available(b.page))).toBe(549_00);
+
+  // A orders home internet: −20% with the mobile number, the router in rent, a visit of the master.
+  await a.page.getByRole('link', { name: /Домашний интернет/ }).click();
+  await a.page.getByRole('button', { name: /^Дом 100 / }).click();
+  await a.page.getByRole('button', { name: 'Указать адрес' }).click();
+  await a.page.getByPlaceholder(/Улица/).fill('Тверская улица');
+  await a.page.getByPlaceholder('Дом').fill('1');
+  await a.page.getByPlaceholder('Квартира').fill('5');
+  await a.page.getByRole('button', { name: 'Проверить адрес' }).click();
+  await expect(a.page.getByText(/Дом подключён/)).toBeVisible();
+  await a.page.getByRole('button', { name: 'Дальше' }).click();
+  await a.page.getByRole('button', { name: /^Аренда/ }).click();
+  await a.page.getByRole('button', { name: 'Выбрать время мастера' }).click();
+  await a.page.locator('button:has-text("11:00–13:00")').first().click();
+  await a.page.getByRole('button', { name: 'Дальше' }).click();
+  const homeBefore = await available(a.page);
+  await a.page.getByRole('button', { name: /Оплатить и вызвать мастера · 498/ }).click();
+  await expect(a.page.getByText('Заявка принята', { exact: true })).toBeVisible();
+  expect(homeBefore - (await available(a.page))).toBe(399_00 + 99_00);
+  await a.page.getByRole('link', { name: 'Главная' }).click();
+  await expect(a.page.getByText(/Мастер приедет/)).toBeVisible();
 
   // In the bank: the charge from Бобтелеком.
   expect(JSON.stringify(await (await a.page.request.get(`${BANK}/api/history`)).json())).toContain('Бобтелеком');

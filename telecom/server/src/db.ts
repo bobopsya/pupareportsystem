@@ -123,6 +123,59 @@ const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN gos_linked_at INTEGER;
   CREATE UNIQUE INDEX users_gos_uid ON users(gos_uid) WHERE gos_uid IS NOT NULL;
   `,
+  `
+  -- Home internet: a contract per flat with its own monthly fee; charges belong to a line or to a flat.
+  CREATE TABLE homes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    contract TEXT NOT NULL UNIQUE,
+    tariff TEXT NOT NULL,
+    next_tariff TEXT,
+    status TEXT NOT NULL,
+    block_reason TEXT,
+    address TEXT NOT NULL,
+    router TEXT NOT NULL,
+    bundle INTEGER NOT NULL DEFAULT 0,
+    install_at INTEGER NOT NULL,
+    master TEXT NOT NULL,
+    master_sent INTEGER NOT NULL DEFAULT 0,
+    installed_at INTEGER,
+    period_no INTEGER NOT NULL DEFAULT 1,
+    period_start INTEGER,
+    period_end INTEGER,
+    retry_at INTEGER,
+    gb_used REAL NOT NULL DEFAULT 0,
+    data_at INTEGER,
+    created_at INTEGER NOT NULL,
+    closed_at INTEGER
+  );
+  CREATE UNIQUE INDEX homes_user_open ON homes(user_id) WHERE status != 'closed';
+
+  CREATE TABLE charges_new (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    line_id TEXT REFERENCES lines(id),
+    home_id TEXT REFERENCES homes(id),
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    external_id TEXT NOT NULL UNIQUE,
+    bank_id TEXT,
+    status TEXT NOT NULL,
+    error TEXT,
+    refunded INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    paid_at INTEGER
+  );
+  INSERT INTO charges_new(id, user_id, line_id, kind, title, amount, external_id, bank_id, status, error, refunded, created_at, paid_at)
+    SELECT id, user_id, line_id, kind, title, amount, external_id, bank_id, status, error, refunded, created_at, paid_at FROM charges;
+  DROP TABLE charges;
+  ALTER TABLE charges_new RENAME TO charges;
+  CREATE INDEX charges_user ON charges(user_id, created_at);
+
+  -- Mobile data per day, for the week chart on the main screen.
+  CREATE TABLE data_usage (line_id TEXT NOT NULL, day TEXT NOT NULL, mb INTEGER NOT NULL, PRIMARY KEY (line_id, day));
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

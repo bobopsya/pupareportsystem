@@ -10,6 +10,7 @@ const ChatPage = lazy(() => import('./pages/Chats').then((m) => ({ default: m.Ch
 const Calls = lazy(() => import('./pages/Calls'));
 const History = lazy(() => import('./pages/History'));
 const Tariffs = lazy(() => import('./pages/Tariffs'));
+const Internet = lazy(() => import('./pages/Internet'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Admin = lazy(() => import('./pages/Admin'));
 
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/calls" element={<Calls />} />
         <Route path="/history" element={<History />} />
         <Route path="/tariffs" element={<Tariffs />} />
+        <Route path="/internet" element={<Internet />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
