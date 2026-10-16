@@ -1,7 +1,8 @@
 import type { Ctx } from '../context.js';
 import { getSetting, setSetting } from '../db.js';
 
-export type TariffId = 'econom' | 'comfort' | 'comfort_plus' | 'business' | 'kids';
+export type TariffId = 'econom' | 'comfort' | 'comfort_plus' | 'business' | 'kids' | 'minibus' | 'bus' | 'bus_business';
+export const TARIFF_IDS = ['econom', 'comfort', 'comfort_plus', 'business', 'kids', 'minibus', 'bus', 'bus_business'] as const;
 
 export interface Tariff {
   id: TariffId;
@@ -17,6 +18,8 @@ export interface Tariff {
   cars: string[];
   /** Base ETA for a car: cheaper classes come faster. */
   etaMin: [number, number];
+  /** Buses are ordered like a taxi, on the «Автобус» tab. */
+  vehicle?: 'car' | 'bus';
 }
 
 const DEFAULT_TARIFFS: Tariff[] = [
@@ -25,6 +28,9 @@ const DEFAULT_TARIFFS: Tariff[] = [
   { id: 'comfort_plus', title: 'Комфорт+', base: 399, perKm: 40, perMin: 22, min: 799, waitPerMin: 30, seats: 4, cars: ['Toyota Camry', 'Kia K5 GT', 'Hyundai Sonata', 'Skoda Superb'], etaMin: [4, 8] },
   { id: 'business', title: 'Бизнес', base: 799, perKm: 64, perMin: 36, min: 1799, waitPerMin: 50, seats: 4, cars: ['Mercedes-Benz E-класс', 'BMW 5 серии', 'Audi A6'], etaMin: [5, 10] },
   { id: 'kids', title: 'Детский', base: 499, perKm: 32, perMin: 18, min: 799, waitPerMin: 24, seats: 3, cars: ['Skoda Octavia', 'Kia K5', 'Volkswagen Tiguan'], etaMin: [4, 9] },
+  { id: 'minibus', title: 'Микроавтобус', base: 999, perKm: 60, perMin: 30, min: 1999, waitPerMin: 40, seats: 18, cars: ['ГАЗель Next', 'Ford Transit', 'Mercedes-Benz Sprinter'], etaMin: [6, 12], vehicle: 'bus' },
+  { id: 'bus', title: 'Автобус', base: 2999, perKm: 120, perMin: 60, min: 5999, waitPerMin: 80, seats: 50, cars: ['НефАЗ-5299 (КАМАЗ)', 'НефАЗ-5299-40 (КАМАЗ)', 'ЛиАЗ-5292'], etaMin: [10, 20], vehicle: 'bus' },
+  { id: 'bus_business', title: 'Бизнес-автобус', base: 4999, perKm: 180, perMin: 90, min: 9999, waitPerMin: 120, seats: 30, cars: ['Mercedes-Benz Tourismo', 'Setra ComfortClass', 'Mercedes-Benz Sprinter VIP'], etaMin: [12, 25], vehicle: 'bus' },
 ];
 
 /** A helicopter or a business jet class: rate per flight hour, cruise speed and range. */
@@ -100,7 +106,8 @@ export function getSettings(ctx: Ctx): Settings {
     timeScale: ctx.cfg.timeScale,
     airTimeScale: ctx.cfg.airTimeScale,
     ...s,
-    tariffs: s.tariffs?.length ? s.tariffs : DEFAULT_TARIFFS,
+    // Tariffs saved in the admin panel, plus new default ones they don't have yet (buses).
+    tariffs: s.tariffs?.length ? [...s.tariffs, ...DEFAULT_TARIFFS.filter((d) => !s.tariffs!.some((t) => t.id === d.id))].map((t) => ({ ...t, vehicle: DEFAULT_TARIFFS.find((d) => d.id === t.id)?.vehicle ?? t.vehicle })) : DEFAULT_TARIFFS,
     helicopters: s.helicopters?.length ? s.helicopters : DEFAULT_HELICOPTERS,
     jets: s.jets?.length ? s.jets : DEFAULT_JETS,
   };

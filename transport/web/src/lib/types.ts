@@ -30,8 +30,9 @@ export interface TariffOption {
   eta: number;
   seats: number;
   cars: string[];
+  vehicle: 'car' | 'bus';
 }
-export type TariffId = 'econom' | 'comfort' | 'comfort_plus' | 'business' | 'kids';
+export type TariffId = 'econom' | 'comfort' | 'comfort_plus' | 'business' | 'kids' | 'minibus' | 'bus' | 'bus_business';
 
 export interface Estimate {
   id: string;
@@ -138,7 +139,7 @@ export interface Ride {
   finishAt: number | null;
   busLeavesAt: number | null;
   status: RideStatus;
-  tariff: { id: TariffId; title: string; waitPerMin: number };
+  tariff: { id: TariffId; title: string; waitPerMin: number; vehicle: 'car' | 'bus' };
   from: Place;
   to: Place;
   distance: number;

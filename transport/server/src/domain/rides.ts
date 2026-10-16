@@ -130,6 +130,7 @@ export async function estimate(ctx: Ctx, userId: string | null, from: Point, to:
     eta: t.etaMin[0] + Math.floor(ctx.random() * (t.etaMin[1] - t.etaMin[0] + 1)),
     seats: t.seats,
     cars: t.cars.slice(0, 3),
+    vehicle: t.vehicle ?? 'car',
   }));
   const id = newId('est', 16);
   ctx.db
@@ -562,7 +563,7 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     busLeavesAt: r.status === 'bus_arrived' && r.arrived_at ? r.arrived_at + realMs(BUS_DWELL_S, r.time_scale) : null,
     finishAt: r.finish_at,
     status: r.status,
-    tariff: { id: r.tariff, title: t?.title ?? extra.air?.className ?? r.tariff, waitPerMin: (t?.waitPerMin ?? 0) * 100 },
+    tariff: { id: r.tariff, title: t?.title ?? extra.air?.className ?? r.tariff, waitPerMin: (t?.waitPerMin ?? 0) * 100, vehicle: t?.vehicle ?? 'car' },
     from,
     to: safeJson<Point>(r.to_json, {} as Point),
     distance: r.distance_m,

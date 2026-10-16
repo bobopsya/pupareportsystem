@@ -2,11 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Ctx } from '../context.js';
 import { cancel, getRide, historyItem, settle, type RideRow } from '../domain/rides.js';
-import { getSettings, saveSettings, surgeAt } from '../domain/tariffs.js';
+import { getSettings, saveSettings, surgeAt, TARIFF_IDS } from '../domain/tariffs.js';
 import { HttpError } from '../context.js';
 
 const tariffSchema = z.object({
-  id: z.enum(['econom', 'comfort', 'comfort_plus', 'business', 'kids']),
+  id: z.enum(TARIFF_IDS),
   title: z.string().min(1).max(40),
   base: z.number().min(0).max(100_000),
   perKm: z.number().min(0).max(10_000),
@@ -16,6 +16,7 @@ const tariffSchema = z.object({
   seats: z.number().int().min(1).max(8),
   cars: z.array(z.string().min(1).max(60)).min(1).max(10),
   etaMin: z.tuple([z.number().int().min(1).max(60), z.number().int().min(1).max(60)]),
+  vehicle: z.enum(['car', 'bus']).optional(),
 });
 
 const airSchema = z.object({
@@ -76,7 +77,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: Ctx) {
         airBoardMin: z.number().min(1).max(120).optional(),
         cancelFee: z.number().int().min(0).max(10_000).optional(),
         childSeat: z.number().int().min(0).max(10_000).optional(),
-        tariffs: z.array(tariffSchema).min(1).max(5).optional(),
+        tariffs: z.array(tariffSchema).min(1).max(12).optional(),
         airTimeScale: z.number().min(1).max(600).optional(),
         helicopters: z.array(airSchema).min(1).max(6).optional(),
         jets: z.array(airSchema).min(1).max(6).optional(),

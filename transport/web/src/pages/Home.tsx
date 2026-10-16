@@ -38,6 +38,20 @@ function TransportSwitch({ value, onChange }: { value: Transport; onChange: (t: 
 
 const login = () => window.location.assign('/api/auth/bank/start');
 
+type BusMode = 'charter' | 'route';
+/** Bus tab: a chartered bus like a taxi, or a city bus on its line. */
+function BusModeSwitch({ value, onChange }: { value: BusMode; onChange: (m: BusMode) => void }) {
+  return (
+    <div className="-mt-1 mb-3 flex gap-2">
+      {([['charter', 'Заказать автобус'], ['route', 'Городской по маршруту']] as const).map(([id, label]) => (
+        <button key={id} type="button" aria-pressed={value === id} onClick={() => onChange(id)} className={cx('h-8 rounded-full px-3 text-[13px] font-semibold transition-colors', value === id ? 'bg-ink text-on-ink' : 'bg-sunken text-muted')}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Centre pin: lifts while the map moves, the address bubble sits above it. */
 function CenterPin({ moving, label, kind }: { moving: boolean; label: string | null; kind: 'from' | 'to' }) {
   return (
@@ -150,6 +164,7 @@ export default function Home() {
   const [search, setSearch] = useState<null | 'from' | 'to'>(null);
   const [drawer, setDrawer] = useState(false);
   const [tariff, setTariff] = useState<TariffId>('econom');
+  const [busMode, setBusMode] = useState<BusMode>('charter');
   const [childSeat, setChildSeat] = useState(false);
   const [comment, setComment] = useState('');
   const [commentOpen, setCommentOpen] = useState(false);
@@ -207,7 +222,9 @@ export default function Home() {
       setMode('main');
     },
   });
-  const estimate = est.data && mode === 'estimate' && transport === 'taxi' ? est.data : null;
+  const routeBus = transport === 'bus' && busMode === 'route';
+  const taxiLike = transport === 'taxi' || (transport === 'bus' && busMode === 'charter');
+  const estimate = est.data && mode === 'estimate' && taxiLike ? est.data : null;
   const busPlan = useMutation({
     mutationFn: (b: { from: Place; to: Place }) => api<BusPlan>('/bus/plan', { body: b }),
     onSuccess: () => setBusOpt(0),
@@ -216,12 +233,12 @@ export default function Home() {
       setMode('main');
     },
   });
-  const plan = busPlan.data && mode === 'estimate' && transport === 'bus' ? busPlan.data : null;
-  const runEstimate = (f: Place, t: Place, kind: Transport = transport) => {
+  const plan = busPlan.data && mode === 'estimate' && routeBus ? busPlan.data : null;
+  const runEstimate = (f: Place, t: Place, kind: Transport = transport, bm: BusMode = busMode) => {
     setFrom(f);
     setTo(t);
     setMode('estimate');
-    if (kind === 'bus') busPlan.mutate({ from: f, to: t });
+    if (kind === 'bus' && bm === 'route') busPlan.mutate({ from: f, to: t });
     else est.mutate({ from: f, to: t });
   };
   const busOrder = useMutation({
@@ -234,14 +251,14 @@ export default function Home() {
   });
   // Prices are valid for 15 minutes; refresh quietly before that.
   useEffect(() => {
-    if (mode !== 'estimate' || !from || !to || transport !== 'taxi') return;
+    if (mode !== 'estimate' || !from || !to || !taxiLike) return;
     const t = setInterval(() => est.mutate({ from, to }), 10 * 60_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, from, to]);
+  }, [mode, from, to, taxiLike]);
 
   const order = useMutation({
-    mutationFn: () => api<Ride>('/rides', { body: { estimateId: estimate!.id, tariff, childSeat: childSeat && tariff !== 'kids', comment: comment || undefined } }),
+    mutationFn: () => api<Ride>('/rides', { body: { estimateId: estimate!.id, tariff: selected!.id, childSeat: seatOk && childSeat, comment: comment || undefined } }),
     onSuccess: (r) => {
       qc.setQueryData(['ride'], { ride: r, offset: r.now - Date.now() });
       void qc.invalidateQueries({ queryKey: ['account'] });
@@ -274,16 +291,24 @@ export default function Home() {
   });
   const switchTransport = (t: Transport) => {
     setTransport(t);
+    if (t === 'bus') setTariff('bus');
+    else if (t === 'taxi') setTariff('econom');
     if (mode === 'estimate' && from && to && (t === 'taxi' || t === 'bus')) runEstimate(from, to, t);
     else if (t === 'heli' || t === 'jet') setMode('main');
+  };
+  const switchBusMode = (m: BusMode) => {
+    setBusMode(m);
+    if (mode === 'estimate' && from && to) runEstimate(from, to, 'bus', m);
   };
 
   const saved = places?.places ?? [];
   const recent = places?.recent ?? [];
   const home = saved.find((p) => p.kind === 'home');
   const work = saved.find((p) => p.kind === 'work');
-  const selected = estimate?.tariffs.find((t) => t.id === tariff) ?? estimate?.tariffs[0];
-  const price = selected ? selected.price + (childSeat && tariff !== 'kids' ? estimate!.childSeat : 0) : 0;
+  const tariffs = estimate?.tariffs.filter((t) => (t.vehicle ?? 'car') === (transport === 'bus' ? 'bus' : 'car'));
+  const selected = tariffs?.find((t) => t.id === tariff) ?? tariffs?.[0];
+  const seatOk = selected?.vehicle !== 'bus' && selected?.id !== 'kids';
+  const price = selected ? selected.price + (childSeat && seatOk ? estimate!.childSeat : 0) : 0;
   const short = account?.linked && account.available !== undefined && price > 0 && account.available < Math.ceil((price * 1.2) / 100) * 100;
 
   const locate = () => {
@@ -352,12 +377,12 @@ export default function Home() {
       {(ride.status === 'searching' || ride.status === 'driver_coming' || ride.status === 'arrived') && <RouteLine path={ride.fullRoute} faded />}
       {(ride.status === 'in_ride' || ride.status === 'completed') && <RouteLine path={ride.route} />}
       {ride.status === 'searching' && <SearchPulse pos={[ride.from.lat, ride.from.lon]} />}
-      {ride.status !== 'in_ride' && ride.status !== 'completed' && <PointMarker pos={[ride.from.lat, ride.from.lon]} kind="from" label={ride.status === 'arrived' ? 'Машина ждёт' : undefined} />}
+      {ride.status !== 'in_ride' && ride.status !== 'completed' && <PointMarker pos={[ride.from.lat, ride.from.lon]} kind="from" label={ride.status === 'arrived' ? (ride.tariff.vehicle === 'bus' ? 'Автобус ждёт' : 'Машина ждёт') : undefined} />}
       <PointMarker pos={[ride.to.lat, ride.to.lon]} kind="to" label={ride.status === 'in_ride' ? ride.to.title : undefined} />
-      {ride.car && ride.status !== 'completed' && <RideCar color={ride.car.colorHex} motion={ride.motion} position={ride.position} clockOffset={rideData?.offset ?? 0} follow={ride.status === 'in_ride'} />}
+      {ride.car && ride.status !== 'completed' && <RideCar kind={ride.tariff.vehicle === 'bus' ? 'bus' : 'car'} color={ride.car.colorHex} motion={ride.motion} position={ride.position} clockOffset={rideData?.offset ?? 0} follow={ride.status === 'in_ride'} />}
       <FitBounds points={fitPoints} padding={[56, 56]} />
     </>
-  ) : mode === 'estimate' && from && to ? (
+  ) : mode === 'estimate' && taxiLike && from && to ? (
     <>
       {estimate && <RouteLine path={estimate.route} />}
       <PointMarker pos={[from.lat, from.lon]} kind="from" label={from.title} />
@@ -381,7 +406,7 @@ export default function Home() {
       <PointMarker pos={[to.lat, to.lon]} kind="to" label={to.title} />
       {plan && <FitBounds points={fitPoints} padding={[60, 60]} />}
     </>
-  ) : transport === 'bus' ? (
+  ) : routeBus ? (
     <>
       <LiveBuses />
       <BusStops onPick={setStop} />
@@ -425,10 +450,11 @@ export default function Home() {
         {air.sheet}
       </>
     );
-  } else if (mode === 'estimate' && transport === 'bus') {
+  } else if (mode === 'estimate' && routeBus) {
     sheet = (
       <>
         <TransportSwitch value={transport} onChange={switchTransport} />
+        <BusModeSwitch value={busMode} onChange={switchBusMode} />
         <div className="-mt-1 flex items-center gap-2">
           <button type="button" aria-label="Назад" onClick={resetTrip} className="-ml-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-sunken">
             <ArrowLeft className="size-5" />
@@ -466,6 +492,7 @@ export default function Home() {
     sheet = (
       <>
         <TransportSwitch value={transport} onChange={switchTransport} />
+        {transport === 'bus' && <BusModeSwitch value={busMode} onChange={switchBusMode} />}
         <div className="-mt-1 flex items-center gap-2">
           <button type="button" aria-label="Назад" onClick={resetTrip} className="-ml-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-sunken">
             <ArrowLeft className="size-5" />
@@ -477,9 +504,9 @@ export default function Home() {
           {estimate && <SurgeBadge surge={estimate.surge} />}
         </div>
         <div className="no-scrollbar -mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1">
-          {(estimate?.tariffs ?? [null, null, null, null]).map((t, i) =>
+          {(tariffs ?? [null, null, null, null]).map((t, i) =>
             t ? (
-              <button key={t.id} type="button" onClick={() => setTariff(t.id)} className={cx('flex w-[108px] shrink-0 flex-col items-start rounded-2xl border-2 px-2.5 pb-2.5 pt-1 text-left transition-colors', tariff === t.id ? 'border-ink bg-surface' : 'border-transparent bg-sunken')}>
+              <button key={t.id} type="button" onClick={() => setTariff(t.id)} className={cx('flex w-[108px] shrink-0 flex-col items-start rounded-2xl border-2 px-2.5 pb-2.5 pt-1 text-left transition-colors', selected?.id === t.id ? 'border-ink bg-surface' : 'border-transparent bg-sunken')}>
                 <TariffCar tariff={t.id} className="-ml-1 h-9 w-[86px]" />
                 <span className="mt-0.5 text-[13px] font-medium text-muted">{t.title}</span>
                 <span className="text-[17px] font-bold num">{rub(t.price)}</span>
@@ -492,7 +519,7 @@ export default function Home() {
         </div>
         {selected && <p className="mt-2 truncate text-xs text-muted">{selected.cars.join(', ')} или похожие · до {selected.seats} пассажиров</p>}
         <div className="no-scrollbar -mx-5 mt-2 flex items-center gap-2 overflow-x-auto px-5">
-          {tariff !== 'kids' && (
+          {seatOk && (
             <button type="button" onClick={() => setChildSeat(!childSeat)} className={cx('inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm font-medium', childSeat ? 'bg-ink text-on-ink' : 'bg-sunken')}>
               <ChildIcon className="size-4" />
               Кресло{estimate ? ` +${rub(estimate.childSeat)}` : ''}
@@ -516,7 +543,7 @@ export default function Home() {
         {user && !user.linked && <p className="mt-3 rounded-2xl bg-warn-soft px-3 py-2.5 text-sm text-warn">Привязка к Bobobank отключена. Привяжите счёт снова, чтобы ездить.</p>}
         {user?.linked ? (
           <Button className="mt-3 w-full" size="lg" variant="brand" loading={order.isPending} disabled={!estimate || est.isPending} onClick={() => order.mutate()}>
-            {estimate ? `Вызвать · ${rub(price)}` : 'Считаем цену…'}
+            {estimate ? `${transport === 'bus' ? 'Заказать' : 'Вызвать'} · ${rub(price)}` : 'Считаем цену…'}
           </Button>
         ) : (
           <Button className="mt-3 w-full" size="lg" variant="ink" onClick={login}>
@@ -536,13 +563,14 @@ export default function Home() {
     sheet = (
       <>
         <TransportSwitch value={transport} onChange={switchTransport} />
+        {transport === 'bus' && <BusModeSwitch value={busMode} onChange={switchBusMode} />}
         <button type="button" onClick={() => setSearch('from')} className="flex w-full items-center gap-3 py-1 text-left">
           <span className="size-3 shrink-0 rounded-full border-[3px] border-ink bg-brand" />
           <span className="min-w-0 flex-1 truncate text-[15px] text-muted">{from ? from.title : 'Определяем адрес…'}</span>
         </button>
         <button type="button" onClick={() => setSearch('to')} className="mt-2 flex h-14 w-full items-center gap-3 rounded-2xl bg-sunken px-4 text-left hover:bg-hover">
           <span className="size-3 shrink-0 rounded-[3px] border-[3px] border-ink bg-surface" />
-          <span className="text-[18px] font-bold">{transport === 'bus' ? 'Куда едем на автобусе?' : 'Куда едем?'}</span>
+          <span className="text-[18px] font-bold">{routeBus ? 'Куда едем на автобусе?' : 'Куда едем?'}</span>
         </button>
         {user && (home || work || recent.length > 0) ? (
           <div className="no-scrollbar -mx-5 mt-3 flex gap-2 overflow-x-auto px-5">

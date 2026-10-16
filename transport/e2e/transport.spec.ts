@@ -92,8 +92,12 @@ test('вход через Bobobank, поездка по Москве, списа
   await page.getByRole('tab', { name: 'Автобус' }).click();
   await page.getByRole('button', { name: 'Где я' }).click();
   await page.waitForTimeout(2500);
-  await expect(page.getByText('Куда едем на автобусе?')).toBeVisible();
+  // By default the bus tab orders a bus like a taxi; city lines are one tap away.
   await page.getByRole('button', { name: 'улица Арбат, 10' }).click();
+  await expect(page.getByRole('button', { name: /Заказать · \d+/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Бизнес-автобус')).toBeVisible();
+  await expect(page.getByText('Микроавтобус')).toBeVisible();
+  await page.getByRole('button', { name: 'Городской по маршруту' }).click();
   await expect(page.getByRole('button', { name: 'Поехали · 83 ₽' })).toBeVisible({ timeout: 20_000 });
   const beforeBus = await available(page);
   await page.getByRole('button', { name: 'Поехали · 83 ₽' }).click();

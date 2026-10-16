@@ -279,6 +279,20 @@ describe('поездка', () => {
     expect(extra % 24_00).toBe(0);
   });
 
+  it('заказной автобус — как такси: тарифы автобусов, «Я сел» → «Мы приехали»', async () => {
+    const h = await login();
+    const { e, r } = await order(h, 'minibus');
+    const buses = e.tariffs.filter((t: { vehicle: string }) => t.vehicle === 'bus').map((t: { id: string }) => t.id);
+    expect(buses).toEqual(['minibus', 'bus', 'bus_business']);
+    expect(e.tariffs.find((t: { id: string }) => t.id === 'bus').cars[0]).toContain('НефАЗ');
+    const minibus = e.tariffs.find((t: { id: string }) => t.id === 'minibus');
+    expect(r.json()).toMatchObject({ mode: 'taxi', price: minibus.price, tariff: { id: 'minibus', title: 'Микроавтобус', vehicle: 'bus' } });
+    await until(h, 'arrived');
+    expect((await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/board`, headers: h })).json().status).toBe('in_ride');
+    const done = (await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/arrive`, headers: h })).json();
+    expect(done).toMatchObject({ status: 'completed', finalPrice: minibus.price });
+  });
+
   it('денег не хватает — машину не ищем; вне Москвы не возим', async () => {
     const h = await login();
     funds = 100_00;

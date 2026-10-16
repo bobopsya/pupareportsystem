@@ -8,13 +8,14 @@ import { airQuote, HELIPADS, JET_DESTINATIONS, JET_ORIGINS } from '../domain/air
 import { board as busBoard, liveIn, plan, routeView, stopsIn, type Bbox } from '../domain/buses.js';
 import { arriveRide, boardRide, cancel, complete, createAirRide, createBusRide, createRide, currentRide, estimate, historyItem, nearCars, ownRide, rate, serializeRide, settle, getRide } from '../domain/rides.js';
 import { receiptPdf } from '../pdf.js';
+import { TARIFF_IDS } from '../domain/tariffs.js';
 import { newId } from '../util.js';
 
 const lat = z.number().min(-90).max(90);
 const lon = z.number().min(-180).max(180);
 const point = z.object({ lat, lon, title: z.string().max(200).default(''), subtitle: z.string().max(300).default('') });
 const coords = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) });
-const TARIFFS = ['econom', 'comfort', 'comfort_plus', 'business', 'kids'] as const;
+const TARIFFS = TARIFF_IDS;
 
 
 export function registerRideRoutes(app: FastifyInstance, ctx: Ctx) {
