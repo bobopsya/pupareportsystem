@@ -41,10 +41,10 @@ export function registerAuth(app: FastifyInstance, ctx: Ctx) {
     const token = req.cookies[SESSION_COOKIE];
     if (token) {
       const h = sha256(token);
-      const row = db.prepare('SELECT s.created_at, s.last_seen, u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?').get(h) as (UserRow & { created_at: number; last_seen: number }) | undefined;
+      const row = db.prepare('SELECT u.*, s.created_at AS s_created, s.last_seen AS s_seen FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?').get(h) as (UserRow & { s_created: number; s_seen: number }) | undefined;
       const now = ctx.now();
-      if (row && now - row.created_at < SESSION_TTL_MS) {
-        if (now - row.last_seen > 60_000) db.prepare('UPDATE sessions SET last_seen = ? WHERE token_hash = ?').run(now, h);
+      if (row && now - row.s_created < SESSION_TTL_MS) {
+        if (now - row.s_seen > 60_000) db.prepare('UPDATE sessions SET last_seen = ? WHERE token_hash = ?').run(now, h);
         req.user = toUser(row);
       } else if (row) {
         db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(h);

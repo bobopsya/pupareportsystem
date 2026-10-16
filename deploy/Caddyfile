@@ -33,3 +33,9 @@
 	encode zstd gzip
 	reverse_proxy transport:8084
 }
+
+# Бобтелеком (profile "telecom").
+{$TELECOM_DOMAIN:telecom.localhost} {
+	encode zstd gzip
+	reverse_proxy telecom:8085
+}

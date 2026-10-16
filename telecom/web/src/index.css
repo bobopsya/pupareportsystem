@@ -1,0 +1,180 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+
+/* Бобтелеком: indigo-violet with white cards. */
+@theme static {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-sunken: #f2f2f6;
+  --color-hover: #e7e7ee;
+  --color-line: #ebebe8;
+  --color-line-strong: #d4d4d0;
+  --color-fg: #141414;
+  --color-muted: #77777a;
+  --color-faint: #a8a8ab;
+
+  --color-brand: #5b4bff;
+  --color-brand-hover: #4a3af0;
+  --color-brand-soft: #ecebff;
+  --color-on-brand: #ffffff;
+  --color-brand-text: #4a3af0;
+  --color-ink: #141414;
+  --color-ink-hover: #2e2e2e;
+  --color-on-ink: #ffffff;
+  --color-route: #141414;
+
+  --color-ok: #1f9d55;
+  --color-ok-soft: #e3f5ea;
+  --color-warn: #b86e00;
+  --color-warn-soft: #fff1d6;
+  --color-bad: #e5332a;
+  --color-bad-soft: #fdecea;
+
+  --shadow-float: 0 4px 16px -4px rgb(0 0 0 / 0.25);
+  --shadow-sheet: 0 -8px 30px -12px rgb(0 0 0 / 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #141414;
+    --color-surface: #1e1e1e;
+    --color-sunken: #2a2a2a;
+    --color-hover: #353535;
+    --color-line: #2c2c2c;
+    --color-line-strong: #454545;
+    --color-fg: #f4f4f2;
+    --color-muted: #9b9b9e;
+    --color-faint: #6c6c70;
+    --color-brand-soft: #262150;
+    --color-brand-text: #a99fff;
+    --color-ink: #f4f4f2;
+    --color-ink-hover: #dcdcda;
+    --color-on-ink: #141414;
+    --color-route: #5b4bff;
+    --color-ok-soft: #12301f;
+    --color-warn-soft: #33270f;
+    --color-bad-soft: #3a1614;
+    --shadow-float: 0 4px 16px -4px rgb(0 0 0 / 0.7);
+    --shadow-sheet: 0 -8px 30px -12px rgb(0 0 0 / 0.8);
+  }
+}
+:root[data-theme='dark'] {
+  --color-bg: #141414;
+  --color-surface: #1e1e1e;
+  --color-sunken: #2a2a2a;
+  --color-hover: #353535;
+  --color-line: #2c2c2c;
+  --color-line-strong: #454545;
+  --color-fg: #f4f4f2;
+  --color-muted: #9b9b9e;
+  --color-faint: #6c6c70;
+  --color-brand-soft: #262150;
+    --color-brand-text: #a99fff;
+  --color-ink: #f4f4f2;
+  --color-ink-hover: #dcdcda;
+  --color-on-ink: #141414;
+  --color-route: #5b4bff;
+  --color-ok-soft: #12301f;
+  --color-warn-soft: #33270f;
+  --color-bad-soft: #3a1614;
+  --shadow-float: 0 4px 16px -4px rgb(0 0 0 / 0.7);
+  --shadow-sheet: 0 -8px 30px -12px rgb(0 0 0 / 0.8);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes bt-pulse {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.bt-pulse {
+  animation: bt-pulse 1.8s ease-out infinite;
+}
+@keyframes bt-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.bt-fade {
+  animation: bt-fade 0.22s ease-out;
+}
+@keyframes bt-sheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.bt-sheet {
+  animation: bt-sheet 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes bt-lift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.bt-lift {
+  animation: bt-lift 0.5s ease-in-out;
+}
+@keyframes bt-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+.bt-bar {
+  animation: bt-bar 1.3s ease-in-out infinite;
+}
+
+@keyframes bt-rotor {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.bt-rotor {
+  animation: bt-rotor 0.35s linear infinite;
+}

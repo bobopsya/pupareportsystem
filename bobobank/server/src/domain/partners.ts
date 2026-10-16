@@ -37,6 +37,20 @@ export function partners(ctx: Ctx): Record<string, Partner> {
       maxLimit: 50_000_00,
     };
   }
+  const { telecomPublicUrl, telecomSecret } = ctx.cfg;
+  if (telecomPublicUrl && telecomSecret) {
+    out.telecom = {
+      client: 'telecom',
+      name: 'Бобтелеком',
+      scope: 'получит ваше имя и сможет списывать со счёта абонентскую плату, доплаты за тариф, доп. пакеты и красивые номера',
+      redirect: `${telecomPublicUrl}/api/auth/bank/callback`,
+      secret: telecomSecret,
+      system: 'telecom',
+      category: categoryOfMcc(4814),
+      limit: 5_000_00,
+      maxLimit: 20_000_00,
+    };
+  }
   return out;
 }
 

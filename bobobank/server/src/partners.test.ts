@@ -15,7 +15,7 @@ const H = { 'x-requested-with': 'bobobank' };
 
 beforeEach(async () => {
   now = Date.UTC(2026, 9, 14, 9, 0, 0);
-  const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://bank.test', BANK_GPAY_SECRET: 'gpay-secret', TRANSPORT_PUBLIC_URL: 'https://taxi.test', BANK_TRANSPORT_SECRET: SECRET });
+  const cfg = loadConfig({ COOKIE_SECURE: '0', PUBLIC_URL: 'https://bank.test', BANK_GPAY_SECRET: 'gpay-secret', TRANSPORT_PUBLIC_URL: 'https://taxi.test', BANK_TRANSPORT_SECRET: SECRET, TELECOM_PUBLIC_URL: 'https://telecom.test', BANK_TELECOM_SECRET: 'telecom-secret' });
   ctx = createCtx(openDb(null), cfg, () => now);
   app = await buildApp(ctx);
 });
@@ -208,5 +208,29 @@ describe('крупные суммы — подтверждение в прило
     expect((await ask('h3', 400_000_00)).json().code).toBe('insufficient_funds');
     expect((await ask('h4', 60_000_000_00)).statusCode).toBe(400);
     expect(await available(c)).toBe(300_000_00);
+  });
+});
+
+describe('второй партнёр — Бобтелеком', () => {
+  it('своя привязка и подпись; списание абонплаты в категорию «ЖКХ и связь», повтор не списывает дважды', async () => {
+    const c = await client();
+    fund(c.main.id, 3000);
+    const info = (await app.inject({ url: '/api/partners/telecom', headers: c.headers })).json();
+    expect(JSON.stringify(info)).toContain('Бобтелеком');
+    const r = await app.inject({ method: 'POST', url: '/api/partners/telecom/authorize', headers: c.headers, payload: { accountId: c.main.id, state: 's' } });
+    const code = new URL(r.json().redirect);
+    expect(code.origin).toBe('https://telecom.test');
+    // The transport secret does not sign telecom requests.
+    expect((await partner('POST', '/internal/partner/v1/auth/redeem', { code: code.searchParams.get('code') }, { client: 'telecom' })).statusCode).toBe(401);
+    const red = await partner('POST', '/internal/partner/v1/auth/redeem', { code: code.searchParams.get('code') }, { client: 'telecom', secret: 'telecom-secret' });
+    const mandate = red.json().mandate;
+    expect(mandate.limit).toBe(5_000_00);
+    const charge = () => partner('POST', `/internal/partner/v1/mandates/${mandate.id}/charges`, { amount: 549_00, external_id: 'sub_1_1', title: 'Абонентская плата' }, { client: 'telecom', secret: 'telecom-secret', key: 'sub_1_1' });
+    expect((await charge()).json()).toMatchObject({ status: 'captured', amount: 549_00 });
+    expect((await charge()).json()).toMatchObject({ status: 'captured' });
+    expect(await available(c)).toBe(3000_00 - 549_00);
+    const hist = JSON.stringify((await app.inject({ url: '/api/history', headers: c.headers })).json());
+    expect(hist).toContain('Бобтелеком');
+    expect(hist).toContain('utilities');
   });
 });

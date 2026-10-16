@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Car, CheckCircle2, Link2, ShieldCheck, Unlink, XCircle } from 'lucide-react';
+import { Car, CheckCircle2, Link2, ShieldCheck, Smartphone, Unlink, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AccountPicker } from '../components/AccountPicker';
@@ -43,7 +43,7 @@ function useChargeable(): Account[] | undefined {
 function PartnerIcon({ client }: { client: string }) {
   return (
     <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFD600] text-[#111]">
-      {client === 'transport' ? <Car className="size-7" /> : <Link2 className="size-7" />}
+      {client === 'transport' ? <Car className="size-7" /> : client === 'telecom' ? <Smartphone className="size-7" /> : <Link2 className="size-7" />}
     </span>
   );
 }
@@ -149,7 +149,7 @@ export function ConnectedServices() {
       <Card pad={false} className="divide-y divide-line overflow-hidden">
         {data.mandates.map((m) => (
           <button key={m.id} type="button" onClick={() => open(m)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken/70">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#FFD600] text-[#111]">{m.client === 'transport' ? <Car className="size-5" /> : <Link2 className="size-5" />}</span>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#FFD600] text-[#111]">{m.client === 'transport' ? <Car className="size-5" /> : m.client === 'telecom' ? <Smartphone className="size-5" /> : <Link2 className="size-5" />}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[15px] font-medium">{m.name}</span>
               <span className="block truncate text-sm text-muted">Счёт •• {m.accountLast4} · до {money(m.limit)} за раз</span>

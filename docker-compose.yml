@@ -71,6 +71,8 @@ services:
       # Бобо.Транспорт (set by deploy/install-transport.sh); empty = «Войти через Bobobank» is off for the taxi.
       TRANSPORT_PUBLIC_URL: ${TRANSPORT_PUBLIC_URL:-}
       BANK_TRANSPORT_SECRET: ${BANK_TRANSPORT_SECRET:-}
+      TELECOM_PUBLIC_URL: ${TELECOM_PUBLIC_URL:-}
+      BANK_TELECOM_SECRET: ${BANK_TELECOM_SECRET:-}
     volumes:
       - ./bobobank-data:/data
     ports:
@@ -124,6 +126,28 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  telecom:
+    build: ./telecom
+    image: bobtelecom:latest
+    profiles: ["telecom"]
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      TRUST_PROXY: "1"
+      COOKIE_SECURE: "1"
+      PUBLIC_URL: https://${TELECOM_DOMAIN:-telecom.localhost}
+      TELECOM_DB_KEY: ${TELECOM_DB_KEY:-}
+      BANK_INTERNAL_URL: http://bobobank:8082
+      BANK_PUBLIC_URL: https://${BANK_DOMAIN:-bank.localhost}
+      BANK_TELECOM_SECRET: ${BANK_TELECOM_SECRET:-}
+    volumes:
+      - ./telecom-data:/data
+    ports:
+      - "127.0.0.1:${TELECOM_PORT:-8085}:8085"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   caddy:
     image: caddy:2-alpine
     profiles: ["caddy"]
@@ -135,6 +159,7 @@ services:
       BANK_DOMAIN: ${BANK_DOMAIN:-bank.localhost}
       GOS_DOMAIN: ${GOS_DOMAIN:-gos.localhost}
       TAXI_DOMAIN: ${TAXI_DOMAIN:-taxi.localhost}
+      TELECOM_DOMAIN: ${TELECOM_DOMAIN:-telecom.localhost}
     ports:
       - "80:80"
       - "443:443"
