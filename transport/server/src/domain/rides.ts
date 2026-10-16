@@ -86,8 +86,17 @@ export const FREE_CANCEL_MS = 2 * 60_000;
 const ESTIMATE_TTL = 15 * 60_000;
 /** Hold = estimate × 1.2: room for paid waiting. The final charge never exceeds it. */
 export const HOLD_FACTOR = 1.2;
-const MIN_LEG_MS = 15_000;
-const MAX_PICKUP_MS = 150_000;
+/** Guard against zero-length stages only: durations come from OSRM and real flight times. */
+const MIN_LEG_MS = 5_000;
+/** City driving to the pickup point, m per game minute (~20 km/h). */
+const PICKUP_M_PER_MIN = 330;
+
+/** Real ms of a stage that lasts `gameS` game seconds at the scale. */
+const realMs = (gameS: number, scale: number) => Math.max(MIN_LEG_MS, (gameS * 1000) / scale);
+/** Looking for a car: 10–40 seconds. */
+const searchAt = (ctx: Ctx, now: number, scale: number) => now + realMs(10 + ctx.random() * 30, scale);
+const prepAt = (s: ReturnType<typeof getSettings>, kind: string, now: number) => now + realMs((kind === 'heli' ? s.heliPrepMin : s.jetPrepMin) * 60, s.airTimeScale);
+const autoBoardMs = (s: ReturnType<typeof getSettings>, r: { mode: string; time_scale: number }) => realMs((r.mode === 'heli' || r.mode === 'jet' ? s.airBoardMin : s.autoBoardMin) * 60, r.time_scale);
 
 export const getRide = (ctx: Ctx, id: string) => ctx.db.prepare('SELECT * FROM rides WHERE id = ?').get(id) as RideRow | undefined;
 
@@ -136,7 +145,7 @@ export async function createRide(ctx: Ctx, user: { id: string; mandateId: string
   if (!user.mandateId) throw new HttpError(403, 'Привяжите счёт Bobobank, чтобы вызвать машину', 'no_mandate');
   if (currentRide(ctx, user.id)) throw new HttpError(409, 'У вас уже есть активная поездка', 'has_ride');
   const est = ctx.db.prepare('SELECT * FROM estimates WHERE id = ?').get(input.estimateId) as
-    | { user_id: string | null; from_json: string; to_json: string; distance_m: number; duration_s: number; route: string; surge: number; created_at: number }
+    | { user_id: string | null; from_json: string; to_json: string; distance_m: number; duration_s: number; route: string; surge: number; prices: string; created_at: number }
     | undefined;
   if (!est || (est.user_id && est.user_id !== user.id) || ctx.now() - est.created_at > ESTIMATE_TTL) throw new HttpError(409, 'Цена устарела — пересчитываем', 'estimate_expired');
   const s = getSettings(ctx);
@@ -150,15 +159,17 @@ export async function createRide(ctx: Ctx, user: { id: string; mandateId: string
 
   const pay = await freeze(ctx, user, hold, id, `Поездка до «${to.title}»`);
   const now = ctx.now();
+  // The car comes from as far as the pickup time promised on the tariff card.
+  const eta = safeJson<{ id: string; eta: number }[]>(est.prices, []).find((x) => x.id === t.id)?.eta ?? 5;
   ctx.db
     .prepare(
-      `INSERT INTO rides(id, user_id, status, tariff, from_json, to_json, distance_m, duration_s, route, surge, price, child_seat, comment, time_scale, hold_amount, hold_id, bank_status, assign_at, created_at, mode, confirmation_id, confirm_url, confirm_expires_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'taxi',?,?,?)`,
+      `INSERT INTO rides(id, user_id, status, tariff, from_json, to_json, distance_m, duration_s, route, surge, price, child_seat, comment, time_scale, hold_amount, hold_id, bank_status, assign_at, created_at, mode, confirmation_id, confirm_url, confirm_expires_at, extra)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'taxi',?,?,?,?)`,
     )
     .run(
       id, user.id, pay.charge ? 'searching' : 'awaiting_payment', t.id, est.from_json, est.to_json, est.distance_m, est.duration_s, est.route, est.surge, price, seat ? 1 : 0,
-      (input.comment ?? '').slice(0, 200), s.timeScale, hold, pay.charge?.id ?? null, pay.charge ? 'held' : 'none', now + 3000 + Math.floor(ctx.random() * 5000), now,
-      pay.confirmation?.id ?? null, pay.confirmation?.url ?? null, pay.confirmation?.expires_at ?? null,
+      (input.comment ?? '').slice(0, 200), s.timeScale, hold, pay.charge?.id ?? null, pay.charge ? 'held' : 'none', searchAt(ctx, now, s.timeScale), now,
+      pay.confirmation?.id ?? null, pay.confirmation?.url ?? null, pay.confirmation?.expires_at ?? null, JSON.stringify({ eta }),
     );
   return getRide(ctx, id)!;
 }
@@ -173,7 +184,6 @@ async function freeze(ctx: Ctx, user: { id: string; mandateId: string | null }, 
   });
 }
 
-const PILOT_PREP_MS = 20_000;
 
 /** Helicopter or private jet: priced by flight time, paid up front (usually with a confirmation in the app). */
 export async function createAirRide(ctx: Ctx, user: { id: string; mandateId: string | null }, input: { estimateId: string; classId: string }) {
@@ -203,7 +213,7 @@ export async function createAirRide(ctx: Ctx, user: { id: string; mandateId: str
     )
     .run(
       id, user.id, pay.charge ? 'preparing' : 'awaiting_payment', opt.id, est.from_json, est.to_json, est.distance_m, opt.durationS, est.route, opt.price, s.airTimeScale, opt.price,
-      pay.charge?.id ?? null, pay.charge ? 'held' : 'none', now + PILOT_PREP_MS, now, kind, JSON.stringify(extra), JSON.stringify(pilot), JSON.stringify(craft),
+      pay.charge?.id ?? null, pay.charge ? 'held' : 'none', prepAt(s, kind, now), now, kind, JSON.stringify(extra), JSON.stringify(pilot), JSON.stringify(craft),
       pay.confirmation?.id ?? null, pay.confirmation?.url ?? null, pay.confirmation?.expires_at ?? null,
     );
   return getRide(ctx, id)!;
@@ -242,11 +252,13 @@ export function createBusRide(ctx: Ctx, user: { id: string; mandateId: string | 
 async function assign(ctx: Ctx, r: RideRow) {
   const from = safeJson<Point>(r.from_json, { lat: 0, lon: 0, title: '', subtitle: '' });
   const a: LatLon = [from.lat, from.lon];
-  const start = offset(a, 700 + ctx.random() * 1800, ctx.random() * 360);
+  const eta = safeJson<{ eta?: number }>(r.extra, {}).eta ?? 5;
+  // Roads are ~1.3× longer than the straight line: start where the route takes about the promised time.
+  const start = offset(a, (eta * PICKUP_M_PER_MIN * (0.85 + ctx.random() * 0.3)) / 1.3, ctx.random() * 360);
   const way = await route(ctx, start, a);
   const t = tariffOf(ctx, r.tariff)!;
   const now = ctx.now();
-  const ms = Math.min(MAX_PICKUP_MS, Math.max(MIN_LEG_MS, (way.duration * 1000) / r.time_scale));
+  const ms = realMs(way.duration, r.time_scale);
   const driver: Driver = newDriver(ctx);
   const car: Car = newCar(ctx, t.cars);
   ctx.db
@@ -260,7 +272,7 @@ export function board(ctx: Ctx, r: RideRow, at = ctx.now()) {
   const s = getSettings(ctx);
   const waitedGameS = ((at - (r.arrived_at ?? at)) / 1000) * r.time_scale;
   const paid = Math.max(0, Math.round(waitedGameS - s.freeWaitMin * 60));
-  const ms = Math.max(MIN_LEG_MS * 1.5, (r.duration_s * 1000) / r.time_scale);
+  const ms = realMs(r.duration_s, r.time_scale);
   ctx.db.prepare(`UPDATE rides SET status = 'in_ride', started_at = ?, finish_at = ?, wait_paid_s = ? WHERE id = ? AND status = 'arrived'`).run(at, at + ms, paid, r.id);
 }
 
@@ -365,7 +377,8 @@ async function checkConfirmation(ctx: Ctx, r: RideRow) {
   const now = ctx.now();
   if (c.status === 'approved' && c.charge) {
     const next = r.mode === 'taxi' ? 'searching' : 'preparing';
-    const at = r.mode === 'taxi' ? now + 3000 + Math.floor(ctx.random() * 5000) : now + PILOT_PREP_MS;
+    const s = getSettings(ctx);
+    const at = r.mode === 'taxi' ? searchAt(ctx, now, r.time_scale) : prepAt(s, r.mode, now);
     ctx.db.prepare(`UPDATE rides SET status = ?, hold_id = ?, bank_status = 'held', assign_at = ? WHERE id = ? AND status = 'awaiting_payment'`).run(next, c.charge.id, at, r.id);
   } else if (c.status === 'declined' || c.status === 'expired') {
     ctx.db
@@ -400,7 +413,10 @@ export async function tick(ctx: Ctx) {
 
   // Helicopters and jets: preparation → boarding → flight.
   ctx.db.prepare(`UPDATE rides SET status = 'boarding', arrived_at = assign_at WHERE status = 'preparing' AND mode IN ('heli','jet') AND assign_at <= ?`).run(now);
-  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'boarding' AND arrived_at <= ?`).all(now - s.autoBoardS * 1000) as RideRow[]) takeOff(ctx, r, r.arrived_at! + s.autoBoardS * 1000);
+  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'boarding'`).all() as RideRow[]) {
+    const at = r.arrived_at! + autoBoardMs(s, r);
+    if (at <= now) takeOff(ctx, r, at);
+  }
   ctx.db
     .prepare(`UPDATE rides SET status = 'completed', finished_at = finish_at, final_price = price, progress = 1, bank_op = 'capture' WHERE status = 'in_flight' AND finish_at <= ?`)
     .run(now);
@@ -417,8 +433,9 @@ export async function tick(ctx: Ctx) {
     }),
   );
   ctx.db.prepare(`UPDATE rides SET status = 'arrived', arrived_at = arrive_at WHERE status = 'driver_coming' AND arrive_at <= ?`).run(now);
-  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'arrived' AND mode = 'taxi' AND arrived_at <= ?`).all(now - s.autoBoardS * 1000) as RideRow[]) {
-    board(ctx, r, r.arrived_at! + s.autoBoardS * 1000);
+  for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'arrived' AND mode = 'taxi'`).all() as RideRow[]) {
+    const at = r.arrived_at! + autoBoardMs(s, r);
+    if (at <= now) board(ctx, r, at);
   }
   for (const r of ctx.db.prepare(`SELECT * FROM rides WHERE status = 'in_ride' AND finish_at <= ?`).all(now) as RideRow[]) complete(ctx, r, 1, r.finish_at!);
 
@@ -439,7 +456,7 @@ export async function tick(ctx: Ctx) {
 /** Everyone is on board: the flight takes the real flight time divided by the air time scale. */
 export function takeOff(ctx: Ctx, r: RideRow, at = ctx.now()) {
   if (r.status !== 'boarding') throw new HttpError(409, 'Посадка ещё не началась', 'bad_status');
-  const ms = Math.max(30_000, (r.duration_s * 1000) / r.time_scale);
+  const ms = realMs(r.duration_s, r.time_scale);
   ctx.db.prepare(`UPDATE rides SET status = 'in_flight', started_at = ?, finish_at = ? WHERE id = ? AND status = 'boarding'`).run(at, at + ms, r.id);
 }
 
@@ -525,7 +542,8 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     bus: busView ?? null,
     air: extra.air ?? null,
     confirmation: r.status === 'awaiting_payment' ? { url: r.confirm_url, expiresAt: r.confirm_expires_at } : null,
-    boardingUntil: r.status === 'boarding' && r.arrived_at ? r.arrived_at + s.autoBoardS * 1000 : r.status === 'preparing' ? r.assign_at : null,
+    boardingUntil: r.status === 'boarding' && r.arrived_at ? r.arrived_at + autoBoardMs(s, r) : r.status === 'preparing' ? r.assign_at : null,
+    finishAt: r.finish_at,
     status: r.status,
     tariff: { id: r.tariff, title: t?.title ?? extra.air?.className ?? r.tariff, waitPerMin: (t?.waitPerMin ?? 0) * 100 },
     from,
@@ -546,7 +564,7 @@ export function serializeRide(ctx: Ctx, r: RideRow) {
     position: car,
     motion,
     etaS,
-    waiting: r.status === 'arrived' ? { waitedS: waitedGameS, freeS: s.freeWaitMin * 60, autoBoardAt: (r.arrived_at ?? now) + s.autoBoardS * 1000 } : null,
+    waiting: r.status === 'arrived' ? { waitedS: waitedGameS, freeS: s.freeWaitMin * 60, autoBoardAt: (r.arrived_at ?? now) + autoBoardMs(s, r) } : null,
     freeCancelUntil: r.status === 'searching' ? null : r.status === 'driver_coming' && r.assigned_at ? r.assigned_at + FREE_CANCEL_MS : r.status === 'arrived' || r.status === 'boarding' ? now : null,
     cancelFeeNow: r.mode === 'heli' || r.mode === 'jet' ? Math.round(r.price / 10 / 100) * 100 : s.cancelFee * 100,
     timeScale: r.time_scale,

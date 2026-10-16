@@ -34,7 +34,10 @@ interface Settings {
   surgeMode: 'auto' | 'fixed';
   surgeFixed: number;
   freeWaitMin: number;
-  autoBoardS: number;
+  autoBoardMin: number;
+  heliPrepMin: number;
+  jetPrepMin: number;
+  airBoardMin: number;
   cancelFee: number;
   childSeat: number;
   tariffs: Tariff[];
@@ -111,9 +114,9 @@ export default function Admin() {
 
       <Section title="Игра">
         <div className="grid grid-cols-2 gap-3 rounded-2xl bg-sunken p-4 sm:grid-cols-3">
-          <Num label="Ускорение времени, ×" value={s.timeScale} step={0.5} onChange={(v) => setS({ ...s, timeScale: v })} />
+          <Num label="Ускорение времени, × (1 — реальное)" value={s.timeScale} step={0.5} onChange={(v) => setS({ ...s, timeScale: v })} />
           <Num label="Бесплатное ожидание, мин" value={s.freeWaitMin} onChange={(v) => setS({ ...s, freeWaitMin: v })} />
-          <Num label="Сам садится через, с" value={s.autoBoardS} onChange={(v) => setS({ ...s, autoBoardS: v })} />
+          <Num label="Сам садится через, мин" value={s.autoBoardMin} onChange={(v) => setS({ ...s, autoBoardMin: v })} />
           <Num label="Плата за отмену, ₽" value={s.cancelFee} onChange={(v) => setS({ ...s, cancelFee: v })} />
           <Num label="Детское кресло, ₽" value={s.childSeat} onChange={(v) => setS({ ...s, childSeat: v })} />
           <label className="flex flex-col gap-1 text-sm">
@@ -146,7 +149,12 @@ export default function Admin() {
 
       <Section title="Вертолёты и джеты">
         <div className="rounded-2xl bg-sunken p-4">
-          <Num label="Ускорение времени в полёте, ×" value={s.airTimeScale} onChange={(v) => setS({ ...s, airTimeScale: v })} />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Num label="Ускорение в полёте, × (1 — реальное)" value={s.airTimeScale} onChange={(v) => setS({ ...s, airTimeScale: v })} />
+            <Num label="Подготовка вертолёта, мин" value={s.heliPrepMin} onChange={(v) => setS({ ...s, heliPrepMin: v })} />
+            <Num label="Подготовка джета, мин" value={s.jetPrepMin} onChange={(v) => setS({ ...s, jetPrepMin: v })} />
+            <Num label="Посадка, мин" value={s.airBoardMin} onChange={(v) => setS({ ...s, airBoardMin: v })} />
+          </div>
         </div>
         {(['helicopters', 'jets'] as const).map((key) =>
           s[key].map((c, i) => (

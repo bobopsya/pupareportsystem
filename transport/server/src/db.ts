@@ -115,6 +115,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE rides ADD COLUMN confirm_expires_at INTEGER;
   ALTER TABLE estimates ADD COLUMN mode TEXT NOT NULL DEFAULT 'taxi';
   `,
+  `
+  -- Real time by default and new prices: forget the old speed-ups and prices saved in the admin panel.
+  UPDATE settings SET value = json_remove(value, '$.timeScale', '$.airTimeScale', '$.autoBoardS', '$.tariffs', '$.cancelFee', '$.childSeat') WHERE key = 'settings';
+  `,
 ];
 
 export function openDb(dataDir: string | null, key = ''): DB {

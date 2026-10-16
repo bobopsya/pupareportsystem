@@ -57,7 +57,8 @@ beforeEach(async () => {
   funds = 5000_00;
   holds = new Map();
   geoCalls = [];
-  saveSettings(ctx, { surgeMode: 'fixed', surgeFixed: 1 });
+  // Real time is the default; tests run taxis ×6 and flights ×30.
+  saveSettings(ctx, { surgeMode: 'fixed', surgeFixed: 1, timeScale: 6, airTimeScale: 30 });
   ctx.bankHttp = async (url, init) => {
     const path = new URL(url).pathname;
     const raw = String(init.body ?? '');
@@ -265,8 +266,8 @@ describe('поездка', () => {
     const h = await login();
     const { e, r } = await order(h, 'comfort');
     await until(h, 'arrived');
-    // Auto-boarding after 45 s = 4.5 game minutes: 1.5 paid minutes → 2 × 24 ₽.
-    await advance(44_000, 1000);
+    // Auto-boarding after 5 game minutes (50 s at ×6): 2 paid minutes → 2 × 24 ₽.
+    await advance(49_000, 1000);
     expect((await current(h)).status).toBe('arrived');
     await advance(2000, 1000);
     expect((await current(h)).status).toBe('in_ride');

@@ -71,6 +71,8 @@ function useNow(ms = 1000) {
   return now;
 }
 
+/** «через 25 мин» for long waits, «через 0:45» for the last minute. */
+const inTime = (s: number) => (s >= 90 ? minutes(s) : mmss(s));
 const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 
 /** Bottom sheet of an active ride: searching → car is coming → waiting → on the way → rating. */
@@ -153,8 +155,8 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
         <h2 className="text-[22px] font-bold">{ride.status === 'preparing' ? (air?.kind === 'heli' ? 'Готовим вертолёт' : 'Готовим борт к вылету') : 'Посадка'}</h2>
         <p className="mt-1 text-[15px] text-muted">
           {ride.status === 'preparing'
-            ? `Экипаж проверяет борт и заправку · посадка через ${mmss((until - now) / 1000)}`
-            : `${place}${air?.kind === 'jet' ? ', терминал бизнес-авиации' : ''} · вылет через ${mmss((until - now) / 1000)}`}
+            ? `Экипаж проверяет борт и заправку · посадка в ${clock(until)}, через ${inTime((until - now) / 1000)}`
+            : `${place}${air?.kind === 'jet' ? ', терминал бизнес-авиации' : ''} · вылет в ${clock(until)}, через ${inTime((until - now) / 1000)}`}
         </p>
         {ride.status === 'preparing' && (
           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-sunken">
@@ -182,11 +184,12 @@ export function RideSheet({ ride, offset, onDone }: { ride: Ride; offset: number
         <p className="mt-0.5 text-[15px] text-muted">
           {ride.from.title} → {ride.to.title} · ещё {minutes(gameS)} · {Math.round((ride.distance * (1 - frac)) / 1000).toLocaleString('ru-RU')} км
         </p>
+        <p className="mt-0.5 text-[15px] font-semibold">Прилёт в {clock(Date.now() + gameS * 1000)} по Москве</p>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sunken">
           <div className="h-full rounded-full bg-ink transition-[width] duration-1000 ease-linear" style={{ width: `${frac * 100}%` }} />
         </div>
         {craftCard}
-        <p className="mt-3 text-center text-xs text-muted">Высота {air.kind === 'heli' ? '450 м' : '12 500 м'} · время в игре ускорено ×{ride.timeScale}</p>
+        <p className="mt-3 text-center text-xs text-muted">Высота {air.kind === 'heli' ? '450 м' : '12 500 м'}{ride.timeScale > 1 ? ` · время ускорено ×${ride.timeScale}` : ' · можно закрыть приложение — полёт продолжится'}</p>
       </>
     );
   } else if ((ride.status === 'waiting_bus' || ride.status === 'on_bus') && bus) {

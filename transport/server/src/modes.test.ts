@@ -9,7 +9,7 @@ import { arrivals, headwayMin, setBusRoutes, vehicles, type BusRoute } from './d
 import { distance, offset, pathLength, type LatLon } from './domain/geo.js';
 import { tick } from './domain/rides.js';
 import { verify } from './domain/signing.js';
-import { DEFAULT_HELICOPTERS, DEFAULT_JETS } from './domain/tariffs.js';
+import { DEFAULT_HELICOPTERS, DEFAULT_JETS, saveSettings } from './domain/tariffs.js';
 
 let now = Date.UTC(2026, 9, 14, 11, 0, 0); // 14:00 in Moscow, Wednesday
 let ctx: Ctx;
@@ -82,6 +82,7 @@ beforeEach(async () => {
     return Response.json({ error: 'not found' }, { status: 404 });
   };
   ctx.geoHttp = async () => new Response('offline', { status: 503 });
+  saveSettings(ctx, { timeScale: 6, airTimeScale: 30 });
   app = await buildApp(ctx);
   setBusRoutes([line(101, 'т1', [55.74, 37.6], 0, 10), line(102, 'н9', [55.74, 37.61], 0, 6, 600, { night: true }), line(103, '77', [55.70, 37.5], 90, 6)]);
 });
@@ -242,5 +243,26 @@ describe('вертолёты и джеты', () => {
     await until(h, 'boarding');
     const c = (await app.inject({ method: 'POST', url: `/api/rides/${r.id}/cancel`, headers: h })).json();
     expect(c).toMatchObject({ status: 'cancelled', cancelFee: Math.round(r44.price / 10 / 100) * 100 });
+  });
+
+  it('по умолчанию время настоящее: полёт длится столько, сколько летит борт, подготовка — полчаса', async () => {
+    saveSettings(ctx, { timeScale: 1, airTimeScale: 1 });
+    const h = await login();
+    const q = (await app.inject({ method: 'POST', url: '/api/air/estimate', headers: h, payload: { kind: 'heli', from: 'HPM', to: 'VKO3' } })).json();
+    const r44 = q.options.find((o: { id: string }) => o.id === 'r44');
+    const r = (await app.inject({ method: 'POST', url: '/api/rides/air', headers: h, payload: { estimateId: q.id, classId: 'r44' } })).json();
+    charges.set('pch_55', { amount: r44.price, status: 'held', captured: 0 });
+    Object.assign(confirmations.get('pcf_1')!, { status: 'approved', chargeId: 'pch_55' });
+    await tick(ctx);
+    const prep = await current(h);
+    expect(prep.status).toBe('preparing');
+    expect(prep.boardingUntil - now).toBe(15 * 60_000);
+    now = prep.boardingUntil;
+    await tick(ctx);
+    const boarding = await current(h);
+    expect(boarding.boardingUntil - now).toBe(10 * 60_000);
+    const fly = (await app.inject({ method: 'POST', url: `/api/rides/${r.id}/takeoff`, headers: h })).json();
+    expect(fly.finishAt - now).toBe(r44.durationS * 1000);
+    expect(r44.durationS).toBeGreaterThan(15 * 60);
   });
 });

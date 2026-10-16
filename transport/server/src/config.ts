@@ -20,6 +20,9 @@ export interface Config {
   nominatimUrl: string;
   /** OSM servers require an identifying User-Agent (operations policy). */
   userAgent: string;
+  /** Time scale of taxis and buses and of flights: 1 = real time (the default); tests and demos speed it up. */
+  timeScale: number;
+  airTimeScale: number;
 }
 
 const HEX = /^[0-9a-f]{32,128}$/i;
@@ -45,5 +48,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     osrmUrl: (env.OSRM_URL ?? 'https://router.project-osrm.org').replace(/\/$/, ''),
     nominatimUrl: (env.NOMINATIM_URL ?? 'https://nominatim.openstreetmap.org').replace(/\/$/, ''),
     userAgent: env.OSM_USER_AGENT ?? `BoboTransport/1.0 (+${publicUrl})`,
+    timeScale: Math.min(600, Math.max(1, Number(env.TIME_SCALE ?? 1) || 1)),
+    airTimeScale: Math.min(600, Math.max(1, Number(env.AIR_TIME_SCALE ?? 1) || 1)),
   };
 }

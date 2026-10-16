@@ -53,34 +53,42 @@ export const DEFAULT_JETS: AirClass[] = [
 ];
 
 export interface Settings {
-  /** How much faster than real time cars drive (a 25-minute ride takes ~4 minutes at ×6). */
+  /** How much faster than real time taxis and buses go: 1 = real time (TIME_SCALE). */
   timeScale: number;
   /** 'auto' — rush hours and random demand; 'fixed' — always `surgeFixed`. */
   surgeMode: 'auto' | 'fixed';
   surgeFixed: number;
   /** Free waiting after the car arrives, game minutes. */
   freeWaitMin: number;
-  /** The passenger gets in on their own after this many real seconds. */
-  autoBoardS: number;
+  /** The passenger gets in on their own after this many minutes of waiting. */
+  autoBoardMin: number;
   cancelFee: number;
   childSeat: number;
   tariffs: Tariff[];
-  /** Flights go faster than real time than cars do: a 2-hour flight takes ~4 minutes at ×30. */
+  /** Time scale of flights: 1 = real time (AIR_TIME_SCALE). */
   airTimeScale: number;
+  /** Pre-flight preparation of the aircraft, minutes. */
+  heliPrepMin: number;
+  jetPrepMin: number;
+  /** How long the crew waits at boarding before take-off, minutes. */
+  airBoardMin: number;
   helicopters: AirClass[];
   jets: AirClass[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  timeScale: 6,
+  timeScale: 1,
   surgeMode: 'auto',
   surgeFixed: 1,
   freeWaitMin: 3,
-  autoBoardS: 45,
+  autoBoardMin: 5,
   cancelFee: 199,
   childSeat: 200,
   tariffs: DEFAULT_TARIFFS,
-  airTimeScale: 30,
+  airTimeScale: 1,
+  heliPrepMin: 15,
+  jetPrepMin: 30,
+  airBoardMin: 10,
   helicopters: DEFAULT_HELICOPTERS,
   jets: DEFAULT_JETS,
 };
@@ -89,6 +97,8 @@ export function getSettings(ctx: Ctx): Settings {
   const s = getSetting<Partial<Settings>>(ctx.db, 'settings', {});
   return {
     ...DEFAULT_SETTINGS,
+    timeScale: ctx.cfg.timeScale,
+    airTimeScale: ctx.cfg.airTimeScale,
     ...s,
     tariffs: s.tariffs?.length ? s.tariffs : DEFAULT_TARIFFS,
     helicopters: s.helicopters?.length ? s.helicopters : DEFAULT_HELICOPTERS,

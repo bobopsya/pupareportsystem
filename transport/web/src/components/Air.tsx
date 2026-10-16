@@ -126,7 +126,7 @@ export function useAirPlanner({ kind, center, linked, account, login, onTaxiTo }
             ))}
           </div>
           <p className="mt-2 text-xs text-muted">
-            {(q.distance / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} км по прямой{opt ? ` · в полёте ${hours(opt.durationS)}` : ''} · экипаж — боты · игровое время ×{q.timeScale}
+            {(q.distance / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} км по прямой{opt ? ` · в полёте ${hours(opt.durationS)}` : ''} · экипаж — боты{q.timeScale > 1 ? ` · время ускорено ×${q.timeScale}` : ''}
           </p>
         </>
       )}

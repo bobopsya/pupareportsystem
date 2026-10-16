@@ -135,6 +135,7 @@ export interface Ride {
   air: { kind: 'heli' | 'jet'; classId: string; className: string; model: string; seats: number; from: string; to: string } | null;
   confirmation: { url: string | null; expiresAt: number | null } | null;
   boardingUntil: number | null;
+  finishAt: number | null;
   status: RideStatus;
   tariff: { id: TariffId; title: string; waitPerMin: number };
   from: Place;
