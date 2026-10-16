@@ -20,11 +20,11 @@ export interface Tariff {
 }
 
 const DEFAULT_TARIFFS: Tariff[] = [
-  { id: 'econom', title: 'Эконом', base: 99, perKm: 12, perMin: 7, min: 199, waitPerMin: 9, seats: 4, cars: ['Kia Rio', 'Hyundai Solaris', 'Lada Vesta', 'Volkswagen Polo'], etaMin: [2, 6] },
-  { id: 'comfort', title: 'Комфорт', base: 149, perKm: 16, perMin: 9, min: 299, waitPerMin: 12, seats: 4, cars: ['Skoda Octavia', 'Kia K5', 'Hyundai Elantra', 'Toyota Camry'], etaMin: [3, 7] },
-  { id: 'comfort_plus', title: 'Комфорт+', base: 199, perKm: 20, perMin: 11, min: 399, waitPerMin: 15, seats: 4, cars: ['Toyota Camry', 'Kia K5 GT', 'Hyundai Sonata', 'Skoda Superb'], etaMin: [4, 8] },
-  { id: 'business', title: 'Бизнес', base: 399, perKm: 32, perMin: 18, min: 899, waitPerMin: 25, seats: 4, cars: ['Mercedes-Benz E-класс', 'BMW 5 серии', 'Audi A6'], etaMin: [5, 10] },
-  { id: 'kids', title: 'Детский', base: 249, perKm: 16, perMin: 9, min: 399, waitPerMin: 12, seats: 3, cars: ['Skoda Octavia', 'Kia K5', 'Volkswagen Tiguan'], etaMin: [4, 9] },
+  { id: 'econom', title: 'Эконом', base: 199, perKm: 24, perMin: 14, min: 399, waitPerMin: 18, seats: 4, cars: ['Kia Rio', 'Hyundai Solaris', 'Lada Vesta', 'Volkswagen Polo'], etaMin: [2, 6] },
+  { id: 'comfort', title: 'Комфорт', base: 299, perKm: 32, perMin: 18, min: 599, waitPerMin: 24, seats: 4, cars: ['Skoda Octavia', 'Kia K5', 'Hyundai Elantra', 'Toyota Camry'], etaMin: [3, 7] },
+  { id: 'comfort_plus', title: 'Комфорт+', base: 399, perKm: 40, perMin: 22, min: 799, waitPerMin: 30, seats: 4, cars: ['Toyota Camry', 'Kia K5 GT', 'Hyundai Sonata', 'Skoda Superb'], etaMin: [4, 8] },
+  { id: 'business', title: 'Бизнес', base: 799, perKm: 64, perMin: 36, min: 1799, waitPerMin: 50, seats: 4, cars: ['Mercedes-Benz E-класс', 'BMW 5 серии', 'Audi A6'], etaMin: [5, 10] },
+  { id: 'kids', title: 'Детский', base: 499, perKm: 32, perMin: 18, min: 799, waitPerMin: 24, seats: 3, cars: ['Skoda Octavia', 'Kia K5', 'Volkswagen Tiguan'], etaMin: [4, 9] },
 ];
 
 /** A helicopter or a business jet class: rate per flight hour, cruise speed and range. */
@@ -77,8 +77,8 @@ export const DEFAULT_SETTINGS: Settings = {
   surgeFixed: 1,
   freeWaitMin: 3,
   autoBoardS: 45,
-  cancelFee: 99,
-  childSeat: 100,
+  cancelFee: 199,
+  childSeat: 200,
   tariffs: DEFAULT_TARIFFS,
   airTimeScale: 30,
   helicopters: DEFAULT_HELICOPTERS,

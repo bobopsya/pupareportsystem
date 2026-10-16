@@ -173,11 +173,11 @@ describe('геометрия и цены', () => {
 
   it('тарифы: посадка + км + минуты, минимум, коэффициент, ожидание', () => {
     const econom = DEFAULT_SETTINGS.tariffs[0];
-    expect(priceOf(econom, 10_000, 1200, 1)).toBe((99 + 120 + 140) * 100);
-    expect(priceOf(econom, 500, 60, 1)).toBe(199_00);
-    expect(priceOf(econom, 10_000, 1200, 1.5)).toBe(Math.round(359 * 1.5) * 100);
-    expect(priceOf(econom, 10_000, 1200, 1, 100)).toBe(459_00);
-    expect(waitingPrice(econom, 61)).toBe(18_00);
+    expect(priceOf(econom, 10_000, 1200, 1)).toBe((199 + 240 + 280) * 100);
+    expect(priceOf(econom, 500, 60, 1)).toBe(399_00);
+    expect(priceOf(econom, 10_000, 1200, 1.5)).toBe(Math.round(719 * 1.5) * 100);
+    expect(priceOf(econom, 10_000, 1200, 1, 200)).toBe(919_00);
+    expect(waitingPrice(econom, 61)).toBe(36_00);
     saveSettings(ctx, { surgeMode: 'auto' });
     for (let h = 0; h < 48; h++) {
       const k = surgeAt(ctx, now + h * 1800_000);
@@ -257,15 +257,15 @@ describe('поездка', () => {
     await until(h, 'arrived');
     now += 10_000; // 1 game minute: still free waiting
     c = await app.inject({ method: 'POST', url: `/api/rides/${r.json().id}/cancel`, headers: h });
-    expect(c.json()).toMatchObject({ status: 'cancelled', cancelFee: 99_00, finalPrice: 99_00, bank: { status: 'captured' } });
-    expect(funds).toBe(5000_00 - 99_00);
+    expect(c.json()).toMatchObject({ status: 'cancelled', cancelFee: 199_00, finalPrice: 199_00, bank: { status: 'captured' } });
+    expect(funds).toBe(5000_00 - 199_00);
   });
 
   it('ожидание сверх бесплатного платное; «остановите здесь» — цена за проеханное', async () => {
     const h = await login();
     const { e, r } = await order(h, 'comfort');
     await until(h, 'arrived');
-    // Auto-boarding after 45 s = 4.5 game minutes: 1.5 paid minutes → 2 × 12 ₽.
+    // Auto-boarding after 45 s = 4.5 game minutes: 1.5 paid minutes → 2 × 24 ₽.
     await advance(44_000, 1000);
     expect((await current(h)).status).toBe('arrived');
     await advance(2000, 1000);
@@ -276,9 +276,9 @@ describe('поездка', () => {
     const comfort = e.tariffs.find((t: { id: string }) => t.id === 'comfort');
     expect(s.json().status).toBe('completed');
     expect(s.json().progress).toBeCloseTo(0.5, 1);
-    // Half of a short ride is below the minimum: minimum 299 ₽ + 2 paid minutes of waiting.
-    expect(comfort.price).toBe(299_00);
-    expect(s.json().finalPrice).toBe(299_00 + 24_00);
+    // Half of a short ride is below the minimum: minimum 599 ₽ + 2 paid minutes of waiting.
+    expect(comfort.price).toBe(599_00);
+    expect(s.json().finalPrice).toBe(599_00 + 48_00);
   });
 
   it('денег не хватает — машину не ищем; вне Москвы не возим', async () => {
